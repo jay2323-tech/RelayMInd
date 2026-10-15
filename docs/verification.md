@@ -23,3 +23,11 @@ when expanding HTTP tests. No model provider has been selected.
 - Docker Desktop started; initial FalkorDB image download remains in progress.
 - Live connection check returned connection refused while the image was downloading.
 - No conversation writes, session creation, authentication or agents implemented.
+
+## Live connection verified
+
+The initial check failed because GRAPH.RO_QUERY cannot initialize an absent graph
+key. The check now uses GRAPH.QUERY RETURN 1 to initialize each fixed demo graph,
+then verifies GRAPH.RO_QUERY RETURN 1. Executed successfully against the running
+local Docker database. Authentication and both graph queries passed; no message,
+session, agent or cross-tenant data isolation behavior is proven by this check.
