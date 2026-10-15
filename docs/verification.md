@@ -15,3 +15,11 @@ No memory, graph queries, agents, authentication, or actions are implemented or
 verified yet. The installed Starlette test client emits an httpx deprecation warning;
 the current two foundation checks pass. Revisit the supported test-client dependency
 when expanding HTTP tests. No model provider has been selected.
+
+## Jk graph foundation
+
+- Seven backend checks pass: foundation schemas/liveness and demo access policy.
+- Access checks use test doubles; live session authorization query is not yet verified.
+- Docker Desktop started; initial FalkorDB image download remains in progress.
+- Live connection check returned connection refused while the image was downloading.
+- No conversation writes, session creation, authentication or agents implemented.
