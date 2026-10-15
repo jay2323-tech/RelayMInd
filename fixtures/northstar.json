@@ -1,0 +1,35 @@
+{
+  "synthetic": true,
+  "tenant_alias": "tenant-a",
+  "project": {
+    "id": "launch-01",
+    "name": "Northstar free-tier launch"
+  },
+  "sources": [
+    {
+      "id": "source-01",
+      "text": "Approved: launch Friday with payments enabled."
+    },
+    {
+      "id": "source-02",
+      "text": "Approved replacement: postpone payments; launch only the free tier Friday."
+    }
+  ],
+  "decisions": [
+    {
+      "id": "decision-01",
+      "text": "Launch Friday with payments enabled.",
+      "status": "superseded",
+      "version": 1,
+      "source_id": "source-01"
+    },
+    {
+      "id": "decision-02",
+      "text": "Postpone payments; launch only the free tier Friday.",
+      "status": "approved",
+      "version": 1,
+      "source_id": "source-02",
+      "supersedes": "decision-01"
+    }
+  ]
+}

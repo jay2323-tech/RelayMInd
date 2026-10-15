@@ -1,0 +1,14 @@
+services:
+  falkordb:
+    image: falkordb/falkordb:latest
+    # Resolve and pin a tested image digest before the final demo.
+    ports:
+      - "127.0.0.1:6379:6379"
+      - "127.0.0.1:3000:3000"
+    environment:
+      REDIS_ARGS: "--appendonly yes --requirepass ${FALKORDB_PASSWORD:?Set FALKORDB_PASSWORD in .env}"
+    volumes:
+      - falkordb-data:/data
+    restart: unless-stopped
+volumes:
+  falkordb-data:
