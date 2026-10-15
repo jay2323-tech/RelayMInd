@@ -72,5 +72,6 @@ Start with docs/implementation-plan.md and its first persisted-message milestone
 ## Submission preparation
 
 Provide a public repository, graph model and essential queries, reproducible setup,
-working video, chosen tracks and honest AI-assistance disclosure. No GitHub
-repository has been published by this setup. Never commit .env or real private data.
+working video, chosen tracks and honest AI-assistance disclosure.
+Repository: https://github.com/jay2323-tech/RelayMInd
+Never commit .env or real private data.
