@@ -75,3 +75,15 @@ Provide a public repository, graph model and essential queries, reproducible set
 working video, chosen tracks and honest AI-assistance disclosure.
 Repository: https://github.com/jay2323-tech/RelayMInd
 Never commit .env or real private data.
+
+## Graph foundation (Jk)
+
+After starting Docker Desktop and `docker compose up -d`, verify the database with:
+
+```sh
+.venv/bin/python scripts/check_graph.py
+```
+
+The foundation includes fixed local-demo graph access and a session ownership
+query. It does not implement login or conversation persistence. See
+`docs/conversation-memory-integration.md` before building the conversation module.

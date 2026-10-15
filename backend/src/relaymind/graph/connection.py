@@ -8,6 +8,8 @@ def create_client() -> FalkorDB:
         host=os.getenv("FALKORDB_HOST", "127.0.0.1"),
         port=int(os.getenv("FALKORDB_PORT", "6379")),
         password=os.environ["FALKORDB_PASSWORD"],
+        socket_connect_timeout=3,
+        socket_timeout=5,
     )
 
 # Tenant-to-graph selection must be added behind verified server identity.
