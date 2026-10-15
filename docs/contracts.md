@@ -27,3 +27,11 @@ Review statuses: accepted, needs_revision, blocked. Plan output is a proposal on
 Future runs: queued -> running -> completed / blocked / failed / cancelled.
 Future handoffs: pending -> claimed -> reviewed / failed, with atomic claims and
 crash recovery. Record plan and decision versions to reject stale actions.
+
+## Conversation milestone v1
+
+See [conversation-memory-integration.md](conversation-memory-integration.md) for
+fixed local demo identities, graph/session access helpers, proposed Python
+interfaces, record fields, pagination, retry semantics, and initial concurrency
+limits. This is CLI development context, not HTTP authentication. A owns the
+conversation implementation and its separate contract model file.
