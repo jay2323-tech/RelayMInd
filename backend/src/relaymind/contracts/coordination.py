@@ -65,7 +65,7 @@ class RunRecord(StrictModel):
     session_id: str
     owner_id: str
     request: str
-    status: Literal["planning", "awaiting_review", "completed", "needs_revision", "blocked", "failed"]
+    status: Literal["planning", "awaiting_review", "paused", "completed", "needs_revision", "blocked", "failed"]
     handoff_ids: list[str] = Field(default_factory=list)
     events: list[AgentEvent] = Field(default_factory=list)
     result: ReviewRecord | None = None

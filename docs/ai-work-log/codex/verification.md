@@ -83,3 +83,14 @@ completing the workflow is not proof of a live model's reasoning quality.
 The documentation package was reviewed for existing paths, local links and Git
 whitespace. Application checks were not repeated because no executable behavior
 changed. Record future results with their code revision and update this boundary.
+
+## Pause/resume scenario follow-up
+
+Latest expanded suite: **58 passed, 1 existing warning** with live FalkorDB enabled.
+Offline: **40 passed, 18 skipped**. Frontend TypeScript/Vite build passed.
+Six new checks parameterized across launch and coding cover pause, unchanged resume,
+new-process changed-requirement resume, preserved historical handoff, graph
+dependencies and refusal to pause an active review. Both CLI start/change/resume/
+cleanup demonstrations passed and were recorded in scenario-results-2026-10-16.json.
+Model and platform are explicitly synthetic fixtures in these runs. Not a live LLM
+reasoning benchmark or proof of production approval behavior.
