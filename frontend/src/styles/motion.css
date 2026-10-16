@@ -1,0 +1,76 @@
+/* Motion + Relay Track — docs/ui-design.md section 7. Animate transform/opacity/stroke only. */
+@keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes breathe { 0%, 100% { opacity: .55; transform: scale(1); } 50% { opacity: 1; transform: scale(1.06); } }
+@keyframes glow { 0%, 100% { box-shadow: 0 0 0 0 var(--orb), 0 0 18px -2px var(--orb); } 50% { box-shadow: 0 0 0 6px transparent, 0 0 34px 2px var(--orb); } }
+@keyframes seal { 0% { transform: scale(.4) rotate(-20deg); opacity: 0; } 70% { transform: scale(1.12) rotate(4deg); opacity: 1; } 100% { transform: scale(1) rotate(0); } }
+@keyframes stamp { 0% { transform: scale(1.6); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+@keyframes flip { 0% { transform: rotateX(90deg); opacity: 0; } 100% { transform: rotateX(0); opacity: 1; } }
+@keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
+@keyframes ripple { 0% { r: 14; opacity: .9; } 100% { r: 70; opacity: 0; } }
+@keyframes draw { from { stroke-dashoffset: 120; } to { stroke-dashoffset: 0; } }
+@keyframes sweep { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+@keyframes lane { 0% { transform: translateX(var(--from)); opacity: 0; } 15% { opacity: 1; } 85% { opacity: 1; } 100% { transform: translateX(var(--to)); opacity: 0; } }
+
+/* ---------- Relay Track ---------- */
+.track { position: relative; padding: 18px 22px 14px; border-radius: 22px; overflow: hidden; }
+.track__light { position: absolute; inset: 0; pointer-events: none; z-index: -1;
+  background: radial-gradient(260px circle at var(--mx, -999px) var(--my, -999px), rgba(255,255,255,.08), transparent 60%); }
+.track__head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+.track__status { flex: 1; min-width: 200px; font-size: 14px; color: var(--text-1); }
+.track__status small { display: block; color: var(--text-3); font-size: 12px; }
+.track__rail { position: relative; display: grid; grid-template-columns: repeat(5, 1fr); align-items: start; }
+.track__line { position: absolute; left: 10%; right: 10%; top: 28px; height: 2px; background: rgba(255,255,255,.10); border-radius: 2px; overflow: hidden; }
+.track__progress { position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(90deg, var(--memory), var(--planner), var(--reviewer), var(--ok));
+  transform-origin: left; transition: transform var(--t-slow) var(--ease-out); }
+.track__sweep { position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(46,230,197,.7), transparent); animation: sweep 1.2s var(--ease-in-out) 2; }
+
+.station { position: relative; display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
+.orb { --orb: var(--superseded); position: relative; width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center;
+  background: radial-gradient(circle at 35% 30%, rgba(255,255,255,.18), rgba(255,255,255,.03) 60%), rgba(10,16,30,.6);
+  border: 1.5px solid color-mix(in srgb, var(--orb) 55%, transparent); color: var(--orb); font: 600 13px/1 var(--font-mono);
+  transition: border-color var(--t-base), transform var(--t-base) var(--ease-out), opacity var(--t-base); }
+.orb svg { width: 24px; height: 24px; }
+.station[data-role="memory"] .orb { --orb: var(--memory); }
+.station[data-role="planner"] .orb { --orb: var(--planner); }
+.station[data-role="handoff"] .orb { --orb: #9fb3cf; }
+.station[data-role="reviewer"] .orb { --orb: var(--reviewer); }
+.station[data-role="you"] .orb { --orb: var(--ok); }
+.station[data-reached="false"] .orb { opacity: .5; filter: saturate(.4); }
+.station[data-active="true"] .orb { animation: glow 1.6s var(--ease-in-out) infinite; transform: scale(1.06); opacity: 1; filter: none; }
+.station[data-waiting="true"] .orb { animation: breathe 1.8s var(--ease-in-out) infinite; }
+.station[data-tone="warn"] .orb { --orb: var(--warn); border-width: 2px; }
+.station[data-tone="danger"] .orb { --orb: var(--danger); border-width: 2px; }
+.station[data-tone="ok"] .orb { --orb: var(--ok); }
+.station__label { font: 600 12px/16px var(--font-ui); color: var(--text-2); }
+.station__sub { font: 400 11px/14px var(--font-mono); color: var(--text-3); min-height: 14px; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.station__stamp { position: absolute; top: -6px; right: calc(50% - 40px); }
+
+.baton { position: absolute; top: 22px; width: 16px; height: 14px; margin-left: -8px; border-radius: 7px; background: var(--accent);
+  box-shadow: 0 0 14px var(--accent); transition: left var(--t-slow) var(--ease-out), background var(--t-base); z-index: 2; pointer-events: none; }
+.baton[data-tone="warn"] { background: var(--warn); box-shadow: 0 0 0 4px rgba(255,181,71,.25), 0 0 16px var(--warn); }
+.baton[data-tone="danger"] { background: var(--danger); box-shadow: 0 0 14px var(--danger); }
+.baton[data-tone="ok"] { background: var(--ok); box-shadow: 0 0 14px var(--ok); }
+.baton[data-tone="idle"] { background: var(--superseded); box-shadow: none; }
+
+.pulse-lane { position: absolute; left: 0; top: 24px; width: 100%; height: 0; z-index: 3; pointer-events: none; animation: lane 700ms var(--ease-in-out) forwards; }
+.pulse { position: absolute; left: 0; top: 0; width: 10px; height: 10px; margin-left: -5px; border-radius: 50%; background: var(--memory); box-shadow: 0 0 12px var(--memory); }
+.pulse__label { position: absolute; top: -16px; left: 0; transform: translateX(-50%); white-space: nowrap; font: 600 10px/1 var(--font-mono); color: var(--memory); }
+
+.track[data-state="failed"] .track__rail { filter: saturate(.35); }
+
+/* decision graph */
+.dgraph { width: 100%; height: auto; overflow: visible; }
+.dgraph__edge { stroke: rgba(46,230,197,.65); stroke-width: 2; fill: none; stroke-dasharray: 120; }
+.dgraph__edge.is-new { animation: draw var(--t-slow) var(--ease-out); }
+.dgraph__node { transition: opacity var(--t-base); }
+.dgraph__node--old { opacity: .55; }
+.dgraph__ripple { fill: none; stroke: var(--accent); stroke-width: 2; animation: ripple var(--t-peak) var(--ease-out) forwards; }
+.dgraph__label { font: 600 11px/1 var(--font-mono); fill: var(--text-2); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 160ms !important; scroll-behavior: auto !important; }
+  .aurora__blob, .station[data-active="true"] .orb, .station[data-waiting="true"] .orb { animation: none !important; }
+  .pulse-lane, .track__sweep, .dgraph__ripple { display: none; }
+  .baton { transition: none !important; }
+}

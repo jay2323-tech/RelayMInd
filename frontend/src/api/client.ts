@@ -1,5 +1,5 @@
 import type {
-  AffectedTask, CurrentDecisions, Evidence, HealthResponse, Identity, ProposedAction, RunView, TaskView,
+  AffectedTask, CurrentDecisions, Decision, Evidence, HealthResponse, Identity, ProposedAction, RunView, TaskView,
 } from '../types';
 import type { ChatMessage } from '../components/chat/ChatPanel';
 import type { SessionSummary } from '../components/chat/ConversationHistory';
@@ -50,6 +50,7 @@ export const api = {
   changes: (sid: string, rid: string, taskIds: string[]) => request<ChangeComparison>(
     `${base}/sessions/${sid}/runs/${rid}/changes?task_ids=${encodeURIComponent(taskIds.join(','))}`),
   decisions: () => request<CurrentDecisions>(`${base}/decisions`),
+  topicHistory: (topic: string) => request<Decision[]>(`${base}/decisions/topics/${encodeURIComponent(topic)}`),
   evidence: (id: string) => request<Evidence>(`${base}/evidence/${encodeURIComponent(id)}`),
   tasks: () => request<TaskView[]>(`${base}/tasks`),
   affected: () => request<AffectedTask[]>(`${base}/tasks/affected`),
