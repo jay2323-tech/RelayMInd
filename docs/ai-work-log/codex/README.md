@@ -21,7 +21,7 @@ This branch includes the teammate's earlier episodic-memory commit `9e68f2c`.
 The original conversation and episode implementations belong to the human teammate's
 work with AI assistance; Codex owns the subsequent fixes and agent-side additions.
 
-52 backend checks passed with live FalkorDB enabled. The frontend production build
+58 backend checks passed with live FalkorDB enabled. The frontend production build
 passed. Database workflow checks used a scripted model and fixture platform bridge.
 Gemini/Groq wire checks used mock HTTP; live model behavior remains unverified.
 
@@ -43,3 +43,5 @@ Follow ../README.md. Daily entries:
 
 Feature/problem/decision/verification files are supporting references; daily files
 are the chronological record. Superseded docs/codex/README.md redirects here.
+
+Pause/resume results: [observed scenario outcomes](scenario-results-2026-10-16.json).

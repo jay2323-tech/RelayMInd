@@ -97,3 +97,14 @@ sandbox. These are execution-environment limits, not database defects.
 **Fix:** requested scoped execution permission and reran authorized commands.
 **Effect:** code authored in isolated checkout and real DB checks executed successfully.
 **Lesson:** distinguish an operation-permitted error from connection refused or query errors.
+
+## P12 - Pause needed to be a durable checkpoint
+
+**Problem addressed:** an in-memory flag would be lost on process restart and would
+not stop a Reviewer from claiming saved work. Pausing after claim would misrepresent
+a running review as stopped.
+**Fix:** one conditional query transitions the run, pending handoff and snapshot.
+Claim only accepts pending/expired-claimed work. Resume explicitly returns paused
+handoff to pending and rechecks decisions. Already-claimed work refuses pause.
+**Evidence:** both scenario live cases passed; new processes recovered state.
+**Limit:** this is checkpoint pause, not cancellation of active model/tool calls.

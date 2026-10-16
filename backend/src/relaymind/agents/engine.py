@@ -242,6 +242,59 @@ class CoordinationEngine:
             self.store.update_run(run)
         return run
 
+    def pause_run(self,run_id):
+        """Pause only at a saved, unclaimed handoff. Does not interrupt model calls."""
+        run=RunRecord.model_validate(self.store.get('run',run_id))
+        if run.status=='paused':
+            return run
+        if run.status!='awaiting_review' or not run.handoff_ids:
+            raise ArtifactConflict('Run has no pausable review checkpoint')
+        run.status='paused'
+        run.events.append(AgentEvent(seq=len(run.events)+1,agent='system',
+                                    summary='Paused at saved handoff; review has not started'))
+        self.store.transition_checkpoint(run,run.handoff_ids[-1],'awaiting_review','pending','paused')
+        return run
+
+    def resume_run(self,run_id):
+        """Explicit operator resume, safe to call from a fresh backend process."""
+        run=RunRecord.model_validate(self.store.get('run',run_id))
+        if run.status=='paused':
+            run.status='awaiting_review'
+            run.events.append(AgentEvent(seq=len(run.events)+1,agent='system',
+                                        summary='Resumed saved handoff; rechecking current decisions'))
+            self.store.transition_checkpoint(run,run.handoff_ids[-1],'paused','paused','pending')
+        return self.continue_run(run_id)
+
+    def explain_changes(self,run_id,task_ids=()):
+        """Mechanical, source-linked comparison, not a new model-generated rationale.
+
+        History is read from immutable handoffs. Current decision changes do not
+        rewrite old plans. Dependency results come from the authorized bridge.
+        """
+        run=RunRecord.model_validate(self.store.get('run',run_id))
+        if not run.handoff_ids:
+            raise LookupError('No saved plan to compare')
+        first=HandoffRecord.model_validate(self.store.get('handoff',run.handoff_ids[0]))
+        latest=HandoffRecord.model_validate(self.store.get('handoff',run.handoff_ids[-1]))
+        current=self.decisions()
+        changes=[]
+        for topic in sorted({d.topic for d in first.decisions+current}):
+            before=[d for d in first.decisions if d.topic==topic]
+            after=[d for d in current if d.topic==topic]
+            if snapshot(before)!=snapshot(after):
+                changes.append({'topic':topic,'before':[d.model_dump() for d in before],
+                                'current':[d.model_dump() for d in after]})
+        if len(task_ids)>10:
+            raise ValueError('Inspect at most ten task roots')
+        return {'run_id':run.id,'status':run.status,'original_handoff_id':first.id,
+                'latest_handoff_id':latest.id,'decisions_changed':bool(changes),
+                'changes':changes,'original_plan':first.plan.model_dump(),
+                'latest_plan':latest.plan.model_dump(),
+                'dependency_paths':{task_id:self.platform.dependencies(self.context,self.project_id,task_id)
+                                    for task_id in task_ids},
+                'review':run.result.model_dump() if run.result else None,
+                'action_applied':False}
+
     def run(self,request,**kwargs):
         run=self.plan_run(request,**kwargs)
         return self.continue_run(run.id) if run.status=='awaiting_review' else run
