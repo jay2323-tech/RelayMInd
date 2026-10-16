@@ -129,3 +129,24 @@ class ArtifactStore:
                     'payload':json.dumps(payload,sort_keys=True)}).result_set
         if len(rows)!=1:
             raise ArtifactConflict('Review claim expired or no longer owned')
+
+    def transition_checkpoint(self,run,handoff_id,expected_run,expected_handoff,new_handoff):
+        """Conditionally transition the run and handoff together at a safe boundary.
+
+        Saves a run snapshot in the same query. No interruption of an active model
+        call is attempted; already-claimed review work cannot be paused here.
+        """
+        params=self._scope('run',run.id)
+        rows=self.graph.query(
+            "MATCH (r:AgentArtifact {kind:'run',id:$id,owner_id:$owner,project_id:$project,session_id:$session}) "
+            "MATCH (h:AgentArtifact {kind:'handoff',id:$handoff,owner_id:$owner,project_id:$project,session_id:$session}) "
+            "WHERE r.status=$expected_run AND h.status=$expected_handoff "
+            "WITH r,h,coalesce(r.version,0)+1 AS next_version "
+            "CREATE (v:AgentRunSnapshot {run_id:$id,version:next_version,payload_json:$payload}) "
+            "CREATE (r)-[:HAS_SNAPSHOT]->(v) "
+            "SET r.payload_json=$payload,r.status=$status,r.version=next_version,h.status=$new_handoff RETURN r.id",
+            params={**params,'handoff':handoff_id,'expected_run':expected_run,
+                    'expected_handoff':expected_handoff,'new_handoff':new_handoff,
+                    'status':run.status,'payload':run.model_dump_json()}).result_set
+        if len(rows)!=1:
+            raise ArtifactConflict('Checkpoint already changed or review is active')
