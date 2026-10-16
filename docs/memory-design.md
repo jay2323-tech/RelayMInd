@@ -431,6 +431,10 @@ Harness:
 | AT-3 | Both create the same Decision id with identical payload | Exactly one Decision node with that id |
 | AT-4 | Both record a new decision superseding the same current decision | Exactly one succeeds; the other reports "replaced decision not current"; topic has exactly one current decision |
 
+**Status 2026-10-16:** AT-3 and AT-4 passed 100/100 with two independent processes on the
+pinned image (amd64), before unique constraints existed; see docs/verification.md. AT-1 is covered
+by Codex's separate-process claim test (3 processes, one round); AT-2 awaits task approval.
+
 Pass on all four → the doc may say "multi-process atomicity observed for these
 operations on FalkorDB `<digest>`, 100 rounds each." That is evidence for these
 operations on this version, not a general guarantee.

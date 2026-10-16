@@ -65,6 +65,26 @@ pass, claim single-process safety only.
 Model provider remains an open decision. It does not block decision, task, evidence
 or approval milestones.
 
+## Platform implementation (Jk, 2026-10-16)
+
+- `memory/decisions.py`: `record_source`, `record_decision` (human-approved, guarded
+  single query, idempotent), `get_current_decisions` → `{current, conflicts, conflicting}`,
+  `get_decision`, `get_decision_history`, `get_source`. Contracts: `contracts/decisions.py`.
+- `memory/tasks.py`: `record_person`, `record_task` (identity + v1), `get_task`,
+  `list_tasks`, `get_task_history`, `trace_dependencies`, `find_affected_tasks`.
+  Contracts: `contracts/tasks.py`.
+- `platform/bridge.py`: `GraphPlatformBridge` implementing the engine's PlatformBridge;
+  CLI factory `relaymind.platform.bridge:factory`.
+  - `current_decisions` returns current decisions **plus every side of every conflict**,
+    so the engine's duplicate-topic check blocks.
+  - `source_id` = first sorted source; all sources listed in the decision evidence and
+    fetchable by their own IDs.
+  - `evidence` serves Source, Decision (with derived state, superseded decision text,
+    affected tasks) and Task records. Messages/episodes stay in the engine.
+  - `dependencies(task_id)` → flat list of `{relation: task|blocked_by|blocks|implements, ...}`.
+- Not yet: CITES edges from handoffs to decisions (documented gap; agree IDs/edge
+  consistency with the engine owner first), task approval, HTTP APIs.
+
 ## Conversation milestone v1
 
 See [conversation-memory-integration.md](conversation-memory-integration.md) for

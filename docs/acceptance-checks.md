@@ -6,19 +6,19 @@
 - [ ] Same-tenant user cannot cite or retrieve episodes based on another user's private message.
 
 ## Decisions (supersession derived from `SUPERSEDES`, never from a stored status)
-- [ ] With northstar.json seeded, current decisions for `launch-scope` = `decision-02` only,
+- [x] With northstar.json seeded, current decisions for `launch-scope` = `decision-02` only,
       because `decision-02 -[:SUPERSEDES]-> decision-01`. No node stores a `superseded` status.
-- [ ] `decision-01` remains readable in topic history.
-- [ ] Recording a decision that supersedes a non-current decision, or one in another
+- [x] `decision-01` remains readable in topic history.
+- [x] Recording a decision that supersedes a non-current decision, or one in another
       topic/project, is rejected with no partial write.
-- [ ] Test scenario `conflict-pricing` is reported as a conflict with both IDs; neither
+- [x] A pricing conflict (same shape as test scenario `conflict-pricing`, throwaway project) is reported as a conflict with both IDs; neither
       appears in `current`; nothing is chosen by timestamp, version or ID order.
-- [ ] A new decision superseding both conflicting decisions resolves the conflict.
+- [x] A new decision superseding both conflicting decisions resolves the conflict.
 
 ## Tasks (immutable versions)
-- [ ] Each task has exactly one current TaskVersion (no incoming `PREVIOUS`); zero or two
+- [x] Each task has exactly one current TaskVersion (no incoming `PREVIOUS`); zero or two
       is reported as an integrity error, not repaired by highest version.
-- [ ] Affected-task query for superseded `decision-01` returns `task-01` and `task-02`,
+- [x] Affected-task query for superseded `decision-01` returns `task-01` and `task-02`,
       with `task-02` blocked by `task-01`.
 
 ## Coordination
