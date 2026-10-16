@@ -32,7 +32,7 @@ export interface Evidence {
   decision?: Decision; history?: Decision[] | TaskVersionEntry[]; note?: string; role?: string;
 }
 
-export interface PlanStep { task: string; evidence_ids: string[] }
+export interface PlanStep { task: string; task_ids?: string[]; evidence_ids: string[] }
 export interface Plan { summary: string; steps: PlanStep[]; uncertainties: string[]; decision_ids: string[] }
 export interface Handoff { id: string; revision: number; plan: Plan; decisions: { id: string; topic: string; text: string }[] }
 export interface Review { status: 'accepted' | 'needs_revision' | 'blocked'; issues: { reason: string; evidence_ids: string[] }[] }

@@ -94,6 +94,24 @@ class GraphPlatformBridge:
                              + "; ".join(_task_line(t) for t in affected))
         return "\n".join(lines)
 
+    def required_tasks(self, context: TrustedContext, project_id: str) -> list[dict]:
+        """Active affected tasks that every project-level plan must address.
+
+        Derived from graph relationships, not natural-language evidence parsing.
+        Already paused/cancelled/done tasks need no new triage requirement.
+        """
+        grouped={}
+        for affected in tm.find_affected_tasks(self.client,context,project_id):
+            task=affected.task
+            if task.status not in {'todo','in_progress'}:
+                continue
+            item=grouped.setdefault(task.task_id,dict(task_id=task.task_id,title=task.title,
+                version_id=task.version_id,version=task.version,
+                superseded_decision_ids=[],replacement_decision_ids=[]))
+            item['superseded_decision_ids']=sorted(set(item['superseded_decision_ids']+[affected.superseded_decision_id]))
+            item['replacement_decision_ids']=sorted(set(item['replacement_decision_ids']+affected.replaced_by))
+        return [grouped[key] for key in sorted(grouped)]
+
     # ------------------------------------------------------- dependencies
     def dependencies(self, context: TrustedContext, project_id: str, task_id: str) -> list[dict]:
         deps = tm.trace_dependencies(self.client, context, project_id, task_id)
