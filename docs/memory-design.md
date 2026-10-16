@@ -361,7 +361,8 @@ All checks run against the **pinned** FalkorDB image (§7.1) in a throwaway grap
 named `relaymind_compat_<random>`. The script deletes only that graph. It never
 touches `relaymind_demo_a` / `relaymind_demo_b`. Planned file:
 `scripts/check_falkordb_compat.py`. Results go in docs/verification.md with the
-image digest. **None of these checks has run yet.**
+image digest. **Status 2026-10-16: C-1, C-2, C-3 PASSED on the pinned image (amd64);**
+see docs/verification.md for the exact output.
 
 | ID | Feature | Check | Pass | If it fails |
 |---|---|---|---|---|
