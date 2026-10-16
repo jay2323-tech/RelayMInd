@@ -1,7 +1,8 @@
 services:
   falkordb:
-    image: falkordb/falkordb:latest
-    # Resolve and pin a tested image digest before the final demo.
+    # Pinned 2026-10-16: multi-arch (amd64 + arm64) index, FalkorDB graph module 4.22.1.
+    # Change only together with re-running the checks in docs/verification.md.
+    image: falkordb/falkordb@sha256:b0bdcac2cbaff989e77cb0610439b7a9289e86de033ccbbd4368b66fb680ae7a
     ports:
       - "127.0.0.1:6379:6379"
       - "127.0.0.1:3000:3000"
