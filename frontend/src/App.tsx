@@ -33,10 +33,19 @@ export default function App() {
   const jobActive = view?.job?.state === 'queued' || view?.job?.state === 'running';
   const status = view?.run?.status ?? (jobActive ? 'planning' : 'idle');
 
+  const [evidenceId, setEvidenceId] = useState<string | null>(null);
+
   const refreshPlatform = useCallback(async () => {
     const [d, a, acts] = await Promise.all([api.decisions(), api.affected(), api.actions()]);
     setDecisions(d); setAffected(a); setActions(acts);
   }, []);
+
+  // Selected evidence shows derived state (current/superseded, task version), so reload it
+  // whenever platform data refreshes instead of showing a stale snapshot.
+  useEffect(() => {
+    if (!evidenceId) return;
+    api.evidence(evidenceId).then(setEvidence).catch(() => undefined);
+  }, [decisions, actions, evidenceId]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -104,6 +113,7 @@ export default function App() {
   }
 
   async function showEvidence(id: string) {
+    setEvidenceId(id);
     setEvidenceState({ loading: true, error: null });
     try { setEvidence(await api.evidence(id)); setEvidenceState({ loading: false, error: null }); }
     catch (e) { setEvidence(null); setEvidenceState({ loading: false, error: `${id}: ${message(e)}` }); }
