@@ -16,3 +16,11 @@ agent product. Preserve that distinction in code, UI, and documentation.
 - Backend: .venv/bin/python -m pytest backend/tests (run from repo root).
 - Do not claim database/model functionality until exercised against real services.
 - Do not modify the other teammate's work without checking current changes first.
+
+## Maintained engineering records
+
+At the user's request, Codex maintains docs/codex/ and Claude maintains docs/claude/.
+Read docs/development-records.md. Update your own records in the same branch/PR for
+each meaningful change: feature, implementation, effects, observed problems/fixes,
+actual verification, limits and next steps. Keep reports separate from personally
+observed results. Preserve the other assistant's records and never include secrets.
