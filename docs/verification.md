@@ -135,3 +135,39 @@ Observed issues handed to Codex (provider/engine owner): no User-Agent (Groq alw
 no retry for 503/429, no re-ask on invalid JSON, failure details reduced to class name.
 Groq key validated with a User-Agent; account lacks Llama models, so `GROQ_MODEL` set to
 `openai/gpt-oss-120b` (not yet exercised in a run). Codex's scenario CLI (`--live-model`) not run yet.
+
+## Real-model rerun after provider fixes (2026-10-17 ~00:07–00:12 IST, Windows PC)
+
+`Jk` = ... + frontend + merge of `65f2c75` (provider retries, User-Agent, repair, diagnostics).
+Live suite after merge: **98 passed** (unit-only: 59 passed, 39 skipped). Demo platform data
+reset and re-seeded (`all`) first. Fresh session `live2-20261017-000650`; fresh run IDs.
+Real `GraphPlatformBridge`; credentials never printed. Failure metadata below is the engine's
+sanitized log output; HTTP error messages were read from provider error bodies only.
+
+| Run | Provider / model | Outcome | Sanitized failure metadata |
+|---|---|---|---|
+| A (CLI) | gemini `gemini-3.6-flash` → fallback groq `openai/gpt-oss-120b` | `failed` at planning | gemini 503 ×3 (retries=0,1,2); fallback; groq HTTP 400 |
+| groqdiag | groq `openai/gpt-oss-120b` only | `failed` | 400 `tool_use_failed`: "Tool choice is none, but model called a tool" |
+| groq | groq `openai/gpt-oss-20b` | `failed` | 400 `tool_use_failed` (same) |
+| groq | groq `qwen/qwen3.8-27b` | `failed` | 400 `json_validate_failed` |
+| B (CLI) | gemini `gemini-3.5-flash-lite`, no fallback | `failed` at review | planning OK (handoff r1); review `invalid_response`, repair attempted (`repaired=True`), still invalid |
+| rdiag | gemini `gemini-3.5-flash-lite`, no fallback | **`completed`** | none |
+
+Completed run `live2-20261017-000650-rdiag-1792175927` (engine API via a response-logging
+wrapper; provider/engine code unmodified):
+- Planner: one `final`; plan cites decision `decision-02` (v2) and evidence `source-02`;
+  uncertainties: missing owners, missing timestamps. Handoff r1 saved with procedure launch-review v1.
+- Independent Reviewer: called `fetch_evidence(source-02)`, then `accepted`, no issues;
+  checked decision-02. All cited IDs passed the engine's evidence validation (real sources).
+- **Quality caveat:** the plan does not name task-01/task-02 (procedure step 3), and this Reviewer
+  accepted anyway; the earlier 2026-10-16 run's Reviewer flagged exactly that omission.
+  Model review strictness varies between runs.
+
+What this verifies / does not:
+- Gemini transient recovery: retries observed (3 attempts on 503 within budget) but **no
+  observed 503 → success recovery**; gemini-3.6-flash stayed unavailable.
+- Groq User-Agent: **fixed** (no Cloudflare 403); Groq still unusable with this protocol on
+  this account (tool_use_failed / json_validate_failed, 400 is non-retryable).
+- Final Review JSON correction: repair path **exercised** (run B) but **did not recover** in
+  that run; run rdiag needed no repair.
+- One completed real-model run with valid evidence: **yes** (rdiag, flash-lite).
