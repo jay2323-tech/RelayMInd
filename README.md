@@ -7,11 +7,17 @@ project. Primary track: **Agent Memory and Coordination**.
 
 ## Current status
 
-Development scaffold only: FastAPI liveness endpoint, strict initial contracts,
-FalkorDB client configuration, persistent Docker service configuration, React
-workspace and synthetic planning fixture. Chat, agents, memory persistence,
-authentication and task actions are not yet implemented. Disabled UI controls are
-intentional; no simulated agent execution is shown.
+Conversation and sourced episode persistence, approved procedure versions, and a
+Planner–Reviewer engine are implemented in this branch. Handoffs and reviews persist
+in FalkorDB; one correction round and decision freshness checks are enforced.
+Gemini/Groq adapters are available but require server-side keys and explicit model
+IDs. Database workflow checks use a labeled scripted model; live LLM grounding is
+not yet verified.
+
+The interface has reusable chat/history/activity components. API/app integration,
+real platform decision tools, production identity and task approval are pending.
+Read docs/agent-platform-integration.md before wiring the engine. The default app
+still displays an unconnected development workspace honestly.
 
 ## Prerequisites
 
@@ -85,5 +91,5 @@ After starting Docker Desktop and `docker compose up -d`, verify the database wi
 ```
 
 The foundation includes fixed local-demo graph access and a session ownership
-query. It does not implement login or conversation persistence. See
+query. It does not implement login. Conversation persistence is available in memory/conversations.py. See
 `docs/conversation-memory-integration.md` before building the conversation module.
