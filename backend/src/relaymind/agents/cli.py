@@ -23,7 +23,8 @@ def main():
     parser.add_argument('--request',default='Continue launch preparation. What changed?')
     parser.add_argument('--procedure',default='launch-review')
     parser.add_argument('--run-id')
-    parser.add_argument('--resume',help='Resume saved run ID instead of planning')
+    parser.add_argument('--resume',help='Explicitly resume a saved, possibly paused run ID')
+    parser.add_argument('--pause-after-plan',action='store_true',help='Persist and pause at the handoff checkpoint')
     args=parser.parse_args()
     load_dotenv()
     context=TrustedContext(tenant_id=os.getenv('DEMO_TENANT_ID','demo-a'),
@@ -32,10 +33,16 @@ def main():
     client=create_client()
     bridge=getattr(importlib.import_module(module),name)(client,context,args.project)
     engine=CoordinationEngine(client,context,args.project,args.session,provider_from_env(),bridge)
-    result=(engine.continue_run(args.resume) if args.resume else
-            engine.run(args.request,run_id=args.run_id,procedure_id=args.procedure))
+    if args.resume:
+        result=engine.resume_run(args.resume)
+    elif args.pause_after_plan:
+        result=engine.plan_run(args.request,run_id=args.run_id,procedure_id=args.procedure)
+        if result.status=='awaiting_review':
+            result=engine.pause_run(result.id)
+    else:
+        result=engine.run(args.request,run_id=args.run_id,procedure_id=args.procedure)
     print(result.model_dump_json(indent=2))
-    return 0 if result.status=='completed' else 2
+    return 0 if result.status in {'completed','paused'} else 2
 
 
 if __name__=='__main__':

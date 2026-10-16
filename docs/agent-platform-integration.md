@@ -100,3 +100,19 @@ checks used a scripted model and fixture platform bridge. Separate-process claim
 contention had one winner on the currently running local FalkorDB instance. This
 observation does not establish all versions' transaction semantics or multi-process
 memory uniqueness. Existing Starlette/httpx deprecation warning remains.
+
+## Pause/change/resume additions
+
+RunRecord has a new `paused` status. Pause only at an unclaimed handoff using
+engine.pause_run(id). Use engine.resume_run(id) for explicit restart/resume. Calling
+continue_run(id) on a paused run intentionally leaves it paused. This does not
+interrupt an active model request. Platform should serialize run-control operations.
+
+engine.explain_changes(id, task_ids=[]) returns original/latest handoff IDs and
+plans, source-linked decision changes and authorized dependency results. Wire
+WhyChangedPanel with this comparison and an evidence callback. See
+docs/pause-change-resume.md and fixtures/pause-resume-scenarios.json for both
+scenarios. No production decision storage fields were changed.
+
+Latest verification: 58 checks passed with live DB enabled; frontend build passed.
+Scenario model/platform fixtures remain explicitly labeled; live LLM pending.

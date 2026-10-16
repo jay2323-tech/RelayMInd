@@ -1,0 +1,34 @@
+{
+  "synthetic": true,
+  "verification_mode": "scripted-model unless --live-model is explicit",
+  "scenarios": {
+    "launch": {
+      "title": "Rescue a product launch",
+      "topic": "launch-scope",
+      "request": "Continue Friday launch preparation and explain changed scope.",
+      "before": "Launch Friday with payments enabled.",
+      "after": "Postpone payments; launch only the free tier Friday.",
+      "before_step": "Prepare payment-enabled Friday launch and verify payment testing.",
+      "after_step": "Revise the launch checklist for the free tier and postpone payment launch work.",
+      "tasks": [
+        "Friday release",
+        "Payment testing",
+        "Billing integration"
+      ]
+    },
+    "coding": {
+      "title": "Adapt a coding plan to changed requirements",
+      "topic": "authentication-requirements",
+      "request": "Continue the authentication implementation plan using the latest approved requirements.",
+      "before": "Implement password login with locally stored password hashes.",
+      "after": "Use organization SSO through OIDC; do not build local password authentication.",
+      "before_step": "Plan the password-login implementation and credential storage checks.",
+      "after_step": "Replace the password-login plan with organization SSO/OIDC integration and callback tests.",
+      "tasks": [
+        "Authentication release",
+        "Password login implementation",
+        "Credential persistence"
+      ]
+    }
+  }
+}

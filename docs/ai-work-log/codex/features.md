@@ -111,3 +111,19 @@ CLI calls a trusted installed bridge factory and can resume a saved run.
 **Verified:** TypeScript and Vite production build; CLI --help.
 **Limit:** no browser interaction or connected API/LLM flow was verified. These
 components do not invent endpoints or display fake completed tool activity.
+
+## F10 - Durable pause/change/resume and explanation
+
+**Files:** agents/engine.py; memory/artifacts.py; coordination.py; demo/scenarios.py;
+fixtures/pause-resume-scenarios.json; activity/WhyChangedPanel.tsx.
+**Behavior:** pause an unclaimed handoff, change approved requirements, then resume
+from a new process and preserve the original plan while revising once.
+**How:** conditional run/handoff state transition also saves snapshot; current
+decisions are compared with immutable first/latest handoffs. No hidden model
+reasoning is exposed. Affected paths come from authorized dependency tools.
+**Effect:** both launch and coding-plan scenarios visibly distinguish remembered
+history from current requirements. Existing API/UI clients must support paused.
+**Verified:** both real-DB scenarios, unchanged resume, claimed-handoff pause denial,
+fresh-process changed resume, two-hop paths and preserved original handoff.
+**Limit:** synthetic decision bridge/scripted model in observed runs. No source-code
+changes or task actions are executed. Active model calls cannot be interrupted.
