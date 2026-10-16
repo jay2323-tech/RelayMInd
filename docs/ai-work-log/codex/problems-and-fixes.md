@@ -122,3 +122,15 @@ expected bound. Full local DB suite 72 passed. No paid live model retry was run.
 **Remaining:** verify actual Groq endpoint with user credentials remotely. Header
 addition addresses a hypothesis, not proof of Cloudflare's root cause. Invalid
 output after the one correction still fails honestly.
+
+## P14 - Groq tool/protocol conflict and inconsistent model review
+
+Claude reported native tool_use_failed and json_validate_failed/400 after the
+User-Agent fix. Groq now uses declared native functions and native tool results,
+without JSON response_format. Known protocol errors can repair once safely.
+
+Claude also observed a real Reviewer accepting omitted affected tasks. Required
+task IDs are now derived from the graph and checked deterministically before model
+acceptance. Existing handoffs stay readable; current checks require a fresh run.
+Coverage is structural, and semantic review still matters. Native wire behavior
+is mock-verified; real Groq outcome remains pending remote credentials.

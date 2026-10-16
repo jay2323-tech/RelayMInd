@@ -127,3 +127,19 @@ history from current requirements. Existing API/UI clients must support paused.
 fresh-process changed resume, two-hop paths and preserved original handoff.
 **Limit:** synthetic decision bridge/scripted model in observed runs. No source-code
 changes or task actions are executed. Active model calls cannot be interrupted.
+
+## F11 - Native Groq function-call translation
+
+Declared read tools and a submit_result function replace Groq's text-described
+JSON tool envelope. Assistant calls and tool results are mapped in both directions.
+Final parameters use the current output schema. Known protocol 400 errors have
+one repair; arbitrary 400s do not. Gemini is unchanged. Wire checks pass; paid
+real-provider compatibility still needs Claude's rerun.
+
+## F12 - Required affected-task coverage
+
+GraphPlatformBridge derives active affected tasks through supersession/IMPLEMENTS.
+Plan steps use exact task_ids with matching task evidence. Missing IDs cannot be
+accepted by model discretion: deterministic needs_revision runs first. Already
+resolved statuses are excluded. The gate checks structural coverage, not whether
+the action text is semantically appropriate. Read discovery is also exposed.

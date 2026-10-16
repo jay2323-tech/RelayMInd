@@ -104,3 +104,13 @@ New cases simulate 429/503 recovery, retry exhaustion/fallback, 403 no-retry, bo
 delay, Retry-After, User-Agent on both adapters, JSON-envelope repair, final-review
 repair, no successful-tool replay and secret-free metadata logs. No live provider
 call or Groq 403 resolution has been verified locally. No frontend code changed.
+
+## October 17 - integrated platform, native Groq and required-task policy
+
+Integrated origin/Jk 0b953ad in the isolated branch before changes. Targeted provider
+suite: 30 passed. Full Mac/Python 3.12 suite with live local FalkorDB: **107 passed,
+1 existing warning in 126.47 seconds**. Includes platform decision/task/action and
+two-process tests, native Groq normalization/known-400 repair, required affected-task
+discovery, deterministic omission rejection without LLM calls, evidence validation
+and successful one-round correction. Frontend build passed. Native Groq HTTP calls
+remain mocked; real Gemini/Groq retest must run on Claude's credentialed machine.
