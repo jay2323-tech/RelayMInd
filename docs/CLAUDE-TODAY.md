@@ -26,3 +26,10 @@ Tomorrow deepen concurrency, crash recovery, model-quality evaluation and polish
 If you need the code in your checkout, merge the published branch after checking
 for local changes, or inspect the managed worktree without editing it. Shared
 App/API files were left to you; components accept props/callbacks.
+
+## User-requested maintained documentation
+
+Maintain docs/claude/ as you work. See its README and docs/development-records.md.
+Record what you build, how it works, user/integration effects, problems encountered,
+causes/fixes, actual checks and remaining gaps. Codex maintains docs/codex/. Update
+records in your implementation PR rather than postponing until the end.
