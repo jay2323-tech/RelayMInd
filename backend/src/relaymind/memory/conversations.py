@@ -25,6 +25,7 @@ Limitations (Pending shared platform safeguards):
 from __future__ import annotations
 
 import time
+from relaymind.memory.locking import serialized_write
 from typing import Any, Literal
 from pydantic import Field, field_validator
 
@@ -69,6 +70,7 @@ class SaveMessageInput(StrictModel):
         return v
 
 
+@serialized_write
 def create_session(
     client: Any,
     context: TrustedContext,
@@ -151,6 +153,7 @@ def create_session(
     )
 
 
+@serialized_write
 def save_message(
     client: Any,
     context: TrustedContext,

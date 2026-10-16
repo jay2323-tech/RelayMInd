@@ -29,6 +29,7 @@ Pagination Boundary & Offset Behavior:
 from __future__ import annotations
 
 import time
+from relaymind.memory.locking import serialized_write
 from typing import Any, Optional
 
 from relaymind.contracts.models import TrustedContext
@@ -57,6 +58,7 @@ class DatabaseOperationError(EpisodeMemoryError):
     pass
 
 
+@serialized_write
 def save_episode(
     client: Any,
     context: TrustedContext,
@@ -92,7 +94,7 @@ def save_episode(
     if len(stripped_summary) > 16000:
         raise ValueError("Summary must not exceed 16000 characters.")
 
-    if occurred_at is not None and occurred_at <= 0:
+    if occurred_at is not None and (type(occurred_at) is not int or occurred_at <= 0):
         raise ValueError("occurred_at must be a positive timestamp")
 
     db_client = client if client is not None else create_client()
@@ -125,6 +127,9 @@ def save_episode(
     if not source_res:
         raise InaccessibleSourceMessageError("Source message unavailable or access denied")
 
+    if len(source_res) != 1:
+        raise DatabaseOperationError("Source message ID is not unique")
+
     source_row = source_res[0]
     msg_created_at = source_row[1]
 
@@ -144,6 +149,8 @@ def save_episode(
         raise DatabaseOperationError(f"Failed to check existing episode: {exc}") from exc
 
     if existing_res:
+        if len(existing_res) != 1:
+            raise DatabaseOperationError("Episode ID is not unique")
         row = existing_res[0]
         ex_id, ex_proj, ex_source, ex_summary, ex_occurred, ex_created, ex_recorded_by, ex_status = row
 
