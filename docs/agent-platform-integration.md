@@ -136,3 +136,25 @@ Scenario model/platform fixtures remain explicitly labeled; live LLM pending.
 
 Verified locally: 72 DB-enabled checks; transient/model failures simulated. No new
 live cloud inference claimed. These edits touch providers.py, loop.py and engine.py.
+
+## Groq native calls and required affected-task coverage
+
+Groq now uses native read functions plus submit_result(final schema), translated
+back to ModelReply. Gemini keeps JSON envelopes. Known Groq 400 tool_use_failed
+and json_validate_failed get one bounded protocol repair. No broad retry of 400s;
+no raw failed_generation, message or response body appears in logs.
+
+PlanStep has optional task_ids (default []). GraphPlatformBridge.required_tasks
+returns graph-derived active affected task references. Engine injects these and
+exposes affected_tasks read tool. Every required task must be named in task_ids
+and cited in evidence_ids. Missing IDs deterministically cause needs_revision
+before LLM review; one correction round remains. Presence does not certify action
+semantics. Legacy bridges lacking required_tasks have no such coverage capability.
+
+Use fresh run IDs after merge; old accepted reviews are historical, not recertified.
+Claude's UI/API contracts remain backward compatible with task_ids being optional.
+
+Verified after integrating Jk 0b953ad: 107 Mac/live-DB checks passed, one existing
+deprecation warning; frontend production build passed. Groq wire checks are mocked.
+Official references consulted: https://console.groq.com/docs/tool-use/overview and
+https://console.groq.com/docs/structured-outputs .

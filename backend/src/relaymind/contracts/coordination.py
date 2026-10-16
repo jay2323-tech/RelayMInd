@@ -35,6 +35,15 @@ class EvidenceRecord(StrictModel):
     source_id: str = Field(min_length=1)
 
 
+class RequiredTaskReference(StrictModel):
+    task_id: str = Field(min_length=1)
+    title: str = Field(min_length=1)
+    version_id: str = Field(min_length=1)
+    version: int = Field(ge=1)
+    superseded_decision_ids: list[str] = Field(default_factory=list)
+    replacement_decision_ids: list[str] = Field(default_factory=list)
+
+
 class HandoffRecord(StrictModel):
     id: str
     run_id: str

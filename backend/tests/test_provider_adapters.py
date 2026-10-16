@@ -20,7 +20,13 @@ def test_provider_wire_format_and_secret_location(provider):
         assert 'test-secret' not in sent.full_url
         assert 'test-secret' not in sent.data.decode()
         body=json.loads(sent.data)
-        assert ('generationConfig' in body) if provider=='gemini' else body['response_format']=={'type':'json_object'}
+        if provider=='gemini':
+            assert 'generationConfig' in body
+        else:
+            assert body['tool_choice']=='required'
+            assert body['parallel_tool_calls'] is False
+            assert 'response_format' not in body
+            assert body['tools'][-1]['function']['name']=='submit_result'
         assert result.final=={'summary':'Done'}
 
 @pytest.mark.parametrize('provider',['gemini','groq'])
