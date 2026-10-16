@@ -17,10 +17,11 @@ agent product. Preserve that distinction in code, UI, and documentation.
 - Do not claim database/model functionality until exercised against real services.
 - Do not modify the other teammate's work without checking current changes first.
 
-## Maintained engineering records
+## AI work log (required)
 
-At the user's request, Codex maintains docs/codex/ and Claude maintains docs/claude/.
-Read docs/development-records.md. Update your own records in the same branch/PR for
-each meaningful change: feature, implementation, effects, observed problems/fixes,
-actual verification, limits and next steps. Keep reports separate from personally
-observed results. Preserve the other assistant's records and never include secrets.
+Every AI assistant keeps its own log under `docs/ai-work-log/<assistant>/`, using
+the rules and template in `docs/ai-work-log/README.md`. Codex writes only in
+`docs/ai-work-log/codex/`; Claude Code writes only in `docs/ai-work-log/claude/`.
+After each task, append to that day's `YYYY-MM-DD.md`: what was done, how it works,
+what it affects, problems found and how they were resolved, actual verification
+results ("not run" if not run), and open items. Never edit another assistant's log.

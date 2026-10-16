@@ -29,7 +29,7 @@ App/API files were left to you; components accept props/callbacks.
 
 ## User-requested maintained documentation
 
-Maintain docs/claude/ as you work. See its README and docs/development-records.md.
+Maintain docs/ai-work-log/claude/ as you work. See its README and docs/development-records.md.
 Record what you build, how it works, user/integration effects, problems encountered,
-causes/fixes, actual checks and remaining gaps. Codex maintains docs/codex/. Update
+causes/fixes, actual checks and remaining gaps. Codex maintains docs/ai-work-log/codex/. Update
 records in your implementation PR rather than postponing until the end.

@@ -69,7 +69,7 @@ Gemini/Groq key or model ID was configured at that check. No live LLM quality cl
 ## October 16 - User requests maintained documentation
 
 **Need:** preserve what was done, how, why it matters, problems, fixes and evidence.
-**Work:** docs/codex/ record set, docs/claude/ starting instructions and shared record
+**Work:** docs/ai-work-log/codex/ record set, docs/ai-work-log/claude/ starting instructions and shared record
 policy. Added a contributor rule so future changes update the owning assistant's folder.
 **Effect:** human teammates and assistants can reconstruct the engineering history
 without relying on chat summaries. Claude's actual work is left for Claude to record.
