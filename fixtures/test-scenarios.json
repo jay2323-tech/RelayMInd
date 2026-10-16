@@ -1,0 +1,39 @@
+{
+  "synthetic": true,
+  "fixture_kind": "test-only",
+  "schema_version": 2,
+  "warning": "Test scenarios. Never load into a demo graph as live data, and never present as agent output. Any UI use must be labelled as a test fixture.",
+  "project_id": "launch-01",
+  "scenarios": [
+    {
+      "id": "conflict-pricing",
+      "purpose": "Two approved decisions on one topic, neither superseding the other. Expected: get_current_decisions reports a conflict for topic 'pricing' with both IDs and puts neither in 'current'. No choice by timestamp or version.",
+      "sources": [
+        { "id": "source-t1", "kind": "email", "title": "Pricing note A", "text": "Approved: free tier limited to 3 projects.", "created_at": 1791795600000 },
+        { "id": "source-t2", "kind": "email", "title": "Pricing note B", "text": "Approved: free tier limited to 5 projects.", "created_at": 1791882000000 }
+      ],
+      "decisions": [
+        { "id": "decision-t1", "topic": "pricing", "version": 1, "text": "Free tier is limited to 3 projects.", "source_ids": ["source-t1"], "approved_by": "person-pm", "approved_at": 1791795600000, "supersedes": [] },
+        { "id": "decision-t2", "topic": "pricing", "version": 1, "text": "Free tier is limited to 5 projects.", "source_ids": ["source-t2"], "approved_by": "person-pm", "approved_at": 1791882000000, "supersedes": [] }
+      ],
+      "expected": { "conflicts": [ { "topic": "pricing", "decision_ids": ["decision-t1", "decision-t2"] } ] }
+    },
+    {
+      "id": "outdated-handoff",
+      "purpose": "A stored handoff whose plan relies on decision-01, which decision-02 supersedes in northstar.json. Expected: Reviewer returns needs_revision or blocked, citing decision-01 as superseded.",
+      "requires": "northstar.json seeded",
+      "handoff": {
+        "id": "handoff-t1",
+        "status": "pending",
+        "attempt": 1,
+        "plan": {
+          "summary": "Finish payment setup for Friday launch.",
+          "steps": [ { "task": "Complete payment provider webhooks before Friday.", "evidence_ids": ["decision-01", "source-01"] } ],
+          "uncertainties": [],
+          "decision_ids": ["decision-01"]
+        }
+      },
+      "expected": { "review_status_in": ["needs_revision", "blocked"], "must_cite_superseded": ["decision-01"] }
+    }
+  ]
+}

@@ -31,3 +31,11 @@ key. The check now uses GRAPH.QUERY RETURN 1 to initialize each fixed demo graph
 then verifies GRAPH.RO_QUERY RETURN 1. Executed successfully against the running
 local Docker database. Authentication and both graph queries passed; no message,
 session, agent or cross-tenant data isolation behavior is proven by this check.
+
+## Pinned FalkorDB image (2026-10-16)
+
+- Image: `falkordb/falkordb@sha256:b0bdcac2cbaff989e77cb0610439b7a9289e86de033ccbbd4368b66fb680ae7a`
+  (was `latest` on 2026-10-16; manifest list with `linux/amd64` and `linux/arm64`, checked against Docker Hub).
+- `MODULE LIST` on Jayanth's Mac: graph module version `42201` (FalkorDB 4.22.1);
+  module args `MAX_QUEUED_QUERIES 25`, `TIMEOUT 1000` (ms), `RESULTSET_SIZE 10000`.
+- Compatibility checks C-1..C-3 and atomicity tests AT-1..AT-4 (memory-design.md §6–7): **not run yet.**
