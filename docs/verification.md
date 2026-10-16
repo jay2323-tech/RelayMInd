@@ -104,3 +104,34 @@ Branch `Jk` = main + PR #3 + PR #4 (merge `fb7472c`) + platform work.
 ### Not verified
 - Any live Gemini/Groq call (no keys configured on this PC yet).
 - arm64 (Mac) runs of the above.
+
+## First real-model checkpoint, Northstar (2026-10-16 ~23:45 IST, Windows PC)
+
+Platform: real `GraphPlatformBridge` on the seeded `launch-01` graph (not a fixture).
+Session `live-20261016-234504`, owner `developer-a`. Provider: Gemini API, called through
+the engine's `JsonProvider`. Credentials in local `.env` only; never printed.
+
+| Attempt | Model | Result |
+|---|---|---|
+| CLI run1, run2 | `gemini-3.6-flash` (+ Groq fallback) | `failed`: Gemini HTTP 503, then Groq fallback HTTP 403 (Cloudflare 1010: request has no User-Agent) |
+| diag | `gemini-3.6-flash` | turn 1 OK: calls `fetch_evidence`, `trace_dependencies` x2; turn 2 HTTP 503 |
+| diag | `gemini-3.8-flash` | same pattern: good tool calls, then 503 |
+| diag | `gemini-2.5-flash` | HTTP 404 for this key |
+| diag | `gemini-3.5-flash-lite` | Planner `final` → handoff saved (`awaiting_review`) |
+
+Full `gemini-3.5-flash-lite` run (`...-gemini-3.5-flash-lite-1792174627`):
+1. Plan r1 cites only `decision-02` and `source-02`; uncertainties: missing owners/dates.
+   Did **not** name affected tasks.
+2. Independent Reviewer (separate process, real model) → `needs_revision`: "The procedure
+   requires that tasks implementing superseded decisions are identified with a proposed next
+   action. The plan fails to identify task-01 and task-02 which implement the superseded
+   decision-01." Evidence cited: `decision-02`.
+3. Correction (real model) → plan r2 names task-01 and task-02 for postponement/cancellation
+   and continues free-tier preparation. Cites `decision-02` only.
+4. Final review call: provider returned an invalid response → run `failed`
+   ("ProviderError: review could not complete"). **Run did not complete.**
+
+Observed issues handed to Codex (provider/engine owner): no User-Agent (Groq always 403),
+no retry for 503/429, no re-ask on invalid JSON, failure details reduced to class name.
+Groq key validated with a User-Agent; account lacks Llama models, so `GROQ_MODEL` set to
+`openai/gpt-oss-120b` (not yet exercised in a run). Codex's scenario CLI (`--live-model`) not run yet.
