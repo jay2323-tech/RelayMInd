@@ -1,35 +1,81 @@
 {
   "synthetic": true,
+  "fixture_kind": "demo-seed",
+  "schema_version": 2,
   "tenant_alias": "tenant-a",
+  "notes": "Supersession is expressed only by 'supersedes' links. A decision is current when no other decision supersedes it. There is no stored superseded status. Timestamps are UTC epoch milliseconds.",
   "project": {
     "id": "launch-01",
     "name": "Northstar free-tier launch"
   },
+  "people": [
+    { "id": "person-pm", "name": "Northstar product lead" },
+    { "id": "person-dev-a", "name": "Northstar backend engineer" },
+    { "id": "person-dev-b", "name": "Northstar web engineer" }
+  ],
   "sources": [
     {
       "id": "source-01",
-      "text": "Approved: launch Friday with payments enabled."
+      "kind": "meeting-notes",
+      "title": "Launch sync, 5 October",
+      "text": "Approved: launch Friday with payments enabled.",
+      "created_at": 1791190800000
     },
     {
       "id": "source-02",
-      "text": "Approved replacement: postpone payments; launch only the free tier Friday."
+      "kind": "meeting-notes",
+      "title": "Launch sync, 12 October",
+      "text": "Approved replacement: postpone payments; launch only the free tier Friday.",
+      "created_at": 1791795600000
     }
   ],
   "decisions": [
     {
       "id": "decision-01",
-      "text": "Launch Friday with payments enabled.",
-      "status": "superseded",
+      "topic": "launch-scope",
       "version": 1,
-      "source_id": "source-01"
+      "text": "Launch Friday with payments enabled.",
+      "source_ids": ["source-01"],
+      "approved_by": "person-pm",
+      "approved_at": 1791192600000,
+      "supersedes": []
     },
     {
       "id": "decision-02",
+      "topic": "launch-scope",
+      "version": 2,
       "text": "Postpone payments; launch only the free tier Friday.",
-      "status": "approved",
-      "version": 1,
-      "source_id": "source-02",
-      "supersedes": "decision-01"
+      "source_ids": ["source-02"],
+      "approved_by": "person-pm",
+      "approved_at": 1791797400000,
+      "supersedes": ["decision-01"],
+      "supersede_reason": "Payments postponed after 12 October launch sync."
+    }
+  ],
+  "tasks": [
+    {
+      "id": "task-01",
+      "implements": ["decision-01"],
+      "blocked_by": [],
+      "versions": [
+        { "version": 1, "title": "Configure payment provider webhooks", "status": "in_progress", "assigned_to": "person-dev-a", "created_at": 1791192600000 }
+      ]
+    },
+    {
+      "id": "task-02",
+      "implements": ["decision-01"],
+      "blocked_by": ["task-01"],
+      "versions": [
+        { "version": 1, "title": "Publish pricing page with checkout", "status": "todo", "assigned_to": "person-dev-b", "created_at": 1791192600000 }
+      ]
+    },
+    {
+      "id": "task-03",
+      "implements": ["decision-02"],
+      "blocked_by": [],
+      "versions": [
+        { "version": 1, "title": "Publish free-tier sign-up page", "status": "todo", "assigned_to": "person-dev-b", "created_at": 1791797400000 }
+      ]
     }
   ]
 }
