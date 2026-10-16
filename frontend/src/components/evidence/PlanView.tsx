@@ -12,7 +12,9 @@ export function PlanView({ run, handoffs, onEvidence }: {
     <h2 id="plan-title">Plan (revision {latest.revision})</h2>
     <p>{latest.plan.summary}</p>
     <p><small>Based on decisions:</small> {latest.plan.decision_ids.map(cite)}</p>
-    <ol className="steps">{latest.plan.steps.map((step, i) => <li key={i}>{step.task} <span className="cites">{step.evidence_ids.map(cite)}</span></li>)}</ol>
+    <ol className="steps">{latest.plan.steps.map((step, i) => <li key={i}>{step.task}
+      {!!step.task_ids?.length && <div><small>Addresses tasks:</small> {step.task_ids.map(cite)}</div>}
+      <div><small>Evidence:</small> <span className="cites">{step.evidence_ids.map(cite)}</span></div></li>)}</ol>
     {latest.plan.uncertainties.length > 0 && <><h4>Uncertainties</h4>
       <ul className="plain">{latest.plan.uncertainties.map((u, i) => <li key={i}>{u}</li>)}</ul></>}
     {run.result && <div className={`review review-${run.result.review.status}`}>
