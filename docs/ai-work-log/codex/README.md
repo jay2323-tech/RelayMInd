@@ -45,3 +45,7 @@ Feature/problem/decision/verification files are supporting references; daily fil
 are the chronological record. Superseded docs/codex/README.md redirects here.
 
 Pause/resume results: [observed scenario outcomes](scenario-results-2026-10-16.json).
+
+Latest integrated verification, October 17: 107 backend checks passed on Mac with
+live FalkorDB; frontend build passed. See [October 17](2026-10-17.md) for native Groq
+and deterministic task-coverage changes. Live cloud retest remains pending.

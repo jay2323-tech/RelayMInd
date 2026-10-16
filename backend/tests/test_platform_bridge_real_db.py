@@ -121,7 +121,7 @@ def test_task_integrity_error_when_two_current_versions(world):
 
 def _plan(n):
     return {"final": {"summary": "Pause payment work; ship free tier",
-                      "steps": [{"task": "Pause payment webhooks", "evidence_ids": [n("d2"), n("t1")]}],
+                      "steps": [{"task": "Pause payment webhooks and pricing page", "task_ids": [n("t1"), n("t2")], "evidence_ids": [n("d2"), n("t1"), n("t2")]}],
                       "decision_ids": [n("d2")]}}
 
 

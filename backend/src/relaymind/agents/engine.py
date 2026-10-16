@@ -10,7 +10,7 @@ from uuid import uuid4
 from relaymind.contracts.models import Plan, Review, ReviewIssue, AgentEvent
 from relaymind.contracts.coordination import (
     DecisionReference, EvidenceRecord, HandoffRecord, ReviewRecord, RunRecord,
-    NoArguments, EvidenceArguments, DependencyArguments,
+    NoArguments, EvidenceArguments, DependencyArguments, RequiredTaskReference,
 )
 from relaymind.graph.access import AccessDenied
 from relaymind.memory.artifacts import ArtifactStore, ArtifactConflict
@@ -75,6 +75,22 @@ class CoordinationEngine:
             raise AgentBlocked('Too many current decisions; narrow the project context')
         return result
 
+    def required_tasks(self):
+        # Legacy/test bridges without task support have no coverage capability.
+        # Production GraphPlatformBridge implements this method explicitly.
+        loader=getattr(self.platform,'required_tasks',None)
+        if loader is None:
+            return []
+        records=[RequiredTaskReference.model_validate(item) for item in loader(self.context,self.project_id)]
+        if len(records)>50 or len({r.task_id for r in records})!=len(records):
+            raise AgentBlocked('Task requirements exceed limits or contain duplicate IDs')
+        return records
+
+    @staticmethod
+    def missing_tasks(plan,requirements):
+        covered={task_id for step in plan.steps for task_id in step.task_ids}
+        return [item for item in requirements if item.task_id not in covered]
+
     def memory_context(self):
         # Recent history query is scoped to this owned session; current decisions
         # are retrieved independently, not inferred from historical messages.
@@ -113,6 +129,8 @@ class CoordinationEngine:
         if not plan.decision_ids or not set(plan.decision_ids).issubset(ids):
             raise AgentBlocked('Plan must cite current decisions only')
         for step in plan.steps:
+            if not set(step.task_ids).issubset(set(step.evidence_ids)):
+                raise AgentBlocked('Structured task IDs must also appear in the step evidence IDs')
             if not step.task.strip() or not step.evidence_ids:
                 raise AgentBlocked('Every plan step requires task text and evidence')
             for evidence_id in step.evidence_ids:
@@ -130,6 +148,9 @@ class CoordinationEngine:
             'review_procedure':ReadTool('Exact approved review checklist version.',NoArguments,
                 lambda:procedure.model_dump()),
         }
+        if callable(getattr(self.platform,'required_tasks',None)):
+            tools['affected_tasks']=ReadTool('Active tasks affected by superseded decisions. Include each task_id in a plan step task_ids and evidence_ids.',NoArguments,
+                lambda:[item.model_dump() for item in self.required_tasks()])
         if handoff is not None:
             tools['load_handoff']=ReadTool('Persisted Planner proposal and decision snapshot.',NoArguments,
                 lambda:handoff.model_dump())
@@ -165,13 +186,15 @@ class CoordinationEngine:
             context=self.memory_context()
             prompt={'request':run.request,'current_decisions':[d.model_dump() for d in decisions],
                     'historical_context':context,'revision_feedback':feedback,
+                    'required_affected_tasks':[item.model_dump() for item in self.required_tasks()],
                     'procedure':procedure.model_dump()}
             import json
             plan=self.loop.run(
                 'You are the Planner. Create a proposal grounded in current approved decisions. '
                 'Episodes and chat are history, not approval. Each step must cite real evidence IDs. '
                 'Use read tools when information is missing. Record uncertainties; never invent owners, '
-                'dates, completed actions or approval. Return the Plan schema.',
+                'dates, completed actions or approval. Every required affected task must be explicitly addressed '
+                'using its exact ID in both task_ids and evidence_ids on a step. These remain proposals. Return the Plan schema.',
                 json.dumps(prompt),self._tools(decisions,procedure,None),Plan,
                 lambda summary:self._event(run,'planner',summary))
             self.validate_plan(plan,decisions)
@@ -207,6 +230,11 @@ class CoordinationEngine:
             if snapshot(current)!=snapshot(handoff.decisions):
                 review=Review(status='needs_revision',issues=[ReviewIssue(
                     reason='Approved decisions changed after planning',evidence_ids=[d.id for d in current])])
+            elif self.missing_tasks(handoff.plan,self.required_tasks()):
+                missing=self.missing_tasks(handoff.plan,self.required_tasks())
+                review=Review(status='needs_revision',issues=[ReviewIssue(
+                    reason='Plan omits affected tasks. Address each using exact task_ids and supporting task evidence.',
+                    evidence_ids=[item.task_id for item in missing])])
             else:
                 self.validate_plan(handoff.plan,current)
                 import json
@@ -226,6 +254,11 @@ class CoordinationEngine:
                 for issue in review.issues:
                     for evidence_id in issue.evidence_ids:
                         self.evidence(evidence_id)
+                remaining=self.missing_tasks(handoff.plan,self.required_tasks())
+                if review.status=='accepted' and remaining:
+                    review=Review(status='needs_revision',issues=[ReviewIssue(
+                        reason='Affected tasks changed during review; replan with task IDs',
+                        evidence_ids=[item.task_id for item in remaining])])
                 if snapshot(self.decisions())!=snapshot(current):
                     review=Review(status='needs_revision',issues=[ReviewIssue(
                         reason='Decisions changed during review; replan',evidence_ids=[])])
