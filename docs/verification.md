@@ -38,4 +38,29 @@ session, agent or cross-tenant data isolation behavior is proven by this check.
   (was `latest` on 2026-10-16; manifest list with `linux/amd64` and `linux/arm64`, checked against Docker Hub).
 - `MODULE LIST` on Jayanth's Mac: graph module version `42201` (FalkorDB 4.22.1);
   module args `MAX_QUEUED_QUERIES 25`, `TIMEOUT 1000` (ms), `RESULTSET_SIZE 10000`.
-- Compatibility checks C-1..C-3 and atomicity tests AT-1..AT-4 (memory-design.md §6–7): **not run yet.**
+- Atomicity tests AT-1..AT-4 (memory-design.md §7): **not run yet.**
+
+## FalkorDB compatibility checks C-1..C-3 (2026-10-16)
+
+Command: `.venv/Scripts/python scripts/check_falkordb_compat.py` on the Windows PC
+(Python 3.14, Docker Desktop, pinned image above running as `linux/amd64`).
+Each check used its own throwaway `relaymind_compat_<random>` graph; `GRAPH.LIST`
+afterwards showed only `relaymind_demo_a` and `relaymind_demo_b`.
+
+```
+FalkorDB graph module version: 42201
+PASS  C-1 WHERE NOT (pattern): short form=[['D2'], ['D3']], aggregation form=[['D2'], ['D3']], expected=[['D2'], ['D3']]
+PASS  C-2 UNIQUE TaskVersion.version_key: status=OPERATIONAL, duplicate error='unique constraint violation on node of type TaskVersion', nodes with key=1
+PASS  C-3a UNIQUE Decision.id: status=OPERATIONAL, duplicate error='unique constraint violation on node of type Decision', nodes with key=1
+PASS  C-3b UNIQUE Handoff.id: status=OPERATIONAL, duplicate error='unique constraint violation on node of type Handoff', nodes with key=1
+4/4 checks passed.
+```
+
+Meaning: on this image, `WHERE NOT (pattern)` matches the aggregation form, and
+single-property unique constraints reject duplicates after reaching OPERATIONAL.
+Not yet run on arm64 (Mac); same digest, so expected identical, but unverified.
+Unique constraints stop duplicate IDs; they do **not** by themselves prove that
+guarded claims/approvals are atomic. That still requires AT-1..AT-4.
+
+Same session, baseline unit tests on Python 3.14: `pytest backend/tests -q` →
+17 passed, 2 skipped (live tests opt-in), 1 warning.

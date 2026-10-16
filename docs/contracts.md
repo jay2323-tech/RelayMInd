@@ -56,10 +56,11 @@ Source of truth: [memory-design.md](memory-design.md). Summary of the contract p
   and no basis decision is superseded or in conflict. No returned row is never success.
 - Model tools are read-only; writes happen in engine code after validation.
 
-Verification status (none run yet): `WHERE NOT (pattern)` (C-1), `GRAPH.CONSTRAINT`
-uniqueness (C-2, C-3), and multi-process atomicity of claims, approvals and
-check-and-create (AT-1..AT-4, two independent processes, 100 rounds, pinned image).
-Until those pass, claim single-process safety only.
+Verification status: `WHERE NOT (pattern)` (C-1) and `GRAPH.CONSTRAINT` uniqueness
+(C-2, C-3) passed on the pinned image (amd64, 2026-10-16; see verification.md).
+Not yet run: multi-process atomicity of claims, approvals and check-and-create
+(AT-1..AT-4, two independent processes, 100 rounds, pinned image). Until those
+pass, claim single-process safety only.
 
 Model provider remains an open decision. It does not block decision, task, evidence
 or approval milestones.

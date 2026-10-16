@@ -35,7 +35,7 @@
 
 ## Platform and safety
 - [ ] Cross-tenant and unauthorized session/evidence access is denied.
-- [ ] FalkorDB compatibility checks C-1..C-3 executed on the pinned image; results recorded.
+- [x] FalkorDB compatibility checks C-1..C-3 executed on the pinned image; results recorded (amd64, 2026-10-16, 4/4 pass).
 - [ ] Atomicity tests AT-1..AT-4 run with **two independent OS processes**, 100 rounds each,
       on the pinned image. Until they pass, docs state single-process safety only.
 - [ ] Tool/model/database failures and limits never report fabricated success.
