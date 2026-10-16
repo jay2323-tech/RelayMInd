@@ -333,6 +333,13 @@ step 3. Acceptable for the demo; documented, not hidden.
 
 ### 5.2 Guarded write shape (atomicity UNVERIFIED, §7)
 
+> **Implementation note (2026-10-16):** on FalkorDB 4.22.1 the
+> `OPTIONAL MATCH (a)-[:BASED_ON]->(b:Decision)<-[:SUPERSEDES]-(:Decision) ... count(b)`
+> step below returned **no row** when nothing matched (expected count 0). The implementation
+> (`services/actions.py`) uses the C-1-verified predicate
+> `NOT (a)-[:BASED_ON]->(:Decision)<-[:SUPERSEDES]-(:Decision)` instead. Two separate
+> OPTIONAL MATCHes also work. The shape below is kept for history.
+
 ```cypher
 MATCH (a:ProposedAction {id: $action_id, status: 'proposed'})-[:TARGETS]->(t:Task)
 MATCH (t)-[:HAS_VERSION]->(cur:TaskVersion {version: a.expected_task_version})
