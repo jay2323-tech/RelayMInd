@@ -94,3 +94,13 @@ dependencies and refusal to pause an active review. Both CLI start/change/resume
 cleanup demonstrations passed and were recorded in scenario-results-2026-10-16.json.
 Model and platform are explicitly synthetic fixtures in these runs. Not a live LLM
 reasoning benchmark or proof of production approval behavior.
+
+## Provider reliability follow-up
+
+25 targeted provider/loop checks passed; 14 are new. The full suite with live local
+FalkorDB enabled passed **72 checks**, with the same one existing deprecation warning.
+These 72 checks are independent of Claude's earlier reported 72-check platform suite.
+New cases simulate 429/503 recovery, retry exhaustion/fallback, 403 no-retry, bounded
+delay, Retry-After, User-Agent on both adapters, JSON-envelope repair, final-review
+repair, no successful-tool replay and secret-free metadata logs. No live provider
+call or Groq 403 resolution has been verified locally. No frontend code changed.

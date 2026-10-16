@@ -2,7 +2,10 @@
 import json
 import time
 from dataclasses import dataclass
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
+import logging
+
+logger=logging.getLogger(__name__)
 from relaymind.contracts.coordination import ModelReply
 
 
@@ -32,17 +35,40 @@ class AgentLoop:
         started=time.monotonic()
         calls=0
         seen=set()
-        for _ in range(self.max_turns):
+        repaired_final=False
+        # One extra turn is reserved exclusively for final-output shape repair.
+        for turn in range(self.max_turns+1):
+            if turn>=self.max_turns and not repaired_final:
+                break
             remaining=self.timeout_seconds-(time.monotonic()-started)
             if remaining<=0:
                 raise AgentBlocked('Agent time limit reached')
             if len(json.dumps(transcript))>self.context_chars:
                 raise AgentBlocked('Context limit reached; narrow the request')
             reply=self.provider.reply(instruction,transcript,descriptors,timeout=min(30,remaining))
+            if time.monotonic()-started>=self.timeout_seconds:
+                raise AgentBlocked('Agent time limit reached')
             if not isinstance(reply,ModelReply):
                 reply=ModelReply.model_validate(reply)
             if reply.final is not None:
-                return output_model.model_validate(reply.final)
+                try:
+                    return output_model.model_validate(reply.final)
+                except ValidationError as exc:
+                    if repaired_final:
+                        raise AgentBlocked('Final output failed schema validation after one correction') from None
+                    repaired_final=True
+                    # Only field paths/error kinds; do not log or echo input values.
+                    fields=[{'field':'.'.join(str(x) for x in e['loc']),'error':e['type']}
+                            for e in exc.errors(include_input=False,include_url=False)][:12]
+                    logger.warning('agent_final_schema_invalid schema=%s repair=1',output_model.__name__)
+                    transcript.append({'role':'assistant','final':reply.final})
+                    transcript.append({'role':'user','content':
+                        'Correct your final object once to the required schema. Return final only, no tool calls. '
+                        +json.dumps(fields)})
+                    emit('Correcting invalid final output format')
+                    continue
+            if repaired_final:
+                raise AgentBlocked('Final-output correction must return final, not additional tool calls')
             if calls+len(reply.calls)>self.max_calls:
                 raise AgentBlocked('Tool-call limit reached')
             transcript.append({'role':'assistant','calls':[call.model_dump() for call in reply.calls]})

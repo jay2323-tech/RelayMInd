@@ -3,6 +3,8 @@
 Platform integration is a Python protocol; no invented HTTP route is assumed.
 """
 import time
+import logging
+import re
 from typing import Protocol
 from uuid import uuid4
 from relaymind.contracts.models import Plan, Review, ReviewIssue, AgentEvent
@@ -24,6 +26,26 @@ class PlatformBridge(Protocol):
     def current_decisions(self, context, project_id) -> list[DecisionReference]: ...
     def evidence(self, context, project_id, evidence_id) -> EvidenceRecord: ...
     def dependencies(self, context, project_id, task_id) -> list[dict]: ...
+
+
+logger=logging.getLogger(__name__)
+
+
+def failure_summary(exc,stage,run_id):
+    # Allowlisted metadata only. Do not log raw exception messages or traceback
+    # values from third-party responses: those may contain prompts or credentials.
+    provider=getattr(exc,'provider',None)
+    provider=provider if provider in {'gemini','groq'} else None
+    status=getattr(exc,'http_status',None)
+    status=status if type(status) is int and 100<=status<=599 else None
+    code=getattr(exc,'code',type(exc).__name__)
+    code=re.sub(r'[^a-zA-Z0-9_]', '_',str(code))[:60]
+    safe_id=re.sub(r'[^a-zA-Z0-9_-]','_',str(run_id))[:100]
+    logger.error('agent_failure run_id=%s stage=%s code=%s provider=%s http_status=%s',
+                 safe_id,stage,code,provider,status)
+    detail=f'{stage}: {code}'
+    if provider:detail+=f' ({provider}' + (f' HTTP {status}' if status else '') + ')'
+    return detail
 
 
 def stamp():
@@ -166,7 +188,7 @@ class CoordinationEngine:
         except Exception as exc:
             run.status='blocked' if isinstance(exc,(AgentBlocked,LookupError,AccessDenied)) else 'failed'
             # Safe category only; caller logs can retain stack traces privately.
-            run.error=type(exc).__name__+': planning could not complete'
+            run.error=failure_summary(exc,'planning',run.id)
             self.store.update_run(run)
         return run
 
@@ -212,8 +234,12 @@ class CoordinationEngine:
                 decision_ids=[d.id for d in current],created_at=stamp())
             self.store.complete_review(handoff.id,token,record.model_dump())
             return record
-        except Exception:
-            self.store.release(handoff_id,token)
+        except Exception as exc:
+            failure_summary(exc,'independent_review',handoff.run_id)
+            try:
+                self.store.release(handoff_id,token)
+            except Exception as release_error:
+                failure_summary(release_error,'claim_release',handoff.run_id)
             raise
 
     def continue_run(self,run_id):
@@ -238,7 +264,7 @@ class CoordinationEngine:
             self.store.update_run(run)
         except Exception as exc:
             run.status='blocked' if isinstance(exc,(AgentBlocked,LookupError,AccessDenied,ArtifactConflict)) else 'failed'
-            run.error=type(exc).__name__+': review could not complete'
+            run.error=failure_summary(exc,'review',run.id)
             self.store.update_run(run)
         return run
 

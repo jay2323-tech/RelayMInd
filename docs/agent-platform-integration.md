@@ -116,3 +116,23 @@ scenarios. No production decision storage fields were changed.
 
 Latest verification: 58 checks passed with live DB enabled; frontend build passed.
 Scenario model/platform fixtures remain explicitly labeled; live LLM pending.
+
+## Provider retry and failure diagnostics update
+
+- User-Agent is sent to both providers. Verify the real Groq 403 issue remotely;
+  the header is not a guarantee against every access-policy rejection.
+- Up to two retries for 429, 5xx and connection failures; delays 0.25/0.5 seconds
+  unless a numeric Retry-After applies (bounded at 5 seconds). Total timeout is
+  shared. No retries for 401/403/404.
+- If fallback is configured, primary receives 65% of the per-reply timeout budget;
+  fallback receives the actual remaining time after a retryable failure.
+- One provider JSON-envelope correction and one agent final-schema correction are
+  separate bounded layers. Final repair never replays successful tools. Exhausted
+  invalid output remains a failure, not coerced success.
+- Logs include provider, code, HTTP status and engine stage/run ID. Never raw
+  response bodies, keys or prompt/source text. Persisted error is safe metadata.
+- Rerun terminal failures using a fresh run ID/session; stable IDs return saved
+  terminal state. Claude should rerun the real bridge/model checkpoint after fetch.
+
+Verified locally: 72 DB-enabled checks; transient/model failures simulated. No new
+live cloud inference claimed. These edits touch providers.py, loop.py and engine.py.
