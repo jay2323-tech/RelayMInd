@@ -108,3 +108,17 @@ Claim only accepts pending/expired-claimed work. Resume explicitly returns pause
 handoff to pending and rechecks decisions. Already-claimed work refuses pause.
 **Evidence:** both scenario live cases passed; new processes recovered state.
 **Limit:** this is checkpoint pause, not cancellation of active model/tool calls.
+
+## P13 - Real-provider run failed at final Review format
+
+**Reported by Claude:** real Gemini Planner, independent Reviewer and correction
+worked; final response shape was invalid. Gemini 503 overloads were common; Groq
+returned 403/error1010, suspected to be missing User-Agent; diagnostics were insufficient.
+**Fix:** explicit User-Agent; two transient retries within deadline; one envelope
+and one final-schema repair; fallback budget reservation; sanitized structured
+provider/stage/status logs and safer persisted run.error.
+**Observed local evidence:** targeted simulated failures recover or stop at the
+expected bound. Full local DB suite 72 passed. No paid live model retry was run.
+**Remaining:** verify actual Groq endpoint with user credentials remotely. Header
+addition addresses a hypothesis, not proof of Cloudflare's root cause. Invalid
+output after the one correction still fails honestly.
