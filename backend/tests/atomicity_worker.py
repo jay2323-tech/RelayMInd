@@ -1,7 +1,7 @@
 """Worker process for two-process atomicity tests. Test-only; not collected by pytest.
 
 Usage: python atomicity_worker.py <json-config>
-Config: {"mode": "AT-3"|"AT-4", "worker": "w1", "project": "...", "rounds": N, "spacing": seconds}
+Config: {"mode": "AT-2"|"AT-3"|"AT-4", "worker": "w1", "project": "...", "rounds": N, "spacing": seconds}
 Handshake: prints READY once connected, then reads one stdin line with the shared
 start epoch. Prints one JSON line per round: {"round", "worker", "fired_at", "outcome", "detail"}.
 """
@@ -15,6 +15,7 @@ from relaymind.contracts.models import TrustedContext
 from relaymind.graph import access
 from relaymind.graph.connection import create_client
 from relaymind.memory.decisions import record_decision
+from relaymind.services.actions import approve_action
 
 
 def main():
@@ -36,6 +37,12 @@ def main():
             pass
         fired = time.time()
         try:
+            if cfg["mode"] == "AT-2":
+                rec = approve_action(client, ctx, pid, f"{pid}-a-{worker}-{rnd}")
+                outcome, detail = rec.status, rec.result
+                print(json.dumps({"round": rnd, "worker": worker, "fired_at": fired,
+                                  "took_ms": (time.time() - fired) * 1000, "outcome": outcome, "detail": detail}), flush=True)
+                continue
             if cfg["mode"] == "AT-3":
                 rec = record_decision(client, ctx, pid, f"{pid}-same-{rnd}", f"t{rnd}", "same payload",
                                       [f"{pid}-src"], human_approved=True)
