@@ -171,3 +171,25 @@ What this verifies / does not:
 - Final Review JSON correction: repair path **exercised** (run B) but **did not recover** in
   that run; run rdiag needed no repair.
 - One completed real-model run with valid evidence: **yes** (rdiag, flash-lite).
+
+## Integrated agent branch 11b3620: live verification (2026-10-17 ~00:40–00:55 IST, Windows PC)
+
+`Jk` merge `44ea49b` (native Groq functions + `submit_result`, required affected-task coverage,
+`PlanStep.task_ids`). Live suite on Windows: **107 passed** (matches Codex's Mac count).
+Live-run evidence from before the reset was exported to
+`docs/ai-work-log/claude/evidence/2026-10-17-live-runs-before-reset.json` (14 runs, no secrets).
+Every attempt below used a fresh session and run ID, the real `GraphPlatformBridge` and the
+seeded `launch-01` graph (decision-02 supersedes decision-01; task-01/task-02 active).
+
+| # | Check | Provider / model | Result |
+|---|---|---|---|
+| 1 | Gemini addresses task-01/task-02 | gemini `gemini-3.5-flash-lite` | **3/3 completed**, every plan has `task_ids` = [task-01, task-02] cited in evidence; reviews `accepted` (11–31 s) |
+| 2 | Omission → needs_revision | SCRIPTED-FIXTURE planner (labelled), reviewer with **no model replies** | **9/9 `needs_revision`** (omit both, omit task-02, IDs only in evidence), issue lists exactly the missing IDs, zero model calls |
+| 3 | Groq native calls + submit_result | groq `openai/gpt-oss-120b` (×3) | Planning **works**: native calls (`fetch_evidence` ×3, `affected_tasks`), `submit_result` → valid plan with task-01/task-02 saved as handoff. Review **failed 3/3: HTTP 429** (free tier 8,000 tokens/min; planning used ~5k; reset ~35 s > 5 s retry cap) |
+| 3b | Groq alternative | groq `openai/gpt-oss-20b` | failed at planning: 429 then 400 after one protocol repair |
+| 4 | Browser flow | gemini flash-lite via API/UI | chat → paused r1 (decision-01) → evidence chip → seed change → Resume → deterministic `needs_revision` (decisions changed) → r2 names task-01/task-02 with task_ids, plus a step "proceed with task-03" **without citing task-03** → real Reviewer `needs_revision` (citation rule) → run ends `needs_revision` (one correction max). Evidence panel auto-refreshed to "SUPERSEDED by decision-02". Propose + Approve pause task-01 → "Applied: version 1 -> 2". |
+
+Conclusions: affected-task coverage works deterministically and Gemini now addresses both tasks.
+Groq is functional for planning but cannot complete a run on this free-tier account
+(per-minute token limit). The browser flow works end to end; the final review outcome depends
+on model output (this run: a correct citation catch).
