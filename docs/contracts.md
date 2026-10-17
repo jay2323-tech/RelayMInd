@@ -233,3 +233,18 @@ lookups, decision validation and freshness snapshots before persistence. Unknown
 inaccessible IDs still block; omitted required tasks/orders still need revision.
 Stored handoffs are never silently rewritten during review. No extra model call is
 needed for this repair, and it does not force Reviewer acceptance.
+
+## Memory-capability help (17 October)
+
+RunRecord adds optional `request_kind` (`planning` default, or `capability`) and
+`answer` (nullable string). Whole-message memory-capability questions receive a
+server-authored informational answer, saved in the same authorized run scope and
+conversation. These completed runs have no handoff or review; the UI must not
+label them Reviewer accepted or ready for approval. Old records default to planning.
+This narrow help route does not answer factual recall questions, approve memory,
+or provide a general Q&A mode. Existing planning fixtures remain unchanged.
+
+The informational capability path also handles whole-message greetings such as
+“Hi” without planning. A greeting followed by a business request does not bypass
+the normal workflow. `request_kind=capability` is displayed as an informational
+reply, with no implied Reviewer acceptance or applied action.
