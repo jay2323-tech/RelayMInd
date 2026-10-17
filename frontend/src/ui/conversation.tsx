@@ -97,8 +97,10 @@ export function Composer({ busy, showSuggestions, pauseAfterPlan, onPauseChange,
 }
 
 // ---------- plan + review ----------
-export function PlanCard({ run, handoffs, currentDecisionIds, onEvidence }: {
-  run: RunRecord | null; handoffs: Handoff[]; currentDecisionIds: Set<string>; onEvidence: (id: string) => void;
+export function PlanCard({ run, handoffs, currentDecisionIds, currentHolds = {}, onEvidence }: {
+  run: RunRecord | null; handoffs: Handoff[]; currentDecisionIds: Set<string>;
+  currentHolds?: Record<string, string>;   // hold id -> current hold decision id (from the impact query)
+  onEvidence: (id: string) => void;
 }) {
   if (!run || !handoffs.length) return null;
   const latest = handoffs[handoffs.length - 1];
@@ -112,6 +114,7 @@ export function PlanCard({ run, handoffs, currentDecisionIds, onEvidence }: {
       </div>
       {handoffs.length > 1 && <span className="badge badge--warn">revised after review</span>}
     </div>
+    <Freshness handoffs={handoffs} currentHolds={currentHolds} onEvidence={onEvidence} />
     <p className="plan__summary">{latest.plan.summary}</p>
     <div className="row caption" style={{ marginBottom: 12 }}>Based on {latest.plan.decision_ids.map(chip)}</div>
     <ol className="steps">{latest.plan.steps.map((step, i) => <li key={i} className="step">
@@ -125,6 +128,26 @@ export function PlanCard({ run, handoffs, currentDecisionIds, onEvidence }: {
       <ul>{latest.plan.uncertainties.map((u, i) => <li key={i}>{u}</li>)}</ul></div>}
     <ReviewSeal run={run} onEvidence={onEvidence} />
   </section>;
+}
+
+/** Which manufacturing evidence version each handoff was planned against, versus the live graph. */
+function Freshness({ handoffs, currentHolds, onEvidence }: {
+  handoffs: Handoff[]; currentHolds: Record<string, string>; onEvidence: (id: string) => void;
+}) {
+  const rows = handoffs.flatMap(h => (h.manufacturing_versions ?? []).map(v => ({ rev: h.revision, v })));
+  if (!rows.length) return null;
+  return <div className="row" style={{ marginBottom: 12 }}>
+    {rows.map(({ rev, v }) => {
+      const now = currentHolds[v.evidence_id];
+      const stale = now !== undefined && now !== v.version_id;
+      return <span key={`${rev}-${v.evidence_id}`} className={`badge ${stale ? 'badge--warn' : 'badge--ok'}`}
+        title={v.content_sha256 ? `snapshot sha256 ${v.content_sha256.slice(0, 12)}…` : undefined}>
+        r{rev} planned against {v.evidence_id} <button type="button" className="chip chip--decision" style={{ height: 18 }}
+          onClick={() => onEvidence(v.version_id)}>{v.version_id}</button>
+        {stale ? <> · now {now}</> : now !== undefined ? ' · current' : ''}
+      </span>;
+    })}
+  </div>;
 }
 
 export function ReviewSeal({ run, onEvidence }: { run: RunRecord; onEvidence: (id: string) => void }) {

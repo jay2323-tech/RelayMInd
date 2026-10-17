@@ -85,15 +85,15 @@ Open http://127.0.0.1:5173 and sign in (password = `RELAYMIND_DEMO_PASSWORD`):
 
 ### Demo script
 
-Northstar: reset (`scripts/reset_northstar_platform.py --yes-reset-launch-01`, then seed
-`--stage before-change`) → sign in as `northstar.lead` → switch on *Pause after the Planner* → ask
+One-command reset of both scenarios to before-change: `scripts/demo_reset.py --scenario all`.
+
+Northstar: reset (`scripts/demo_reset.py --scenario northstar`) → sign in as `northstar.lead` → switch on *Pause after the Planner* → ask
 "Continue launch preparation. What changed, and what should we do next?" → run pauses at handoff r1 →
 apply the change with `scripts/seed_northstar.py` → **Resume** → needs revision → revised plan →
 Reviewer accepted → Inspector: *Why changed*, decision graph v1 → v2 → *Actions*: propose and approve
 pausing an affected task.
 
-AdventureWorks: reset (`scripts/reset_adventureworks.py --yes-reset-aw-qh-17`, then seed
-`--stage before-change`) → sign in as `aw.quality` → Inspector *Actions* shows exposed orders →
+AdventureWorks: reset (`scripts/demo_reset.py --scenario aw`) → sign in as `aw.quality` → Inspector *Actions* shows exposed orders →
 apply the expanded notice with `scripts/seed_adventureworks.py --stage after-change` → reload →
 AW-O103 now exposed under hold v2 → propose and approve the hold. Full script: [docs/demo-script.md](docs/demo-script.md).
 
