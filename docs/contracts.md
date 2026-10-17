@@ -1,5 +1,39 @@
 # Shared contracts
 
+## Agent job scope (P2-04 engine boundary)
+
+`contracts/agent_jobs.py` defines frozen `AgentJobScope` with tenant, user, company,
+project and session IDs. `CoordinationEngine.for_job` accepts a server-verified
+scope, persists tenant/company IDs in new run and handoff records and checks all
+five IDs before resuming or reviewing a scoped artifact. Existing unscoped demo
+records remain readable only through the legacy demo path. The HTTP background
+queue, account membership and polling authorization still need Claude's platform
+integration; this contract alone is not authentication. See
+`agent-job-scope.md` for the exact handoff.
+
+## AdventureWorks retrieval milestone (17 October)
+
+`contracts/retrieval.py` adds `SearchArguments`, `SearchHit`, `SearchResult` and
+`EvidenceVersion`. `memory/retrieval.py` searches Source
+nodes in the server-authorized project. Planner and Reviewer both expose this
+read-only `search_sources` tool. It accepts query/limit only, never identity or graph.
+Only a successful zero-row query returns `not_found`; authorization and DB failures
+propagate. Results include source hashes, timestamp, method, scope and `has_more`.
+This is bounded lexical source discovery, not comprehensive semantic retrieval.
+`HandoffRecord.evidence_versions` now records every cited evidence ID, its source ID
+and a SHA-256 of the authorized evidence text shown to the agents. On independent
+review, a changed text/source ID causes `needs_revision` before model acceptance;
+the engine checks again after review. Older handoffs without a manifest still load
+with their original behavior. A Planner citation to a source it discovered through
+`search_sources` requires a successful `fetch_evidence` call first. Engine source
+fetches return the complete authorized `SourceRecord.text` (bounded at 16,000
+characters by the existing contract), without the platform display truncation.
+The manifest's `state` is `unknown`: content equality alone cannot prove a
+decision is current.
+The existing approved-decision snapshot still supplies that guard. Typed
+manufacturing freshness and employee/incident search await platform contracts.
+See `adventureworks-checkpoint.md` for integration requirements.
+
 ## Additive organization directory milestone (17 October)
 
 See [company-directory-and-import.md](company-directory-and-import.md).

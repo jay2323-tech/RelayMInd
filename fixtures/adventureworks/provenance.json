@@ -1,0 +1,53 @@
+{
+  "employee_count": 290,
+  "team_count": 16,
+  "historical_assignments_excluded": 6,
+  "department_rule": "EndDate empty; exactly one current row required per employee",
+  "snapshot_semantics": "Source export snapshot, not today's staffing",
+  "manager_ids": "Unknown: SQL hierarchyid binary values are not decoded",
+  "skills": "Unknown: source does not contain skills",
+  "omitted_fields": [
+    "NationalIDNumber",
+    "LoginID",
+    "BirthDate",
+    "MaritalStatus",
+    "Gender",
+    "VacationHours",
+    "SickLeaveHours",
+    "Demographics"
+  ],
+  "source_revision": "e5d7bb90ca0b695ac14f61458047bfb5a498459e",
+  "source_files": {
+    "Employee.csv": {
+      "url": "https://raw.githubusercontent.com/microsoft/sql-server-samples/e5d7bb90ca0b695ac14f61458047bfb5a498459e/samples/databases/adventure-works/oltp-install-script/Employee.csv",
+      "sha256": "111b1ba4a51bf982c7f8841cdb14c14374fc4552a22e7ba067ef728e7ae72258",
+      "bytes": 48854
+    },
+    "Person.csv": {
+      "url": "https://raw.githubusercontent.com/microsoft/sql-server-samples/e5d7bb90ca0b695ac14f61458047bfb5a498459e/samples/databases/adventure-works/oltp-install-script/Person.csv",
+      "sha256": "e22b399865b5f322eda6b34c4c4532165a1ee62cb2362d3f6bb8c1eebbecd896",
+      "bytes": 13565030
+    },
+    "Department.csv": {
+      "url": "https://raw.githubusercontent.com/microsoft/sql-server-samples/e5d7bb90ca0b695ac14f61458047bfb5a498459e/samples/databases/adventure-works/oltp-install-script/Department.csv",
+      "sha256": "ea23f5c516f7d843a2d4abe583346a9c8cda9670179ecfb63707641189d61934",
+      "bytes": 1075
+    },
+    "EmployeeDepartmentHistory.csv": {
+      "url": "https://raw.githubusercontent.com/microsoft/sql-server-samples/e5d7bb90ca0b695ac14f61458047bfb5a498459e/samples/databases/adventure-works/oltp-install-script/EmployeeDepartmentHistory.csv",
+      "sha256": "6b090ae6cd83bd6673cd2ecc6a1db80f869e6e955d57ba4dfbe6c27c482f6a53",
+      "bytes": 13021
+    },
+    "instawdb.sql": {
+      "url": "https://raw.githubusercontent.com/microsoft/sql-server-samples/e5d7bb90ca0b695ac14f61458047bfb5a498459e/samples/databases/adventure-works/oltp-install-script/instawdb.sql",
+      "sha256": "d979f036750f9c7b4fb7be3d58cdbb596a74f864a6325998501b3a96c6ad53f9",
+      "bytes": 329368
+    },
+    "license.txt": {
+      "url": "https://raw.githubusercontent.com/microsoft/sql-server-samples/e5d7bb90ca0b695ac14f61458047bfb5a498459e/license.txt",
+      "sha256": "201f3705979e932c92cd3c6ddbddf4dc3c71dcc5a82089a1e4018227cfe1cf09",
+      "bytes": 1142
+    }
+  },
+  "output_sha256": "2ccf337bbd44c17b29acc1dedab501ae0d3b77028aeae3b37d20c3514a6d0e1d"
+}
