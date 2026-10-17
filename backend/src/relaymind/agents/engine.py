@@ -22,6 +22,8 @@ from relaymind.agents.loop import AgentLoop, AgentBlocked, ReadTool
 from relaymind.contracts.retrieval import SearchArguments, EvidenceVersion
 from relaymind.contracts.agent_jobs import AgentJobScope
 from relaymind.memory.retrieval import search_sources
+from relaymind.agents.manufacturing import HoldArguments, OrderArguments, hold_snapshots, impact_snapshot
+from relaymind.memory import manufacturing as mf
 from relaymind.memory.decisions import get_source
 
 
@@ -221,17 +223,24 @@ class CoordinationEngine:
                                                         for i in step.evidence_ids}))]
 
     def changed_evidence(self,handoff):
+        changed=[]
+        for item in handoff.manufacturing_versions:
+            latest=impact_snapshot(self.client,self.context,self.project_id,item.evidence_id)
+            if latest!=item:
+                # Cite the fetchable decision evidence, not the virtual hold
+                # snapshot ID (the existing evidence API does not serve Hold IDs).
+                changed.append(item.source_id)
         # Empty manifests belong to older handoffs and retain their old behavior.
         if not handoff.evidence_versions:
-            return []
+            return changed
         expected={i for step in handoff.plan.steps for i in step.evidence_ids}
         recorded={item.evidence_id for item in handoff.evidence_versions}
         if len(recorded)!=len(handoff.evidence_versions) or expected!=recorded:
             raise AgentBlocked('Handoff evidence manifest is incomplete')
         latest={item.evidence_id:item for item in self.evidence_manifest(handoff.plan)}
-        return [item.evidence_id for item in handoff.evidence_versions
+        return sorted(set(changed+[item.evidence_id for item in handoff.evidence_versions
                 if latest[item.evidence_id].content_sha256!=item.content_sha256
-                or latest[item.evidence_id].source_id!=item.source_id]
+                or latest[item.evidence_id].source_id!=item.source_id]))
 
     def _tools(self,decisions,procedure,emit,*,handoff=None,discovered=None,fetched=None):
         def search(query,limit=5):
@@ -247,6 +256,13 @@ class CoordinationEngine:
             return record.model_dump()
 
         tools={
+            'current_hold':ReadTool('Current approved manufacturing hold and held batches. Never infers approval.',
+                HoldArguments,lambda hold_id:mf.current_hold(self.client,self.context,self.project_id,hold_id).model_dump()),
+            'affected_orders':ReadTool('Recompute current hold impact via batch/assembly/order graph paths. '
+                'Includes order versions, shipped exposure and unknown traceability; unknown is never safe.',
+                HoldArguments,lambda hold_id:mf.affected_orders(self.client,self.context,self.project_id,hold_id).model_dump()),
+            'get_order':ReadTool('Current version of an authorized manufacturing order. Read-only.',
+                OrderArguments,lambda order_id:mf.get_order(self.client,self.context,self.project_id,order_id).model_dump()),
             'search_sources':ReadTool('Search authorized project source documents by a few exact terms. '
                 'All terms must match; try synonyms separately. Empty results apply only to this search scope. '
                 'Fetch full evidence by returned ID; a source is not necessarily current approved truth.',
@@ -297,6 +313,7 @@ class CoordinationEngine:
         self._check_artifact_scope(run)
         try:
             decisions=self.decisions()
+            manufacturing=hold_snapshots(self.client,self.context,self.project_id,decisions)
             procedure=get_procedure(self.client,self.context,self.project_id,procedure_id,procedure_version)
             self._event(run,'planner','Retrieved approved decisions and procedure')
             context=self.memory_context()
@@ -322,10 +339,13 @@ class CoordinationEngine:
             self.validate_plan(plan,decisions)
             if snapshot(self.decisions())!=snapshot(decisions):
                 raise AgentBlocked('Decisions changed during planning; start a fresh run')
+            if hold_snapshots(self.client,self.context,self.project_id,decisions)!=manufacturing:
+                raise AgentBlocked('Manufacturing impact changed during planning; start a fresh run')
             handoff=HandoffRecord(id=run.id+'-r'+str(revision),run_id=run.id,
                 session_id=self.session_id,project_id=self.project_id,owner_id=self.context.user_id,
                 request=run.request,revision=revision,plan=plan,decisions=decisions,
                 evidence_versions=self.evidence_manifest(plan),
+                manufacturing_versions=manufacturing,
                 procedure_id=procedure.id,procedure_version=procedure.version,created_at=stamp(),
                 **self._scope_fields())
             self.store.put('handoff',handoff.id,handoff.model_dump())

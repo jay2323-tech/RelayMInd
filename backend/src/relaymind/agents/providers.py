@@ -11,9 +11,56 @@ import time
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
 from relaymind.contracts.coordination import ModelReply
+from pydantic import ValidationError
 
 logger=logging.getLogger(__name__)
 USER_AGENT='RelayMind/0.1 (+https://github.com/jay2323-tech/RelayMInd)'
+
+
+def _inline_schema(schema):
+    """Inline local Pydantic refs before nesting schemas in the wire envelope."""
+    definitions=schema.get('$defs',{})
+    def expand(value,depth=0):
+        if depth>24:
+            raise ValueError('Output schema nesting exceeds provider limits')
+        if isinstance(value,list):return [expand(item,depth+1) for item in value]
+        if not isinstance(value,dict):return value
+        if '$ref' in value:
+            ref=value['$ref']
+            if not ref.startswith('#/$defs/') or ref.split('/')[-1] not in definitions:
+                raise ValueError('Unsupported schema reference')
+            return expand(definitions[ref.split('/')[-1]],depth+1)
+        return {k:expand(v,depth+1) for k,v in value.items() if k not in {'$defs','default','title'}}
+    return expand(schema)
+
+
+def final_schema(system):
+    marker='Required final schema: '
+    if marker not in system:return {'type':'object','additionalProperties':True}
+    schema,_=json.JSONDecoder().raw_decode(system.split(marker,1)[1].lstrip())
+    return schema
+
+
+def gemini_reply_schema(system,tools):
+    """Constrain the protocol envelope as well as its typed final payload.
+
+    JSON MIME mode alone doesn't enforce calls/final shape. Distinct object
+    branches forbid both keys together and bind calls to declared argument shapes.
+    Local validation in ModelReply and AgentLoop remains mandatory.
+    """
+    branches=[{'type':'object','additionalProperties':False,'required':['final'],
+               'properties':{'final':_inline_schema(final_schema(system))}}]
+    if tools:
+        variants=[{'type':'object','additionalProperties':False,
+            'required':['id','name','arguments'],'properties':{
+                'id':{'type':'string','minLength':1,'maxLength':200},
+                'name':{'type':'string','enum':[name]},
+                'arguments':_inline_schema(tool['arguments'])}}
+            for name,tool in tools.items()]
+        branches.append({'type':'object','additionalProperties':False,'required':['calls'],
+            'properties':{'calls':{'type':'array','minItems':1,'maxItems':10,
+                                  'items':{'anyOf':variants}}}})
+    return {'anyOf':branches}
 
 
 class ProviderError(RuntimeError):
@@ -46,16 +93,14 @@ class JsonProvider:
             headers['x-goog-api-key']=self._key
             payload={'systemInstruction':{'parts':[{'text':system}]},
                 'contents':[{'role':'user','parts':[{'text':user}]}],
-                'generationConfig':{'responseMimeType':'application/json','maxOutputTokens':4096}}
+                'generationConfig':{'responseMimeType':'application/json','maxOutputTokens':4096,
+                                    'responseJsonSchema':gemini_reply_schema(system,tools)}}
         else:
             url='https://api.groq.com/openai/v1/chat/completions'
             headers['Authorization']='Bearer '+self._key
             # Groq models use native function calling. Do not combine JSON mode
             # with textual fake tools, which caused tool_use_failed/400 remotely.
-            final_schema={'type':'object','additionalProperties':True}
-            marker='Required final schema: '
-            if marker in system:
-                final_schema,_=json.JSONDecoder().raw_decode(system.split(marker,1)[1].lstrip())
+            output_schema=final_schema(system)
             functions=[]
             for name,tool in tools.items():
                 if name=='submit_result':
@@ -64,7 +109,7 @@ class JsonProvider:
                     'description':tool['description'],'parameters':tool['arguments']}})
             functions.append({'type':'function','function':{'name':'submit_result',
                 'description':'Finish by submitting the final result matching the required schema.',
-                'parameters':final_schema}})
+                'parameters':output_schema}})
             messages=[{'role':'system','content':system+
                 '\nFor this provider use the declared native functions. Finish by calling submit_result. '
                 'Do not print calls/final JSON envelopes or invent undeclared functions. '
@@ -147,7 +192,16 @@ class JsonProvider:
         except (URLError,TimeoutError,OSError):
             raise ProviderError(f'{self.provider} connection unavailable',True,
                                 provider=self.provider,code='connection_error') from None
+        except ValidationError:
+            logger.warning('provider_decode_failure provider=%s stage=envelope_schema',self.provider)
+            raise ProviderError(f'{self.provider} returned an invalid response',
+                                provider=self.provider,code='invalid_response') from None
+        except json.JSONDecodeError:
+            logger.warning('provider_decode_failure provider=%s stage=json_syntax',self.provider)
+            raise ProviderError(f'{self.provider} returned an invalid response',
+                                provider=self.provider,code='invalid_response') from None
         except (KeyError,IndexError,ValueError,TypeError):
+            logger.warning('provider_decode_failure provider=%s stage=wire_shape',self.provider)
             raise ProviderError(f'{self.provider} returned an invalid response',
                                 provider=self.provider,code='invalid_response') from None
 
