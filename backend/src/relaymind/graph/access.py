@@ -11,7 +11,7 @@ _DEMO_ACCESS = {
     ("demo-a", "developer-a"): ("relaymind_demo_a", frozenset({"launch-01"})),
     ("demo-a", "developer-a2"): ("relaymind_demo_a", frozenset({"launch-01"})),
     ("adventureworks", "aw-analyst"): ("relaymind_adventureworks", frozenset({"aw-qh-17"})),
-    ("demo-b", "developer-b"): ("relaymind_demo_b", frozenset({"launch-01"})),
+    ("demo-b", "developer-b"): ("relaymind_demo_b", frozenset({"launch-01", "hb-route-07"})),
     ("demo-c", "developer-c"): ("relaymind_demo_c", frozenset({"launch-01"})),
 }
 

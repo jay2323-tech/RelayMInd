@@ -34,7 +34,7 @@ export function ChatStream({ messages, onEvidence }: { messages: ChatMessage[]; 
   const end = useRef<HTMLDivElement>(null);
   useEffect(() => { end.current?.scrollIntoView({ block: 'end' }); }, [messages.length]);
   if (!messages.length) return <div className="empty">
-    Ask about the launch. RelayMind remembers approved decisions and earlier conversations across sessions.
+    Ask about your project. RelayMind remembers approved decisions and earlier conversations across sessions.
   </div>;
   return <div className="stream" role="log" aria-live="polite" aria-label="Conversation">
     {messages.map(m => <article key={m.id} className={`bubble bubble--${m.role}`}>
@@ -51,6 +51,11 @@ const SUGGESTIONS: Record<string, string[]> = {
     'Investigate hold QH-17, identify affected orders, evaluate replacement options and prepare an owned recovery plan. Do not approve shipments or replacements.',
     'Which orders are exposed under the current hold, and which are unknown?',
     'What changed in hold QH-17 and what must be replanned?',
+  ],
+  'hb-route-07': [
+    'Port North changed our plans. What changed for HB-O201 and what should dispatch and account management do next?',
+    'Which tasks still assume Route A, and what should happen to them?',
+    'Can we confirm a delivery date to Coldline Foods yet?',
   ],
   default: [
     'Continue launch preparation. What changed, and what should we do next?',

@@ -43,7 +43,7 @@ class Account:
 ACCOUNTS: dict[str, Account] = {a.username: a for a in (
     Account("northstar.lead", "developer-a", "demo-a", "northstar", "Northstar launch lead", frozenset({"launch-01"})),
     Account("northstar.peer", "developer-a2", "demo-a", "northstar", "Northstar engineer", frozenset({"launch-01"})),
-    Account("harbor.lead", "developer-b", "demo-b", "harbor", "Harbor operations lead", frozenset({"launch-01"})),
+    Account("harbor.lead", "developer-b", "demo-b", "harbor", "Harbor operations lead", frozenset({"hb-route-07"})),
     Account("aw.quality", "aw-analyst", "adventureworks", "adventureworks", "AdventureWorks quality analyst",
             frozenset({"aw-qh-17"})),
 )}

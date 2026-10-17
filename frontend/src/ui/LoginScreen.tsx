@@ -6,7 +6,7 @@ import type { Identity } from '../types';
 const ACCOUNTS = [
   ['northstar.lead', 'Northstar · software launch'],
   ['northstar.peer', 'Northstar · second user (own sessions only)'],
-  ['harbor.lead', 'Harbor · logistics'],
+  ['harbor.lead', 'Harbor · logistics route change'],
   ['aw.quality', 'AdventureWorks · manufacturing quality hold'],
 ];
 
