@@ -46,14 +46,21 @@ export function ChatStream({ messages, onEvidence }: { messages: ChatMessage[]; 
 }
 
 // ---------- composer ----------
-const SUGGESTIONS = [
-  'Continue launch preparation. What changed, and what should we do next?',
-  'Which tasks are affected by the latest decision?',
-  'Summarise the current launch scope with sources.',
-];
+const SUGGESTIONS: Record<string, string[]> = {
+  'aw-qh-17': [
+    'Investigate hold QH-17, identify affected orders, evaluate replacement options and prepare an owned recovery plan. Do not approve shipments or replacements.',
+    'Which orders are exposed under the current hold, and which are unknown?',
+    'What changed in hold QH-17 and what must be replanned?',
+  ],
+  default: [
+    'Continue launch preparation. What changed, and what should we do next?',
+    'Which tasks are affected by the latest decision?',
+    'Summarise the current launch scope with sources.',
+  ],
+};
 
-export function Composer({ busy, showSuggestions, pauseAfterPlan, onPauseChange, onSend }: {
-  busy: boolean; showSuggestions: boolean; pauseAfterPlan: boolean;
+export function Composer({ busy, showSuggestions, pauseAfterPlan, onPauseChange, onSend, project = '' }: {
+  busy: boolean; showSuggestions: boolean; pauseAfterPlan: boolean; project?: string;
   onPauseChange: (v: boolean) => void; onSend: (text: string) => Promise<void>;
 }) {
   const [draft, setDraft] = useState('');
@@ -73,7 +80,7 @@ export function Composer({ busy, showSuggestions, pauseAfterPlan, onPauseChange,
   };
   const working = busy || sending;
   return <form className="composer glass glass--l2 glass--liquid" onSubmit={submit}>
-    {showSuggestions && <div className="suggestions">{SUGGESTIONS.map(s =>
+    {showSuggestions && <div className="suggestions">{(SUGGESTIONS[project] ?? SUGGESTIONS.default).map(s =>
       <button key={s} type="button" className="suggestion" disabled={working} onClick={() => void send(s)}>{s}</button>)}</div>}
     <label htmlFor="composer" className="sr-only">Message</label>
     <textarea id="composer" value={draft} maxLength={16000} disabled={working} placeholder="Ask RelayMind… (Enter to send, Shift+Enter for a new line)"

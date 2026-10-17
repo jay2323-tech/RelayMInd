@@ -1,5 +1,5 @@
 import type {
-  AffectedTask, CurrentDecisions, Decision, Evidence, HealthResponse, Identity, ProposedAction, RunView, TaskView,
+  AffectedTask, CurrentDecisions, Decision, Evidence, HealthResponse, Identity, ImpactReport, ProposedAction, RunView, TaskView,
 } from '../types';
 import type { ChatMessage } from '../components/chat/ChatPanel';
 import type { SessionSummary } from '../components/chat/ConversationHistory';
@@ -63,7 +63,9 @@ export const api = {
   tasks: () => request<TaskView[]>(`${base()}/tasks`),
   affected: () => request<AffectedTask[]>(`${base()}/tasks/affected`),
   actions: () => request<ProposedAction[]>(`${base()}/actions`),
-  propose: (body: { task_id: string; new_status: string; reason: string; based_on: string[]; expected_task_version: number; run_id?: string }) =>
+  holds: () => request<string[]>(`${base()}/holds`),
+  impact: (hold: string) => request<ImpactReport>(`${base()}/holds/${encodeURIComponent(hold)}/impact`),
+  propose: (body: { target?: 'task' | 'order'; task_id: string; new_status: string; reason: string; based_on: string[]; expected_task_version: number; run_id?: string }) =>
     post<ProposedAction>(`${base()}/actions`, body),
   approve: (id: string) => post<ProposedAction>(`${base()}/actions/${id}/approve`),
   reject: (id: string) => post<ProposedAction>(`${base()}/actions/${id}/reject`, {}),

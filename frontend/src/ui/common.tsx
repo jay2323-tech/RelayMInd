@@ -4,9 +4,9 @@ import type { Identity } from '../types';
 // ---------- evidence chips ----------
 export type ChipKind = 'decision' | 'source' | 'task' | 'episode' | 'other';
 export function chipKind(id: string): ChipKind {
-  if (id.startsWith('decision-')) return 'decision';
-  if (id.startsWith('source-')) return 'source';
-  if (id.startsWith('task-')) return 'task';
+  if (id.startsWith('decision-') || id.startsWith('aw-dec-')) return 'decision';
+  if (id.startsWith('source-') || id.startsWith('aw-src-')) return 'source';
+  if (id.startsWith('task-') || id.startsWith('aw-task-')) return 'task';
   if (id.includes('episode')) return 'episode';
   return 'other';
 }
@@ -22,7 +22,7 @@ export function EvidenceChip({ id, onOpen, superseded = false, title }: {
     onClick={() => onOpen(id)}><span className="chip__dot" aria-hidden />{id}</button>;
 }
 
-const ID_PATTERN = /\b((?:decision|source|task)-[\w-]+|northstar-episode-\d+)\b/g;
+const ID_PATTERN = /\b((?:decision|source|task)-[\w-]+|northstar-episode-\d+|aw-(?:dec|src|task)-[\w-]+|AW-[OBA]\d+)\b/g;
 /** Render plain text with every known record ID turned into an evidence chip. */
 export function Linkified({ text, onOpen }: { text: string; onOpen: (id: string) => void }) {
   const parts: ReactNode[] = [];

@@ -49,8 +49,21 @@ export interface Job { state: 'queued' | 'running' | 'done' | 'error'; error: st
 export interface RunView { run: RunRecord | null; job: Job | null; handoffs: Handoff[] }
 
 export interface ProposedAction {
-  id: string; task_id: string; new_status: string; reason: string; expected_task_version: number;
+  id: string; task_id: string; kind?: 'set_status' | 'hold_order'; new_status: string; reason: string; expected_task_version: number;
   based_on: string[]; run_id: string | null;
   status: 'proposed' | 'applied' | 'stale' | 'blocked_by_conflict' | 'rejected';
   result: string | null; applied_version_id: string | null; created_at: number;
+}
+
+export interface OrderView {
+  order_id: string; version_id: string; version: number; status: string; model: string | null;
+  units: number | null; traceability: 'known' | 'unknown'; source_id: string;
+}
+export interface ImpactReport {
+  hold: { hold_id: string; decision_id: string; decision_version: number; decision_text: string;
+          held_batches: string[]; source_ids: string[]; supersedes: string[] };
+  affected: { order: OrderView; batch_id: string; assembly_id: string; hold_decision_id: string;
+              hold_decision_version: number; exposure: 'open_order_hold' | 'shipped_exposure_review'; source_ids: string[] }[];
+  unknown_traceability: OrderView[];
+  query: string;
 }
