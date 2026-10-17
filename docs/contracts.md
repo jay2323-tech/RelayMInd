@@ -25,7 +25,14 @@ and a SHA-256 of the authorized evidence text shown to the agents. On independen
 review, a changed text/source ID causes `needs_revision` before model acceptance;
 the engine checks again after review. Older handoffs without a manifest still load
 with their original behavior. A Planner citation to a source it discovered through
-`search_sources` requires a successful `fetch_evidence` call first. Engine source
+`search_sources` requires a successful full evidence read before persistence.
+If the Planner omits its `fetch_evidence` call, engine code fetches each distinct
+cited, discovered source through the same authorized evidence lookup and records
+a count-only recovery event. Lookup failures still block; search excerpts never
+substitute for the full source in the manifest or independent review. The Reviewer
+receives complete cited source text and may reject an unsupported plan. This is
+an engine read, not a claim that the Planner saw the full text; no extra model
+call or automatic semantic acceptance is introduced. Engine source
 fetches return the complete authorized `SourceRecord.text` (bounded at 16,000
 characters by the existing contract), without the platform display truncation.
 The manifest's `state` is `unknown`: content equality alone cannot prove a
@@ -233,3 +240,18 @@ lookups, decision validation and freshness snapshots before persistence. Unknown
 inaccessible IDs still block; omitted required tasks/orders still need revision.
 Stored handoffs are never silently rewritten during review. No extra model call is
 needed for this repair, and it does not force Reviewer acceptance.
+
+## Memory-capability help (17 October)
+
+RunRecord adds optional `request_kind` (`planning` default, or `capability`) and
+`answer` (nullable string). Whole-message memory-capability questions receive a
+server-authored informational answer, saved in the same authorized run scope and
+conversation. These completed runs have no handoff or review; the UI must not
+label them Reviewer accepted or ready for approval. Old records default to planning.
+This narrow help route does not answer factual recall questions, approve memory,
+or provide a general Q&A mode. Existing planning fixtures remain unchanged.
+
+The informational capability path also handles whole-message greetings such as
+“Hi” without planning. A greeting followed by a business request does not bypass
+the normal workflow. `request_kind=capability` is displayed as an informational
+reply, with no implied Reviewer acceptance or applied action.
