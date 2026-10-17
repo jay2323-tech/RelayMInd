@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ChangeComparison } from '../components/activity/WhyChangedPanel';
-import type { AffectedTask, CurrentDecisions, Decision, Evidence, ProposedAction, TaskVersionEntry } from '../types';
+import type { AffectedTask, CurrentDecisions, Decision, Evidence, ImpactReport, ProposedAction, TaskVersionEntry } from '../types';
 import { EvidenceChip } from './common';
 
 export type InspectorTab = 'evidence' | 'why' | 'actions';
@@ -145,9 +145,44 @@ export function WhyTab({ comparison, onOpen }: { comparison?: ChangeComparison; 
 }
 
 // ---------- actions tab (human gate) ----------
-export function ActionsTab({ affected, decisions, actions, busy, runId, onPropose, onApprove, onReject, onOpen }: {
+type ProposeBody = { target?: 'task' | 'order'; task_id: string; new_status: string; reason: string; based_on: string[];
+  expected_task_version: number; run_id?: string };
+
+// ---------- manufacturing incident impact (deterministic graph query, not model output) ----------
+function ImpactSection({ impact, actions, busy, runId, onPropose, onOpen }: {
+  impact: ImpactReport; actions: ProposedAction[]; busy: boolean; runId?: string;
+  onPropose: (body: ProposeBody) => void; onOpen: (id: string) => void;
+}) {
+  const pending = (id: string) => actions.some(a => a.status === 'proposed' && a.task_id === id);
+  const h = impact.hold;
+  return <div>
+    <div className="section-title">Incident impact · hold {h.hold_id}</div>
+    <div className="card">
+      <div className="row"><EvidenceChip id={h.decision_id} onOpen={onOpen} /><span className="badge badge--live">current v{h.decision_version}</span>
+        {h.supersedes.map(id => <EvidenceChip key={id} id={id} onOpen={onOpen} superseded />)}</div>
+      <p className="caption" style={{ margin: '6px 0' }}>Held batches: {h.held_batches.join(', ')} · computed by graph query</p>
+      {impact.affected.map(a => <div key={a.order.order_id + a.batch_id} className="gate-item">
+        <div className="row"><strong className="mono">{a.order.order_id}</strong>
+          <span className="version"><span className="version__chip">v{a.order.version}</span></span>
+          <span className={`badge ${a.exposure === 'shipped_exposure_review' ? 'badge--warn' : a.order.status === 'on_hold' ? 'badge--ok' : 'badge--danger'}`}>
+            {a.exposure === 'shipped_exposure_review' ? 'shipped · QA exposure review' : a.order.status === 'on_hold' ? 'on hold' : 'open · exposed'}</span></div>
+        <p className="caption" style={{ marginTop: 4 }}>via {a.assembly_id} → {a.batch_id} · {a.source_ids.map(id => <EvidenceChip key={id} id={id} onOpen={onOpen} />)}</p>
+        {a.order.status === 'open' && <button type="button" className="btn btn--small" style={{ marginTop: 6 }}
+          disabled={busy || pending(a.order.order_id)}
+          onClick={() => onPropose({ target: 'order', task_id: a.order.order_id, new_status: 'on_hold', based_on: [h.decision_id],
+            expected_task_version: a.order.version, reason: `${h.hold_id} v${h.decision_version} holds ${a.batch_id}`, run_id: runId })}>
+          {pending(a.order.order_id) ? 'Hold proposed' : 'Propose hold'}</button>}
+      </div>)}
+      {impact.unknown_traceability.length > 0 && <p className="alert alert--warn" style={{ marginTop: 8 }}>
+        Unknown traceability: {impact.unknown_traceability.map(o => o.order_id).join(', ')}. No installation trace — not proven safe.</p>}
+    </div>
+  </div>;
+}
+
+export function ActionsTab({ affected, decisions, actions, busy, runId, impacts = [], onPropose, onApprove, onReject, onOpen }: {
   affected: AffectedTask[]; decisions: CurrentDecisions | null; actions: ProposedAction[]; busy: boolean; runId?: string;
-  onPropose: (body: { task_id: string; new_status: string; reason: string; based_on: string[]; expected_task_version: number; run_id?: string }) => void;
+  impacts?: ImpactReport[];
+  onPropose: (body: ProposeBody) => void;
   onApprove: (id: string) => void; onReject: (id: string) => void; onOpen: (id: string) => void;
 }) {
   const current = new Set(decisions?.current.map(d => d.id) ?? []);
@@ -160,6 +195,8 @@ export function ActionsTab({ affected, decisions, actions, busy, runId, onPropos
     if (added.length) { setNewlyDecided(new Set(added)); added.forEach(id => fresh.current.add(id)); }
   }, [decided]);
   return <>
+    {impacts.map(impact => <ImpactSection key={impact.hold.hold_id} impact={impact} actions={actions} busy={busy} runId={runId}
+      onPropose={onPropose} onOpen={onOpen} />)}
     <div>
       <div className="section-title">Tasks affected by superseded decisions</div>
       {!affected.length && <p className="caption">No task implements a superseded decision.</p>}
@@ -184,7 +221,7 @@ export function ActionsTab({ affected, decisions, actions, busy, runId, onPropos
       <div className="section-title">Waiting for your approval</div>
       {!pending.length && <p className="caption">No change needs your approval.</p>}
       {pending.map(a => <div key={a.id} className="gate-item">
-        <p>Set <EvidenceChip id={a.task_id} onOpen={onOpen} /> to <strong>{a.new_status}</strong>
+        <p>{a.kind === 'hold_order' ? 'Hold order' : 'Set'} <EvidenceChip id={a.task_id} onOpen={onOpen} /> to <strong>{a.new_status.replace('_', ' ')}</strong>
           <span className="caption"> (from v{a.expected_task_version})</span></p>
         <p className="caption" style={{ margin: '4px 0 10px' }}>Because {a.reason}</p>
         <div className="row">

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, fetchHealth, setProject, currentProject, UnauthorizedError } from './api/client';
-import type { AffectedTask, CurrentDecisions, Decision, Evidence, Identity, ProposedAction, RunView } from './types';
+import type { AffectedTask, CurrentDecisions, Decision, Evidence, Identity, ImpactReport, ProposedAction, RunView } from './types';
 import type { ChatMessage } from './components/chat/ChatPanel';
 import type { SessionSummary } from './components/chat/ConversationHistory';
 import type { ChangeComparison } from './components/activity/WhyChangedPanel';
@@ -45,6 +45,7 @@ function Workspace({ identity, healthy, onSignOut, onExpired }: {
   const [histories, setHistories] = useState<Record<string, Decision[]>>({});
   const [affected, setAffected] = useState<AffectedTask[]>([]);
   const [actions, setActions] = useState<ProposedAction[]>([]);
+  const [impacts, setImpacts] = useState<ImpactReport[]>([]);
   const [evidenceId, setEvidenceId] = useState<string | null>(null);
   const [evidence, setEvidence] = useState<Evidence | null>(null);
   const [evidenceState, setEvidenceState] = useState<{ loading: boolean; error: string | null }>({ loading: false, error: null });
@@ -65,8 +66,9 @@ function Workspace({ identity, healthy, onSignOut, onExpired }: {
   const currentIds = useMemo(() => new Set(decisions?.current.map(d => d.id) ?? []), [decisions]);
 
   const refreshPlatform = useCallback(async () => {
-    const [d, a, acts] = await Promise.all([api.decisions(), api.affected(), api.actions()]);
+    const [d, a, acts, holdIds] = await Promise.all([api.decisions(), api.affected(), api.actions(), api.holds()]);
     setDecisions(d); setAffected(a); setActions(acts);
+    setImpacts(await Promise.all(holdIds.map(h => api.impact(h))));
     const topics = [...new Set([...d.current, ...d.conflicting].map(x => x.topic))];
     const entries = await Promise.all(topics.map(async t => [t, await api.topicHistory(t)] as const));
     setHistories(Object.fromEntries(entries));
@@ -153,7 +155,7 @@ function Workspace({ identity, healthy, onSignOut, onExpired }: {
     try {
       const result = await work();
       await refreshPlatform();
-      if (result.status === 'applied') toast('ok', `Applied: ${result.task_id} is now ${result.new_status} (v${result.expected_task_version + 1}).`);
+      if (result.status === 'applied') toast('ok', `Applied: ${result.task_id} is now ${result.new_status.replace('_', ' ')} (v${result.expected_task_version + 1}).`);
       else if (result.status === 'proposed') toast('info', `${verb}: waiting for your approval.`);
       else toast(result.status === 'rejected' ? 'info' : 'danger', `${result.task_id}: ${result.status.replaceAll('_', ' ')}${result.result ? ` — ${result.result}` : ''}`);
     } catch (e) { fail(e); } finally { setBusy(false); }
@@ -178,7 +180,7 @@ function Workspace({ identity, healthy, onSignOut, onExpired }: {
             <div className="panel__head"><h1 id="chat-title" className="h2">Continue with context</h1>
               <span className="caption">Memory persists in FalkorDB across sessions</span></div>
             <ChatStream messages={messages} onEvidence={showEvidence} />
-            <Composer busy={jobActive} showSuggestions={!messages.length} pauseAfterPlan={pauseAfterPlan}
+            <Composer busy={jobActive} showSuggestions={!messages.length} pauseAfterPlan={pauseAfterPlan} project={currentProject()}
               onPauseChange={setPauseAfterPlan} onSend={send} />
           </section>
           <PlanCard run={view?.run ?? null} handoffs={view?.handoffs ?? []} currentDecisionIds={currentIds} onEvidence={showEvidence} />
@@ -188,6 +190,7 @@ function Workspace({ identity, healthy, onSignOut, onExpired }: {
             loading={evidenceState.loading} error={evidenceState.error} onOpen={showEvidence} />}
           {tab === 'why' && <WhyTab comparison={comparison} onOpen={showEvidence} />}
           {tab === 'actions' && <ActionsTab affected={affected} decisions={decisions} actions={actions} busy={busy} runId={runId}
+            impacts={impacts}
             onOpen={showEvidence}
             onPropose={body => act(() => api.propose(body), 'Proposed')}
             onApprove={id => act(() => api.approve(id), 'Approve')}

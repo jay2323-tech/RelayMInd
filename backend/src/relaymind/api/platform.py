@@ -7,7 +7,9 @@ from __future__ import annotations
 
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, Query
+from typing import Literal
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import Field
 
 from relaymind.api.deps import api_errors, get_client, project_member
@@ -97,8 +99,9 @@ def task_history(project_id: str, task_id: str, me: Principal = Depends(project_
 
 
 class ProposeBody(StrictModel):
-    task_id: str = Field(min_length=1, max_length=200)
-    new_status: TaskStatus
+    target: Literal["task", "order"] = "task"
+    task_id: str = Field(min_length=1, max_length=200, description="Target task or order ID")
+    new_status: TaskStatus | Literal["on_hold"]
     reason: str = Field(min_length=1, max_length=2000)
     based_on: list[str] = Field(min_length=1, max_length=10)
     expected_task_version: int | None = Field(default=None, ge=1)
@@ -114,6 +117,14 @@ def list_actions(project_id: str, status: str | None = Query(default=None), me: 
 @router.post("/actions", status_code=201)
 def propose(project_id: str, body: ProposeBody, me: Principal = Depends(project_member)):
     with api_errors():
+        if body.target == "order":
+            if body.new_status != "on_hold":
+                raise HTTPException(422, "Orders can only be proposed for on_hold")
+            return am.propose_order_hold(get_client(), me.context(), project_id, str(uuid4()), body.task_id,
+                                         body.reason, body.based_on, expected_order_version=body.expected_task_version,
+                                         run_id=body.run_id)
+        if body.new_status == "on_hold":
+            raise HTTPException(422, "on_hold applies to orders only")
         return am.propose_action(get_client(), me.context(), project_id, str(uuid4()), body.task_id,
                                  body.new_status, body.reason, body.based_on,
                                  expected_task_version=body.expected_task_version, run_id=body.run_id)
@@ -158,3 +169,12 @@ def order(project_id: str, order_id: str, me: Principal = Depends(project_member
     from relaymind.memory import manufacturing as mf
     with api_errors():
         return mf.get_order(get_client(), me.context(), project_id, order_id)
+
+
+@router.get("/holds")
+def holds(project_id: str, me: Principal = Depends(project_member)):
+    """Hold IDs in this project (empty for projects without a manufacturing incident)."""
+    with api_errors():
+        graph = authorized_graph(get_client(), me.context(), project_id)
+        return [r[0] for r in graph.ro_query("MATCH (h:Hold {project_id: $p}) RETURN h.id ORDER BY h.id",
+                                             params={"p": project_id}).result_set]

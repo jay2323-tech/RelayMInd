@@ -26,6 +26,7 @@ from relaymind.memory.decisions import get_decision_history, get_source
 from relaymind.platform import identity as idm
 from relaymind.platform.aw_incident import load_incident
 from relaymind.platform.bridge import GraphPlatformBridge
+from relaymind.services.actions import InvalidActionError, approve_action, propose_order_hold
 from test_agent_loop import ScriptedModel
 
 load_dotenv()
@@ -135,3 +136,25 @@ def test_http_isolation_and_scoped_aw_run(world, monkeypatch):
     assert run["result"]["procedure_id"] == "quality-hold-review"
     assert ns.get(f"/api/projects/{pid}/sessions/{sid}/runs/{rid}").status_code == 404
     idm.reset_for_tests()
+
+
+def test_order_hold_approval_and_stale_after_hold_change(world):
+    client, graph, pid = world
+    load_incident(client, AW, pid, "before-change")
+    early = propose_order_hold(client, AW, pid, f"{pid}-a1", "AW-O101", "QH-17 v1 covers AW-B101", ["aw-dec-hold-v1"])
+    assert early.kind == "hold_order" and early.expected_task_version == 1
+    with pytest.raises(InvalidActionError, match="only open orders"):
+        propose_order_hold(client, AW, pid, f"{pid}-a2", "AW-O102", "shipped", ["aw-dec-hold-v1"])   # AW-04: review, not hold
+    load_incident(client, AW, pid, "after-change")                     # v2 supersedes v1
+    stale = approve_action(client, AW, pid, f"{pid}-a1")
+    assert stale.status == "stale" and "aw-dec-hold-v1" in stale.result
+    assert mf.get_order(client, AW, pid, "AW-O101").version == 1          # no write
+    ok = propose_order_hold(client, AW, pid, f"{pid}-a3", "AW-O103", "QH-17 v2 adds AW-B102", ["aw-dec-hold-v2"])
+    done = approve_action(client, AW, pid, ok.id)
+    assert done.status == "applied" and done.applied_version_id == "AW-O103:v2"
+    order = mf.get_order(client, AW, pid, "AW-O103")
+    assert (order.version, order.status, order.model) == (2, "on_hold", "AW-M1")
+    report = mf.affected_orders(client, AW, pid, "QH-17")
+    assert next(a for a in report.affected if a.order.order_id == "AW-O103").order.status == "on_hold"
+    prev = graph.ro_query("MATCH (:OrderVersion {id: 'AW-O103:v2'})-[:PREVIOUS]->(p) RETURN p.id").result_set
+    assert prev == [["AW-O103:v1"]]
