@@ -209,3 +209,23 @@ on model output (this run: a correct citation catch).
   container layer; `docker compose down` or a fresh container would have lost it. Fixed the mount to
   `/var/lib/falkordb/data`, copied the live data into the volume, recreated the container, verified counts.
 - Prevention: `check_falkordb_compat.py` now warns to run only against a disposable FalkorDB instance.
+
+## AdventureWorks real-Gemini runs after Kg b73961f (2026-10-17 ~21:30 IST, Windows PC)
+
+`Jk` merge `23ec001` (Gemini schema-constrained output, manufacturing agent tools, impact snapshots).
+Live suite: **190 passed, 0 failed** (Windows UTF-8 test fixed by Codex). Provider: gemini
+`gemini-3.5-flash-lite` through the authenticated API as `aw.quality`; responses and keys not printed.
+
+| Run | Flow | Outcome | Provider/decode errors |
+|---|---|---|---|
+| A `97ef3d17…` | fresh, after-change | Planner used `current_hold`, `affected_orders`, `affected_tasks`; r1 and r2 cover both required tasks; **final review `needs_revision`** | none logged |
+| B `0b76ea69…` | before-change → pause → hold v2 → resume | paused at r1 (snapshot hold v1); resume → review `needs_revision` → r2 (snapshot hold v2, both tasks); **final review `needs_revision`** | none logged |
+
+`manufacturing_versions` saved on handoffs: r1 (B) `{evidence_id: QH-17, version_id: aw-dec-hold-v1, state: current}`,
+r2 `{evidence_id: QH-17, version_id: aw-dec-hold-v2, state: current, content_sha256: …}` — correct per stage.
+
+Review quality finding (model behaviour, not a provider failure): in both runs the Reviewer rejected r2
+because its steps reference tasks that "implement superseded decision aw-dec-hold-v1". Those tasks are
+exactly the graph-required affected tasks the plan must address (deterministic coverage), and r2 does
+propose updated actions for them (quarantine B101+B102 under v2; hold/review O103). In run B the Reviewer
+also noted r2 cites no order IDs, which is a fair gap. **No completed real-model AW run yet.**
