@@ -1,5 +1,15 @@
 # Ownership
 
+## Chat-first parallel milestone (18 October)
+
+Jayanth assigned Codex the frontend/chat-first interface and Claude the backend
+plan-review, routing, guided-work and reminder workflow. See
+[chat-first-parallel-plan.md](chat-first-parallel-plan.md) and
+[claude-chat-workflow-prompt.md](claude-chat-workflow-prompt.md). For this milestone,
+Codex owns frontend/** including App.tsx; Claude owns backend/** after incorporating
+the published conversational repair baseline. Use separate Kg/Jk checkouts. This
+assignment supersedes the older App-shell ownership for this milestone only.
+
 ## Current assistant branches and integration
 
 Jayanth assigned Codex to **Kg** and Claude to **Jk** on 17 October 2026.

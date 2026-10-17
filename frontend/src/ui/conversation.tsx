@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react';
 import type { ChatMessage } from '../components/chat/ChatPanel';
 import type { SessionSummary } from '../components/chat/ConversationHistory';
 import type { Handoff, RunRecord } from '../types';
@@ -30,16 +30,22 @@ export function SessionRail({ sessions, activeId, busy, onSelect, onNew }: {
 }
 
 // ---------- chat stream ----------
-export function ChatStream({ messages, onEvidence }: { messages: ChatMessage[]; onEvidence: (id: string) => void }) {
+export function ChatStream({ messages, onEvidence, renderAfter, hasPlan }: {
+  messages: ChatMessage[]; onEvidence: (id: string) => void;
+  renderAfter?: (message: ChatMessage) => ReactNode; hasPlan?: (message: ChatMessage) => boolean;
+}) {
   const end = useRef<HTMLDivElement>(null);
   useEffect(() => { end.current?.scrollIntoView({ block: 'end' }); }, [messages.length]);
   if (!messages.length) return <div className="empty">
-    Ask about your project. RelayMind remembers approved decisions and earlier conversations across sessions.
+    <h1>What would you like to work on?</h1><p>Explore your project, work through a change, or prepare an evidence-backed plan.</p>
   </div>;
   return <div className="stream" role="log" aria-live="polite" aria-label="Conversation">
     {messages.map(m => <article key={m.id} className={`bubble bubble--${m.role}`}>
       <span className="bubble__who">{m.role === 'user' ? 'You' : 'RelayMind'}</span>
-      {m.role === 'assistant' ? <ReadableReply text={m.content} onOpen={onEvidence} /> : m.content}
+      {m.role === 'assistant' ? <ReadableReply text={hasPlan?.(m)
+        ? m.content.split('**Proposed next steps**')[0].replace(/^Run [^:]+: [^.]+\. Latest plan: /, '').replace(/ Review: [^.]+\.$/, '')
+        : m.content} onOpen={onEvidence} /> : m.content}
+      {renderAfter?.(m)}
     </article>)}
     <div ref={end} />
   </div>;
@@ -118,11 +124,11 @@ export function PlanCard({ run, handoffs, currentDecisionIds, currentHolds = {},
   const latest = handoffs[handoffs.length - 1];
   const chip = (id: string) => <EvidenceChip key={id} id={id} onOpen={onEvidence}
     superseded={id.startsWith('decision-') && currentDecisionIds.size > 0 && !currentDecisionIds.has(id)} />;
-  return <section className="glass panel" aria-labelledby="plan-title">
+  return <section className="glass panel" aria-labelledby={`plan-title-${run.id}`}>
     <div className="panel__head">
       <div style={{ flex: 1 }}>
         <span className="eyebrow">Evidence-backed recommendations</span>
-        <h2 id="plan-title" className="h2">Proposed plan</h2><details className="caption"><summary>Plan details · revision {latest.revision}</summary><p>Saved handoff: {latest.id}</p></details>
+        <h2 id={`plan-title-${run.id}`} className="h2">Proposed plan</h2><details className="caption"><summary>Plan details · revision {latest.revision}</summary><p>Saved handoff: {latest.id}</p></details>
       </div>
       {handoffs.length > 1 && <span className="badge badge--warn">revised after review</span>}
     </div>
@@ -177,7 +183,7 @@ export function ReviewSeal({ run, onEvidence }: { run: RunRecord; onEvidence: (i
   return <div className={`seal seal--${review.status}`}>
     <div className="seal__icon" aria-hidden>{icon}</div>
     <div>
-      <strong>{title}</strong>{review.status === 'accepted' && <p className="review-boundary">Plan reviewed. Business changes still require your approval in Actions.</p>}
+      <strong>{title}</strong>{review.status === 'accepted' && <p className="review-boundary">Plan reviewed. Review the individual business changes below before approving execution.</p>}
       <details className="caption"><summary>Review details</summary><p>Procedure {procedure_id} v{procedure_version} · checked {decision_ids.join(', ')}</p></details>
       {review.issues.length > 0 && <ul className="issues">{review.issues.map((issue, i) => <li key={i}>
         {issue.reason} {issue.evidence_ids.map(id => <EvidenceChip key={id} id={id} onOpen={onEvidence} />)}</li>)}</ul>}
