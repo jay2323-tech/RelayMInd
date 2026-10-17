@@ -229,12 +229,19 @@ function Workspace({ identity, healthy, onSignOut, onExpired }: {
         <div className="sidebar-heading"><strong>RelayMind</strong><button className="btn btn--small btn--ghost" aria-label="Close conversation sidebar" onClick={() => setSidebarOpen(false)}>←</button></div>
         <SessionRail sessions={sessions} activeId={sessionId} busy={busy || jobActive}
           onSelect={id => { openSession(id).catch(fail); }} onNew={newSession} />
-        <div className="sidebar-account">
-          <div className="sidebar-profile"><span className="sidebar-avatar" aria-hidden>{identity.display_name.slice(0, 1).toUpperCase()}</span>
-            <div><strong>{identity.display_name}</strong><span>{identity.company_id} · demo account</span></div></div>
-          <button className="btn btn--small btn--ghost sidebar-signout" onClick={onSignOut}>Sign out</button>
-          <p className="sidebar-footnote">Synthetic workspace · Your conversations stay scoped to your account.</p>
-        </div>
+        <details className="sidebar-account" onKeyDown={event => {
+          if (event.key === 'Escape') { event.currentTarget.open = false; event.currentTarget.querySelector('summary')?.focus(); }
+        }}>
+          <summary className="account-trigger" aria-label={`Account: ${identity.display_name}`}>
+            <span className="sidebar-avatar" aria-hidden>{identity.display_name.slice(0, 1).toUpperCase()}</span>
+            <span className="account-label"><strong title={identity.display_name}>{identity.display_name}</strong><span title={identity.username}>{identity.username}</span></span>
+            <span className="account-dots" aria-hidden>⋯</span>
+          </summary>
+          <div className="account-popover glass">
+            <strong>{identity.display_name}</strong><span>{identity.company_id}</span>
+            <button className="account-signout" onClick={onSignOut}>Sign out <span aria-hidden>↗</span></button>
+          </div>
+        </details>
       </div>
       <div className="chat-main">
         <div className="chat-header">
