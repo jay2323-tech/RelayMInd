@@ -21,7 +21,7 @@ from relaymind.workflow import plan_reviews as pr
 router = APIRouter(prefix="/projects/{project_id}")
 
 # Flip a flag only when the feature is implemented AND verified (tests + live check).
-CAPABILITIES = WorkflowCapabilities(plan_review=True, work_setup=False, reminders=False)
+CAPABILITIES = WorkflowCapabilities(plan_review=True, work_setup=True, reminders=False)
 
 
 def capabilities_now() -> WorkflowCapabilities:
@@ -96,3 +96,58 @@ def approval_history(project_id: str, limit: int = Query(50, ge=1, le=200), me: 
         actions.sort(key=lambda a: a.decided_at or 0, reverse=True)
         return {"plan_reviews": [r.model_dump() for r in reviews],
                 "actions": [a.model_dump() for a in actions[:limit]]}
+
+
+# ------------------------------------------------------------------ B3 work setup
+
+from relaymind.contracts.agent_jobs import AgentJobScope
+from relaymind.contracts.workflow import WorkItem, WorkItemCreate, WorkItemTransition, WorkItemUpdate
+from relaymind.workflow import work_setup as ws
+
+
+def _reader_scope(me: Principal, project_id: str) -> AgentJobScope:
+    """Scope for reads that are not tied to one session (session is never used by these queries)."""
+    return AgentJobScope(tenant_id=me.tenant_id, user_id=me.user_id, company_id=me.company_id,
+                         project_id=project_id, session_id="reads")
+
+
+def _item_scope(me: Principal, project_id: str, item_id: str) -> AgentJobScope:
+    """Writes run in the item's own session, which the caller must still own."""
+    item = ws.get_item(get_client(), _reader_scope(me, project_id), item_id)
+    return runs_api.job_scope(me, project_id, item.session_id)
+
+
+@router.get("/work-items", response_model=list[WorkItem])
+def list_work_items(project_id: str, status: str | None = Query(None, pattern="^(draft|confirmed|completed|cancelled)$"),
+                    me: Principal = Depends(project_member)):
+    with api_errors():
+        return ws.list_items(get_client(), _reader_scope(me, project_id), status)
+
+
+@router.get("/work-items/{item_id}", response_model=WorkItem)
+def get_work_item(project_id: str, item_id: str, me: Principal = Depends(project_member)):
+    with api_errors():
+        return ws.get_item(get_client(), _reader_scope(me, project_id), item_id)
+
+
+@router.post("/sessions/{session_id}/work-items", response_model=WorkItem, status_code=201)
+def create_work_item(project_id: str, session_id: str, body: WorkItemCreate, me: Principal = Depends(project_member)):
+    with api_errors():
+        scope = runs_api.job_scope(me, project_id, session_id)
+        fields = ws.WorkFields.model_validate(body.model_dump(exclude={"operation_id"}))
+        return ws.create_draft(get_client(), scope, fields, str(body.operation_id))
+
+
+@router.post("/work-items/{item_id}", response_model=WorkItem)
+def update_work_item(project_id: str, item_id: str, body: WorkItemUpdate, me: Principal = Depends(project_member)):
+    with api_errors():
+        scope = _item_scope(me, project_id, item_id)
+        fields = ws.WorkFields.model_validate(body.model_dump(exclude={"expected_version"}))
+        return ws.update_draft(get_client(), scope, item_id, fields, body.expected_version)
+
+
+@router.post("/work-items/{item_id}/transition", response_model=WorkItem)
+def transition_work_item(project_id: str, item_id: str, body: WorkItemTransition, me: Principal = Depends(project_member)):
+    with api_errors():
+        scope = _item_scope(me, project_id, item_id)
+        return ws.transition(get_client(), scope, item_id, body.action, body.expected_version)
