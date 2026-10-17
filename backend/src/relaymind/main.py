@@ -6,6 +6,7 @@ from relaymind.api.deps import current_principal
 from relaymind.api.health import router
 from relaymind.api.platform import router as platform_router
 from relaymind.api.runs import router as runs_router
+from relaymind.api.workflow import router as workflow_router
 from relaymind.platform.identity import Principal
 
 load_dotenv()
@@ -22,6 +23,7 @@ app.include_router(router, prefix="/api")
 app.include_router(auth_router, prefix="/api")
 app.include_router(platform_router, prefix="/api")
 app.include_router(runs_router, prefix="/api")
+app.include_router(workflow_router, prefix="/api")
 
 
 @app.get("/api/identity")

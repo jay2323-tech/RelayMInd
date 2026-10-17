@@ -1,0 +1,98 @@
+"""Workflow endpoints (Part B): capabilities, plan review (B1), approval history.
+
+All routes require an authenticated project member; plan-review routes also require ownership of
+the session (runs.job_scope). Bodies never carry identity. Conflicts -> 409; missing or
+forbidden -> the existing access-safe 404.
+"""
+from __future__ import annotations
+
+from uuid import uuid4
+
+from fastapi import APIRouter, Depends, Query
+
+from relaymind.api import runs as runs_api
+from relaymind.api.deps import api_errors, get_client, project_member
+from relaymind.contracts.coordination import RunRecord
+from relaymind.contracts.workflow import PlanReview, PlanReviewBody, WorkflowCapabilities
+from relaymind.memory.conversations import save_message
+from relaymind.platform.identity import Principal
+from relaymind.workflow import plan_reviews as pr
+
+router = APIRouter(prefix="/projects/{project_id}")
+
+# Flip a flag only when the feature is implemented AND verified (tests + live check).
+CAPABILITIES = WorkflowCapabilities(plan_review=True, work_setup=False, reminders=False)
+
+
+def capabilities_now() -> WorkflowCapabilities:
+    return CAPABILITIES
+
+
+@router.get("/workflow/capabilities", response_model=WorkflowCapabilities)
+def capabilities(project_id: str, me: Principal = Depends(project_member)):
+    return capabilities_now()
+
+
+def _run(engine, scope, run_id) -> RunRecord:
+    return RunRecord.model_validate(runs_api._require_scoped(engine.store.get("run", run_id), scope))
+
+
+@router.get("/sessions/{session_id}/runs/{run_id}/plan-review", response_model=PlanReview | None)
+def get_plan_review(project_id: str, session_id: str, run_id: str, me: Principal = Depends(project_member)):
+    with api_errors():
+        scope = runs_api.job_scope(me, project_id, session_id)
+        run = _run(runs_api._engine(scope), scope, run_id)
+        return pr.review_for_run(get_client(), scope, run)
+
+
+@router.post("/sessions/{session_id}/runs/{run_id}/plan-review", response_model=PlanReview)
+def post_plan_review(project_id: str, session_id: str, run_id: str, body: PlanReviewBody,
+                     me: Principal = Depends(project_member)):
+    with api_errors():
+        scope = runs_api.job_scope(me, project_id, session_id)
+        client = get_client()
+        engine = runs_api._engine(scope)
+        run = _run(engine, scope, run_id)
+        replay = pr.existing_for_operation(client, scope, run_id, body)
+        if replay is not None:
+            return replay
+        job = runs_api._visible_job(run_id, scope)
+        handoff = pr.check_reviewable(engine, scope, run, body,
+                                      active=bool(job and job["state"] in ("queued", "running")))
+        next_run_id, provider = None, None
+        if body.decision == "needs_changes":
+            provider = runs_api.provider_factory()          # fail before recording anything
+            if runs_api.session_busy(scope):
+                raise pr.PlanReviewConflict("This session already has an active run")
+            next_run_id = str(uuid4())
+        review = pr.record_review(client, scope, run, handoff, body, next_run_id)   # durable first
+        if review.next_run_id == next_run_id and next_run_id:
+            request = pr.revision_request(run, handoff, body.feedback or "")
+            runs_api.queue_plan(scope, next_run_id, request, provider,
+                                message=f"Request changes to {handoff.id}: {body.feedback}")
+        save_message(client, scope.trusted_context(), project_id, session_id,
+                     f"{review.id}-receipt", "assistant", pr.receipt_text(review))
+        return review
+
+
+@router.get("/plan-reviews", response_model=list[PlanReview])
+def plan_review_history(project_id: str, limit: int = Query(50, ge=1, le=200),
+                        me: Principal = Depends(project_member)):
+    with api_errors():
+        return pr.list_reviews(get_client(), me.context(), tenant_id=me.tenant_id, company_id=me.company_id,
+                               user_id=me.user_id, project_id=project_id, limit=limit)
+
+
+@router.get("/approvals")
+def approval_history(project_id: str, limit: int = Query(50, ge=1, le=200), me: Principal = Depends(project_member)):
+    """Human decisions only: this user's plan reviews + decided actions. Never seeded decisions."""
+    from relaymind.services.actions import list_actions
+    with api_errors():
+        client = get_client()
+        reviews = pr.list_reviews(client, me.context(), tenant_id=me.tenant_id, company_id=me.company_id,
+                                  user_id=me.user_id, project_id=project_id, limit=limit)
+        actions = [a for a in list_actions(client, me.context(), project_id)
+                   if a.status != "proposed" and a.decided_by == me.user_id]
+        actions.sort(key=lambda a: a.decided_at or 0, reverse=True)
+        return {"plan_reviews": [r.model_dump() for r in reviews],
+                "actions": [a.model_dump() for a in actions[:limit]]}

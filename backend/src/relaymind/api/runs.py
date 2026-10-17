@@ -105,6 +105,12 @@ def _visible_job(run_id: str, scope: AgentJobScope):
     return {"state": job["state"], "error": job["error"]}
 
 
+def session_busy(scope: AgentJobScope) -> bool:
+    with _lock:
+        busy = _active.get(_key(scope))
+        return bool(busy and _jobs.get(busy, {}).get("state") in ("queued", "running"))
+
+
 def _submit(scope: AgentJobScope, run_id: str, work: Callable[[], None]):
     with _lock:
         busy = _active.get(_key(scope))
@@ -181,20 +187,26 @@ def start_run(project_id: str, session_id: str, body: RunBody, me: Principal = D
     with api_errors():
         scope = job_scope(me, project_id, session_id)          # captured before queueing
         provider = provider_factory()                          # fail fast on server misconfiguration
-        save_message(get_client(), scope.trusted_context(), project_id, session_id,
-                     f"{run_id}-request", "user", body.request)
+    queue_plan(scope, run_id, body.request, provider, mode=body.mode)
+    return {"run_id": run_id, "job": _visible_job(run_id, scope)}
+
+
+def queue_plan(scope: AgentJobScope, run_id: str, request: str, provider, *, mode: str = "run",
+               message: str | None = None):
+    """Save the user's message, then queue plan (+review) under the captured scope."""
+    save_message(get_client(), scope.trusted_context(), scope.project_id, scope.session_id,
+                 f"{run_id}-request", "user", (message or request)[:16000])
 
     def work(scope: AgentJobScope = scope, provider=provider):   # bound now; never re-resolved
         engine = _engine(scope, provider)
-        run = engine.plan_run(body.request, run_id=run_id, procedure_id=procedure_for(scope.project_id))
+        run = engine.plan_run(request, run_id=run_id, procedure_id=procedure_for(scope.project_id))
         if run.status == "awaiting_review":
-            if body.mode == "plan_then_pause":
+            if mode == "plan_then_pause":
                 engine.pause_run(run_id)
             else:
                 engine.continue_run(run_id)
         _summarize(scope, run_id)
     _submit(scope, run_id, work)
-    return {"run_id": run_id, "job": _visible_job(run_id, scope)}
 
 
 @router.get("/{session_id}/runs")
@@ -242,6 +254,10 @@ def resume(project_id: str, session_id: str, run_id: str, me: Principal = Depend
         current = _require_scoped(engine.store.get("run", run_id), scope)
         if current["status"] != "paused":
             raise HTTPException(409, "Run is not paused")
+        from relaymind.workflow.plan_reviews import review_for_handoff
+        prior = review_for_handoff(get_client(), scope, current["handoff_ids"][-1])
+        if prior is not None and prior.decision != "approved":
+            raise HTTPException(409, f"Plan revision was {prior.decision.replace('_', ' ')}; it cannot be resumed")
         provider = provider_factory()
 
     def work(scope: AgentJobScope = scope, provider=provider):
