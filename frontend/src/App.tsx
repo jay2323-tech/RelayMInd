@@ -229,12 +229,17 @@ function Workspace({ identity, healthy, onSignOut, onExpired }: {
         <div className="sidebar-heading"><strong>RelayMind</strong><button className="btn btn--small btn--ghost" aria-label="Close conversation sidebar" onClick={() => setSidebarOpen(false)}>←</button></div>
         <SessionRail sessions={sessions} activeId={sessionId} busy={busy || jobActive}
           onSelect={id => { openSession(id).catch(fail); }} onNew={newSession} />
-        <p className="sidebar-footnote">Synthetic demo workspace<br />Your conversations stay scoped to your account.</p>
+        <div className="sidebar-account">
+          <div className="sidebar-profile"><span className="sidebar-avatar" aria-hidden>{identity.display_name.slice(0, 1).toUpperCase()}</span>
+            <div><strong>{identity.display_name}</strong><span>{identity.company_id} · demo account</span></div></div>
+          <button className="btn btn--small btn--ghost sidebar-signout" onClick={onSignOut}>Sign out</button>
+          <p className="sidebar-footnote">Synthetic workspace · Your conversations stay scoped to your account.</p>
+        </div>
       </div>
       <div className="chat-main">
         <div className="chat-header">
           <button className="btn btn--small btn--ghost" aria-label="Toggle conversation sidebar" aria-expanded={sidebarOpen} onClick={() => setSidebarOpen(value => !value)}>☰</button>
-          <TopBar identity={identity} healthy={healthy} project={currentProject()} onSignOut={onSignOut} />
+          <TopBar identity={null} healthy={healthy} project={currentProject()} />
           <button className="btn btn--small" aria-expanded={sheetOpen} onClick={() => setSheetOpen(value => !value)}>Sources{pendingCount ? ` · ${pendingCount} actions` : ''}</button>
         </div>
         <main className="chat-conversation" aria-label="Conversation workspace">
