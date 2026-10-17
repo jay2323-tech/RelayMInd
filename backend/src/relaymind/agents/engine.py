@@ -371,8 +371,16 @@ class CoordinationEngine:
             if added:
                 self._event(run,'planner',f'Added {added} structured task citations to evidence')
             cited={i for step in plan.steps for i in step.evidence_ids}
-            if (cited & discovered)-fetched:
-                raise AgentBlocked('Cited search sources must be fetched in full before planning')
+            unread=sorted((cited & discovered)-fetched)
+            for evidence_id in unread:
+                # Recover an omitted read using the same scoped, complete source
+                # lookup as fetch_evidence. This is an engine read, not a claim
+                # that the Planner saw the full text. Independent review below
+                # receives complete cited evidence and judges semantic support.
+                self.evidence(evidence_id)
+                fetched.add(evidence_id)
+            if unread:
+                self._event(run,'planner',f'Engine fetched {len(unread)} cited search sources in full for validation and review')
             self.validate_plan(plan,decisions)
             if snapshot(self.decisions())!=snapshot(decisions):
                 raise AgentBlocked('Decisions changed during planning; start a fresh run')

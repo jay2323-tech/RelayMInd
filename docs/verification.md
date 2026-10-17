@@ -247,3 +247,23 @@ Conclusion: the first **completed real-model AdventureWorks run** exists (fresh 
 completed once in three replays. The most common failure is an engine hard block when the model lists a task in
 `task_ids` without repeating it in `evidence_ids`; that is a recoverable formatting slip that could be repaired
 (auto-include) or returned as a correction instead of blocking. Handed to Codex.
+
+## Real-Gemini reruns after Kg 7b10365 + Hold evidence fix (2026-10-17 ~22:20 IST, Windows PC)
+
+`Jk` merge `6c2441c` (auto-include task_ids in evidence_ids). Live suite **201 passed**. Gemini
+`gemini-3.5-flash-lite`; only engine-authored block messages and synthetic record IDs were printed.
+
+**Bug found and fixed (Claude, bridge):** `evidence("QH-17")` raised AccessDenied because the bridge had no
+Hold handler, so a plan citing the hold ID itself was blocked (`planning: AccessDenied`, seen in 2 replays).
+Hold evidence now returns the current hold version, held batches, exposed orders and unknown traceability
+(test added; 20 related live tests pass).
+
+| Scenario / flow | Attempts | Outcome |
+|---|---|---|
+| AdventureWorks pause → hold v2 → resume (before Hold fix) | 3 | 1 completed (accepted), 1 blocked AccessDenied (Hold gap), 1 needs_revision |
+| AdventureWorks pause → hold v2 → resume (after Hold fix) | 3 | **1 completed (accepted)**, 2 `needs_revision`: (a) plan proposed "ship AW-O103 on schedule" although held — correct rejection; (b) deterministic "plan omits current exposed orders" — correct |
+| Harbor pause → port closure → resume (API) | 1 | blocked at planning before the pause |
+| Harbor pause → port closure → resume (in-process) | 2 | **1 completed (accepted)** — r2: cancel Route A booking (hb-task-book-route-a), replace Friday confirmation with Saturday notification to Coldline Foods (hb-task-confirm-friday); engine event "Added 2 structured task citations to evidence"; procedure route-change-review. 1 blocked: "Cited search sources must be fetched in full before planning" |
+
+Remaining agent-side issue (Codex): the search-then-cite guard hard-blocks instead of fetching or asking for a
+correction. Remaining AdventureWorks `needs_revision` results were legitimate rejections.
