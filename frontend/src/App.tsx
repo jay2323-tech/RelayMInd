@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { api, fetchHealth, PROJECT } from './api/client';
+import { api, fetchHealth, setProject, currentProject, UnauthorizedError } from './api/client';
 import type { AffectedTask, CurrentDecisions, Decision, Evidence, Identity, ProposedAction, RunView } from './types';
 import type { ChatMessage } from './components/chat/ChatPanel';
 import type { SessionSummary } from './components/chat/ConversationHistory';
@@ -8,12 +8,32 @@ import { AuroraBackground, Toasts, TopBar, type ToastMsg } from './ui/common';
 import { RelayTrack } from './ui/track/RelayTrack';
 import { ChatStream, Composer, PlanCard, SessionRail } from './ui/conversation';
 import { ActionsTab, EvidenceTab, Inspector, WhyTab, type InspectorTab } from './ui/inspector';
+import { LoginScreen } from './ui/LoginScreen';
 
 const message = (e: unknown) => (e instanceof Error ? e.message : 'Request failed');
 
+/** Auth gate. The workspace is keyed by account, so switching accounts remounts it with empty state. */
 export default function App() {
   const [healthy, setHealthy] = useState<boolean | null>(null);
   const [identity, setIdentity] = useState<Identity | null>(null);
+  const [checked, setChecked] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  useEffect(() => {
+    fetchHealth().then(() => setHealthy(true)).catch(() => setHealthy(false));
+    api.identity().then(setIdentity).catch(() => setIdentity(null)).finally(() => setChecked(true));
+  }, []);
+  const signIn = (who: Identity) => { setNotice(null); setProject(who.projects[0]); setIdentity(who); };
+  if (identity) setProject(currentProject() && identity.projects.includes(currentProject()) ? currentProject() : identity.projects[0]);
+  if (!checked) return <AuroraBackground />;
+  if (!identity) return <><AuroraBackground /><LoginScreen onSignedIn={signIn} notice={notice} /></>;
+  return <Workspace key={identity.username} identity={identity} healthy={healthy}
+    onSignOut={async () => { try { await api.logout(); } finally { setIdentity(null); } }}
+    onExpired={() => { setNotice('Your session ended. Sign in again.'); setIdentity(null); }} />;
+}
+
+function Workspace({ identity, healthy, onSignOut, onExpired }: {
+  identity: Identity; healthy: boolean | null; onSignOut: () => void; onExpired: () => void;
+}) {
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [sessionId, setSessionId] = useState<string>();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -37,6 +57,8 @@ export default function App() {
 
   const toast = useCallback((tone: ToastMsg['tone'], text: string) =>
     setToasts(t => [...t, { id: ++toastId.current, tone, text }]), []);
+  const fail = useCallback((e: unknown) => { if (e instanceof UnauthorizedError) onExpired(); else fail(e); },
+    [onExpired, toast]);
   const dismiss = useCallback((id: number) => setToasts(t => t.filter(x => x.id !== id)), []);
 
   const jobActive = view?.job?.state === 'queued' || view?.job?.state === 'running';
@@ -51,13 +73,8 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const controller = new AbortController();
-    fetchHealth(controller.signal)
-      .then(() => { setHealthy(true); return Promise.all([api.identity(), api.sessions(), refreshPlatform()]); })
-      .then(r => { if (r) { setIdentity(r[0]); setSessions(r[1]); } })
-      .catch(() => { if (!controller.signal.aborted) setHealthy(false); });
-    return () => controller.abort();
-  }, [refreshPlatform]);
+    Promise.all([api.sessions(), refreshPlatform()]).then(([s]) => setSessions(s)).catch(fail);
+  }, [refreshPlatform, fail]);
 
   // Selected evidence shows derived state, so reload it whenever platform data refreshes.
   useEffect(() => {
@@ -87,7 +104,7 @@ export default function App() {
           const ids = [...new Set(affected.map(a => a.task.task_id))].slice(0, 10);
           setComparison(await api.changes(sessionId, runId, ids));
         }
-      } catch (e) { if (!stop) toast('danger', message(e)); }
+      } catch (e) { if (!stop) fail(e); }
     };
     void tick();
     return () => { stop = true; clearTimeout(timer); };
@@ -97,7 +114,7 @@ export default function App() {
   async function newSession() {
     setBusy(true);
     try { const s = await api.newSession(); setSessions(await api.sessions()); await openSession(s.id); }
-    catch (e) { toast('danger', message(e)); } finally { setBusy(false); }
+    catch (e) { fail(e); } finally { setBusy(false); }
   }
 
   async function send(text: string) {
@@ -121,7 +138,7 @@ export default function App() {
         toast('info', 'Resumed. Current decisions are rechecked before review.');
         await refreshPlatform();  // show the decisions the Reviewer will recheck against
       }
-    } catch (e) { toast('danger', message(e)); } finally { setBusy(false); }
+    } catch (e) { fail(e); } finally { setBusy(false); }
   }
 
   async function showEvidence(id: string) {
@@ -139,7 +156,7 @@ export default function App() {
       if (result.status === 'applied') toast('ok', `Applied: ${result.task_id} is now ${result.new_status} (v${result.expected_task_version + 1}).`);
       else if (result.status === 'proposed') toast('info', `${verb}: waiting for your approval.`);
       else toast(result.status === 'rejected' ? 'info' : 'danger', `${result.task_id}: ${result.status.replaceAll('_', ' ')}${result.result ? ` — ${result.result}` : ''}`);
-    } catch (e) { toast('danger', message(e)); } finally { setBusy(false); }
+    } catch (e) { fail(e); } finally { setBusy(false); }
   }
 
   const changeKey = comparison?.decisions_changed ? `${runId}:${comparison.latest_plan.summary}` : null;
@@ -150,12 +167,12 @@ export default function App() {
   return <>
     <AuroraBackground />
     <div className="app">
-      <TopBar identity={identity} healthy={healthy} project={PROJECT} />
+      <TopBar identity={identity} healthy={healthy} project={currentProject()} onSignOut={onSignOut} />
       <RelayTrack view={view} busy={busy} onPause={() => control('pause')} onResume={() => control('resume')}
-        onRetry={view?.run ? () => { void send(view.run!.request).catch(e => toast('danger', message(e))); } : undefined} />
+        onRetry={view?.run ? () => { void send(view.run!.request).catch(e => fail(e)); } : undefined} />
       <div className="workspace">
         <SessionRail sessions={sessions} activeId={sessionId} busy={busy || jobActive}
-          onSelect={id => { openSession(id).catch(e => toast('danger', message(e))); }} onNew={newSession} />
+          onSelect={id => { openSession(id).catch(e => fail(e)); }} onNew={newSession} />
         <main className="column">
           <section className="glass panel" aria-labelledby="chat-title">
             <div className="panel__head"><h1 id="chat-title" className="h2">Continue with context</h1>

@@ -6,7 +6,10 @@ export interface AgentEvent {
   seq: number; agent: 'planner' | 'reviewer' | 'system'; summary: string;
 }
 
-export interface Identity { tenant_id: string; user_id: string; mode: 'local-demo-identity' }
+export interface Identity {
+  username: string; user_id: string; tenant_id: string; company_id: string; display_name: string;
+  projects: string[]; mode: 'local-demo-auth';
+}
 
 export interface Decision {
   id: string; project_id: string; topic: string; version: number; text: string;

@@ -1,20 +1,18 @@
-"""Shared API dependencies: trusted identity, database client, error mapping.
+"""Shared API dependencies: authenticated principal, membership checks, client, errors.
 
-Identity is LOCAL DEMO scaffolding: the operator sets DEMO_TENANT_ID / DEMO_USER_ID in
-the server's .env. The browser never supplies tenant, user or graph names. This is not
-production authentication.
+Identity comes only from the server-side session (relaymind.platform.identity). Request
+bodies never carry tenant, company, user or graph fields (strict models reject them).
 """
 from __future__ import annotations
 
-import os
 import threading
 from contextlib import contextmanager
 
-from fastapi import HTTPException
+from fastapi import Depends, HTTPException, Request
 
-from relaymind.contracts.models import TrustedContext
-from relaymind.graph.access import AccessDenied
+from relaymind.graph.access import AccessDenied, authorized_graph
 from relaymind.graph.connection import create_client
+from relaymind.platform.identity import SESSION_COOKIE, AuthError, Principal, resolve
 
 _client = None
 _client_lock = threading.Lock()
@@ -28,9 +26,22 @@ def get_client():
         return _client
 
 
-def trusted_context() -> TrustedContext:
-    return TrustedContext(tenant_id=os.getenv("DEMO_TENANT_ID", "demo-a"),
-                          user_id=os.getenv("DEMO_USER_ID", "developer-a"))
+def current_principal(request: Request) -> Principal:
+    try:
+        return resolve(request.cookies.get(SESSION_COOKIE))
+    except AuthError as exc:
+        raise HTTPException(401, str(exc)) from None
+
+
+def project_member(project_id: str, principal: Principal = Depends(current_principal)) -> Principal:
+    """Authenticated AND a member of this project in the server's registry and graph map."""
+    if project_id not in principal.projects:
+        raise HTTPException(404, "Not found or access denied")
+    try:
+        authorized_graph(get_client(), principal.context(), project_id)
+    except AccessDenied:
+        raise HTTPException(404, "Not found or access denied") from None
+    return principal
 
 
 @contextmanager
