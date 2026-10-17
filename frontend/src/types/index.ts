@@ -1,6 +1,6 @@
 // Align with backend contracts; generate from OpenAPI when routes stabilize.
 export interface HealthResponse {
-  status: 'ok'; service: 'relaymind'; mode: 'scaffold';
+  status: 'ok'; service: 'relaymind'; mode: 'local-demo';
 }
 export interface AgentEvent {
   seq: number; agent: 'planner' | 'reviewer' | 'system'; summary: string;
@@ -37,7 +37,8 @@ export interface Evidence {
 
 export interface PlanStep { task: string; task_ids?: string[]; evidence_ids: string[] }
 export interface Plan { summary: string; steps: PlanStep[]; uncertainties: string[]; decision_ids: string[] }
-export interface Handoff { id: string; revision: number; plan: Plan; decisions: { id: string; topic: string; text: string }[] }
+export interface EvidenceVersion { evidence_id: string; version_id: string; state: string; source_id?: string; content_sha256?: string }
+export interface Handoff { id: string; revision: number; plan: Plan; decisions: { id: string; topic: string; text: string }[]; manufacturing_versions?: EvidenceVersion[] }
 export interface Review { status: 'accepted' | 'needs_revision' | 'blocked'; issues: { reason: string; evidence_ids: string[] }[] }
 export type RunStatus = 'planning' | 'awaiting_review' | 'paused' | 'completed' | 'needs_revision' | 'blocked' | 'failed';
 export interface RunRecord {

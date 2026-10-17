@@ -183,7 +183,8 @@ function Workspace({ identity, healthy, onSignOut, onExpired }: {
             <Composer busy={jobActive} showSuggestions={!messages.length} pauseAfterPlan={pauseAfterPlan} project={currentProject()}
               onPauseChange={setPauseAfterPlan} onSend={send} />
           </section>
-          <PlanCard run={view?.run ?? null} handoffs={view?.handoffs ?? []} currentDecisionIds={currentIds} onEvidence={showEvidence} />
+          <PlanCard run={view?.run ?? null} handoffs={view?.handoffs ?? []} currentDecisionIds={currentIds}
+            currentHolds={Object.fromEntries(impacts.map(i => [i.hold.hold_id, i.hold.decision_id]))} onEvidence={showEvidence} />
         </main>
         <Inspector tab={tab} onTab={openTab} open={sheetOpen} whyBadge={whyBadge} actionCount={pendingCount}>
           {tab === 'evidence' && <EvidenceTab decisions={decisions} histories={histories} evidence={evidence}

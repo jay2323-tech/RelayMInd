@@ -7,10 +7,7 @@ and keep the backup recording ready. Never present a scripted/fixture run as a l
 
 ```sh
 docker compose up -d
-.venv/bin/python scripts/reset_northstar_platform.py --yes-reset-launch-01
-.venv/bin/python scripts/seed_northstar.py --stage before-change
-.venv/bin/python scripts/reset_adventureworks.py --yes-reset-aw-qh-17
-.venv/bin/python scripts/seed_adventureworks.py --stage before-change
+.venv/bin/python scripts/demo_reset.py --scenario all   # both scenarios back to before-change
 # backend + frontend running (README quick start); browser at http://127.0.0.1:5173
 ```
 
@@ -37,7 +34,8 @@ Sign out → sign in as `harbor.lead`: different company graph, Northstar sessio
 1. Sign in as `aw.quality` → Inspector **Actions**: hold QH-17 v1, exposed AW-O101 (open) and AW-O102
    (shipped → QA review, no hold), AW-O105 **unknown traceability, not safe**.
 2. Apply the expanded notice: `scripts/seed_adventureworks.py --stage after-change` → reload.
-3. Impact recomputed by graph traversal: hold v2 (v1 superseded), **AW-O103 now exposed**.
+3. Impact recomputed by graph traversal: hold v2 (v1 superseded), **AW-O103 now exposed**. If a run was
+   planned earlier, its plan card shows "r1 planned against aw-dec-hold-v1 · now aw-dec-hold-v2".
 4. Propose hold AW-O103 → **Approve change** → "AW-O103 is now on hold (v2)". Mention: a hold proposed
    under v1 would now be rejected as stale.
 

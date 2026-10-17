@@ -9,7 +9,7 @@ def test_liveness_does_not_require_external_services():
     with TestClient(app) as client:
         response = client.get("/api/health")
     assert response.status_code == 200
-    assert response.json()["mode"] == "scaffold"
+    assert response.json()["mode"] == "local-demo"
 
 
 def test_plan_rejects_undeclared_fields():

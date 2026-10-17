@@ -36,7 +36,7 @@ export async function fetchHealth(signal?: AbortSignal): Promise<HealthResponse>
   if (typeof data !== 'object' || data === null ||
       !('status' in data) || data.status !== 'ok' ||
       !('service' in data) || data.service !== 'relaymind' ||
-      !('mode' in data) || data.mode !== 'scaffold') {
+      !('mode' in data) || data.mode !== 'local-demo') {
     throw new Error('Unexpected backend response');
   }
   return data as HealthResponse;

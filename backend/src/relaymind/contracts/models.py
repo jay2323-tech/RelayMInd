@@ -7,7 +7,7 @@ class StrictModel(BaseModel):
 class HealthResponse(StrictModel):
     status: Literal["ok"]
     service: Literal["relaymind"]
-    mode: Literal["scaffold"]
+    mode: Literal["local-demo"]
 
 class TrustedContext(StrictModel):
     """Internal only. Construct from verified identity, never request JSON."""
