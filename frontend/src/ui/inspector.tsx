@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ChangeComparison } from '../components/activity/WhyChangedPanel';
 import type { AffectedTask, CurrentDecisions, Decision, Evidence, ImpactReport, ProposedAction, TaskVersionEntry } from '../types';
-import { EvidenceChip } from './common';
+import { EvidenceChip, readableTopic } from './common';
 
 export type InspectorTab = 'evidence' | 'why' | 'actions';
 
@@ -74,11 +74,11 @@ export function EvidenceTab({ decisions, histories, evidence, loading, error, on
       <div className="caption">Requires human resolution. Agents will not choose a side.</div>
     </div>)}
     <div>
-      <div className="section-title">Current decisions · FalkorDB</div>
+      <div className="section-title">Approved decisions</div>
       {decisions?.current.length ? decisions.current.map(d => <div key={d.id} className="card" style={{ marginBottom: 8 }}>
-        <div className="row"><EvidenceChip id={d.id} onOpen={onOpen} /><span className="caption">{d.topic} · v{d.version}</span></div>
+        <div className="row"><h3 className="record-title">{readableTopic(d.topic)}</h3><span className="badge badge--live">v{d.version} · current</span></div><EvidenceChip id={d.id} onOpen={onOpen} />
         <p style={{ marginTop: 6 }}>{d.text}</p>
-        {histories[d.topic] && <DecisionGraph history={histories[d.topic]} onOpen={onOpen} />}
+        {histories[d.topic] && <details className="record-history"><summary>Decision history · {histories[d.topic].length} versions</summary><DecisionGraph history={histories[d.topic]} onOpen={onOpen} /></details>}
       </div>) : <p className="caption">No current decisions.</p>}
     </div>
     <div>
@@ -93,7 +93,11 @@ export function EvidenceTab({ decisions, histories, evidence, loading, error, on
 
 function EvidenceView({ evidence, onOpen }: { evidence: Evidence; onOpen: (id: string) => void }) {
   const decision = evidence.decision;
+  const heading = decision ? readableTopic(decision.topic)
+    : evidence.text.split('\n').find(line => line.trim())?.replace(/^\[[^\]]+\]\s*/, '').slice(0, 120)
+      || 'Evidence record';
   return <div className="card">
+    <h3 className="record-title evidence-heading">{heading}</h3>
     <div className="row">
       <span className="badge">{evidence.kind}</span>
       <EvidenceChip id={evidence.id} superseded={decision ? !decision.is_current : false} />
@@ -218,7 +222,7 @@ export function ActionsTab({ affected, decisions, actions, busy, runId, impacts 
       })}
     </div>
     <div>
-      <div className="section-title">Waiting for your approval</div>
+      <div className="approval-heading"><span className="eyebrow">Human control</span><h3>Waiting for your approval</h3><p className="caption">Review each proposed change before applying it.</p></div>
       {!pending.length && <p className="caption">No change needs your approval.</p>}
       {pending.map(a => <div key={a.id} className="gate-item">
         <p>{a.kind === 'hold_order' ? 'Hold order' : 'Set'} <EvidenceChip id={a.task_id} onOpen={onOpen} /> to <strong>{a.new_status.replace('_', ' ')}</strong>
@@ -238,7 +242,7 @@ export function ActionsTab({ affected, decisions, actions, busy, runId, impacts 
         const isNew = newlyDecided.has(a.id);
         const tone = a.status === 'applied' ? 'badge--ok' : a.status === 'rejected' ? 'badge--muted' : 'badge--warn';
         return <div key={a.id} className={`gate-item ${isNew && a.status !== 'applied' && a.status !== 'rejected' ? 'is-shake' : ''}`}>
-          <div className="row"><span className={`badge ${tone}`}>{a.status.replaceAll('_', ' ')}</span><EvidenceChip id={a.task_id} onOpen={onOpen} />
+          <div className="row"><span className={`badge ${tone}`}>{a.status === 'applied' ? 'Human-approved · applied' : a.status.replaceAll('_', ' ')}</span><EvidenceChip id={a.task_id} onOpen={onOpen} />
             {a.status === 'applied' && <span className="version"><span className="version__chip">v{a.expected_task_version}</span>→
               <span className={`version__chip ${isNew ? 'version__chip--new' : ''}`}>v{a.expected_task_version + 1}</span></span>}
           </div>
