@@ -18,6 +18,8 @@ from relaymind.memory.procedures import get_procedure
 from relaymind.memory.conversations import load_messages
 from relaymind.memory.episodes import load_episodes
 from relaymind.agents.loop import AgentLoop, AgentBlocked, ReadTool
+from relaymind.contracts.retrieval import SearchArguments
+from relaymind.memory.retrieval import search_sources
 
 
 class PlatformBridge(Protocol):
@@ -138,6 +140,11 @@ class CoordinationEngine:
 
     def _tools(self,decisions,procedure,emit,*,handoff=None):
         tools={
+            'search_sources':ReadTool('Search authorized project source documents by a few exact terms. '
+                'All terms must match; try synonyms separately. Empty results apply only to this search scope. '
+                'Fetch full evidence by returned ID; a source is not necessarily current approved truth.',
+                SearchArguments, lambda query,limit=5:search_sources(
+                    self.client,self.context,self.project_id,query,limit).model_dump()),
             'current_decisions':ReadTool('Current approved decisions. History does not override them.',NoArguments,
                 lambda:[d.model_dump() for d in self.decisions()]),
             'memory_context':ReadTool('Recent conversation and sourced historical episodes.',NoArguments,self.memory_context),

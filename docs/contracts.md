@@ -1,5 +1,17 @@
 # Shared contracts
 
+## AdventureWorks retrieval milestone (17 October)
+
+`contracts/retrieval.py` adds `SearchArguments`, `SearchHit`, `SearchResult` and
+the proposed `EvidenceVersion` manifest item. `memory/retrieval.py` searches Source
+nodes in the server-authorized project. Planner and Reviewer both expose this
+read-only `search_sources` tool. It accepts query/limit only, never identity or graph.
+Only a successful zero-row query returns `not_found`; authorization and DB failures
+propagate. Results include source hashes, timestamp, method, scope and `has_more`.
+This is bounded lexical source discovery, not comprehensive semantic retrieval.
+Employee/incident entity search and EvidenceVersion freshness enforcement are not
+yet wired. See `adventureworks-checkpoint.md` for integration requirements.
+
 ## Additive organization directory milestone (17 October)
 
 See [company-directory-and-import.md](company-directory-and-import.md).
