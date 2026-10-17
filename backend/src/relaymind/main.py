@@ -26,6 +26,18 @@ app.include_router(runs_router, prefix="/api")
 app.include_router(workflow_router, prefix="/api")
 
 
+@app.on_event("startup")
+def _maybe_start_reminder_worker():
+    # Optional in-process worker for local demos (RELAYMIND_REMINDER_WORKER=1). Otherwise run
+    # scripts/reminder_worker.py as its own process. Claims make several workers safe.
+    import os
+    import threading
+    if os.getenv("RELAYMIND_REMINDER_WORKER") == "1":
+        from relaymind.api.deps import get_client
+        from relaymind.workflow.reminders import worker_loop
+        threading.Thread(target=worker_loop, args=(get_client(),), daemon=True, name="reminder-worker").start()
+
+
 @app.get("/api/identity")
 def identity(principal: Principal = Depends(current_principal)):
     # Authenticated local demo account (server-side session); not a production identity provider.
