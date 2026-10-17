@@ -16,6 +16,7 @@ class TrustedContext(StrictModel):
 
 class PlanStep(StrictModel):
     task: str
+    task_ids: list[str] = Field(default_factory=list, description="Exact task IDs explicitly addressed by this step; cite them in evidence_ids too")
     evidence_ids: list[str] = Field(default_factory=list)
 
 class Plan(StrictModel):

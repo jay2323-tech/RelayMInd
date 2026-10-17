@@ -1,0 +1,4 @@
+# Optional employee XLSX parser dependencies. Install alongside the base lock.
+openpyxl==3.1.5
+et-xmlfile==2.0.0
+defusedxml==0.7.1

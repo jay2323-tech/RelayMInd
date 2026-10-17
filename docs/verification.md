@@ -31,3 +31,165 @@ key. The check now uses GRAPH.QUERY RETURN 1 to initialize each fixed demo graph
 then verifies GRAPH.RO_QUERY RETURN 1. Executed successfully against the running
 local Docker database. Authentication and both graph queries passed; no message,
 session, agent or cross-tenant data isolation behavior is proven by this check.
+
+## Pinned FalkorDB image (2026-10-16)
+
+- Image: `falkordb/falkordb@sha256:b0bdcac2cbaff989e77cb0610439b7a9289e86de033ccbbd4368b66fb680ae7a`
+  (was `latest` on 2026-10-16; manifest list with `linux/amd64` and `linux/arm64`, checked against Docker Hub).
+- `MODULE LIST` on Jayanth's Mac: graph module version `42201` (FalkorDB 4.22.1);
+  module args `MAX_QUEUED_QUERIES 25`, `TIMEOUT 1000` (ms), `RESULTSET_SIZE 10000`.
+- Atomicity tests AT-1..AT-4 (memory-design.md §7): **not run yet.**
+
+## FalkorDB compatibility checks C-1..C-3 (2026-10-16)
+
+Command: `.venv/Scripts/python scripts/check_falkordb_compat.py` on the Windows PC
+(Python 3.14, Docker Desktop, pinned image above running as `linux/amd64`).
+Each check used its own throwaway `relaymind_compat_<random>` graph; `GRAPH.LIST`
+afterwards showed only `relaymind_demo_a` and `relaymind_demo_b`.
+
+```
+FalkorDB graph module version: 42201
+PASS  C-1 WHERE NOT (pattern): short form=[['D2'], ['D3']], aggregation form=[['D2'], ['D3']], expected=[['D2'], ['D3']]
+PASS  C-2 UNIQUE TaskVersion.version_key: status=OPERATIONAL, duplicate error='unique constraint violation on node of type TaskVersion', nodes with key=1
+PASS  C-3a UNIQUE Decision.id: status=OPERATIONAL, duplicate error='unique constraint violation on node of type Decision', nodes with key=1
+PASS  C-3b UNIQUE Handoff.id: status=OPERATIONAL, duplicate error='unique constraint violation on node of type Handoff', nodes with key=1
+4/4 checks passed.
+```
+
+Meaning: on this image, `WHERE NOT (pattern)` matches the aggregation form, and
+single-property unique constraints reject duplicates after reaching OPERATIONAL.
+Not yet run on arm64 (Mac); same digest, so expected identical, but unverified.
+Unique constraints stop duplicate IDs; they do **not** by themselves prove that
+guarded claims/approvals are atomic. That still requires AT-1..AT-4.
+
+Same session, baseline unit tests on Python 3.14: `pytest backend/tests -q` →
+17 passed, 2 skipped (live tests opt-in), 1 warning.
+
+## Platform: decisions, tasks, bridge, atomicity (2026-10-16, Windows PC, pinned image)
+
+Branch `Jk` = main + PR #3 + PR #4 (merge `fb7472c`) + platform work.
+
+- `RUN_LIVE_FALKORDB_TESTS=1 pytest backend/tests -q` → **72 passed**, 1 warning
+  (52 from PR #3/#4 + 20 new platform tests). Without live flag: 45 passed, 27 skipped.
+- New live tests: `test_decisions_real_db.py` (7), `test_platform_bridge_real_db.py` (6),
+  `test_decisions_atomicity_real_db.py` (2); unit `test_decisions.py` (5). All use a
+  throwaway project per test, never `launch-01`; afterwards the demo graph contained
+  only the Northstar seed and no leftover test projects.
+- `scripts/setup_graph.py` run on both demo graphs: unique constraints OPERATIONAL on
+  `Decision.id`, `Source.id`, `Task.id`, `TaskVersion.id`, `TaskVersion.version_key`,
+  `ProposedAction.id`; second run idempotent.
+- `scripts/seed_northstar.py --stage before-change` then default `all`, then re-run:
+  idempotent. Bridge read-back on `launch-01`: current decisions = `decision-02` only;
+  decision-01 evidence says "SUPERSEDED by decision-02"; affected tasks = task-01, task-02.
+
+### Atomicity AT-3 / AT-4 (two independent OS processes, 100 rounds each)
+
+| Test | Race | Result |
+|---|---|---|
+| AT-3 | both processes `record_decision` the same ID + payload | 100/100 rounds: exactly one node, both callers got the record |
+| AT-4 | both supersede the same current decision with different new decisions | 100/100 rounds: one `ok`, one `InvalidSupersessionError`; exactly one current decision per topic |
+
+- Run **before** unique constraints existed (`CALL db.constraints()` was empty), so the
+  guarded single-query writes alone produced these results.
+- Start alignment: READY/GO barrier, then both busy-wait to the same scheduled instant;
+  recorded start skew 0.00 ms median/max (this measures start alignment, not server
+  arrival). Operations take ~2–13 ms, so the two queries overlap at the server.
+- First two attempts were **invalid evidence** and are not counted: start skew was
+  1–27 s because the parent read one worker's stdout to completion while the other
+  blocked on a full pipe. Fixed by draining both concurrently; the test now fails if
+  skew exceeds 25 ms.
+- Scope: these operations on FalkorDB 4.22.1 (amd64). AT-1 (handoff claim) has Codex's
+  3-process one-winner test; AT-2 (task approval) not implemented yet.
+
+### Not verified
+- Any live Gemini/Groq call (no keys configured on this PC yet).
+- arm64 (Mac) runs of the above.
+
+## First real-model checkpoint, Northstar (2026-10-16 ~23:45 IST, Windows PC)
+
+Platform: real `GraphPlatformBridge` on the seeded `launch-01` graph (not a fixture).
+Session `live-20261016-234504`, owner `developer-a`. Provider: Gemini API, called through
+the engine's `JsonProvider`. Credentials in local `.env` only; never printed.
+
+| Attempt | Model | Result |
+|---|---|---|
+| CLI run1, run2 | `gemini-3.6-flash` (+ Groq fallback) | `failed`: Gemini HTTP 503, then Groq fallback HTTP 403 (Cloudflare 1010: request has no User-Agent) |
+| diag | `gemini-3.6-flash` | turn 1 OK: calls `fetch_evidence`, `trace_dependencies` x2; turn 2 HTTP 503 |
+| diag | `gemini-3.8-flash` | same pattern: good tool calls, then 503 |
+| diag | `gemini-2.5-flash` | HTTP 404 for this key |
+| diag | `gemini-3.5-flash-lite` | Planner `final` → handoff saved (`awaiting_review`) |
+
+Full `gemini-3.5-flash-lite` run (`...-gemini-3.5-flash-lite-1792174627`):
+1. Plan r1 cites only `decision-02` and `source-02`; uncertainties: missing owners/dates.
+   Did **not** name affected tasks.
+2. Independent Reviewer (separate process, real model) → `needs_revision`: "The procedure
+   requires that tasks implementing superseded decisions are identified with a proposed next
+   action. The plan fails to identify task-01 and task-02 which implement the superseded
+   decision-01." Evidence cited: `decision-02`.
+3. Correction (real model) → plan r2 names task-01 and task-02 for postponement/cancellation
+   and continues free-tier preparation. Cites `decision-02` only.
+4. Final review call: provider returned an invalid response → run `failed`
+   ("ProviderError: review could not complete"). **Run did not complete.**
+
+Observed issues handed to Codex (provider/engine owner): no User-Agent (Groq always 403),
+no retry for 503/429, no re-ask on invalid JSON, failure details reduced to class name.
+Groq key validated with a User-Agent; account lacks Llama models, so `GROQ_MODEL` set to
+`openai/gpt-oss-120b` (not yet exercised in a run). Codex's scenario CLI (`--live-model`) not run yet.
+
+## Real-model rerun after provider fixes (2026-10-17 ~00:07–00:12 IST, Windows PC)
+
+`Jk` = ... + frontend + merge of `65f2c75` (provider retries, User-Agent, repair, diagnostics).
+Live suite after merge: **98 passed** (unit-only: 59 passed, 39 skipped). Demo platform data
+reset and re-seeded (`all`) first. Fresh session `live2-20261017-000650`; fresh run IDs.
+Real `GraphPlatformBridge`; credentials never printed. Failure metadata below is the engine's
+sanitized log output; HTTP error messages were read from provider error bodies only.
+
+| Run | Provider / model | Outcome | Sanitized failure metadata |
+|---|---|---|---|
+| A (CLI) | gemini `gemini-3.6-flash` → fallback groq `openai/gpt-oss-120b` | `failed` at planning | gemini 503 ×3 (retries=0,1,2); fallback; groq HTTP 400 |
+| groqdiag | groq `openai/gpt-oss-120b` only | `failed` | 400 `tool_use_failed`: "Tool choice is none, but model called a tool" |
+| groq | groq `openai/gpt-oss-20b` | `failed` | 400 `tool_use_failed` (same) |
+| groq | groq `qwen/qwen3.8-27b` | `failed` | 400 `json_validate_failed` |
+| B (CLI) | gemini `gemini-3.5-flash-lite`, no fallback | `failed` at review | planning OK (handoff r1); review `invalid_response`, repair attempted (`repaired=True`), still invalid |
+| rdiag | gemini `gemini-3.5-flash-lite`, no fallback | **`completed`** | none |
+
+Completed run `live2-20261017-000650-rdiag-1792175927` (engine API via a response-logging
+wrapper; provider/engine code unmodified):
+- Planner: one `final`; plan cites decision `decision-02` (v2) and evidence `source-02`;
+  uncertainties: missing owners, missing timestamps. Handoff r1 saved with procedure launch-review v1.
+- Independent Reviewer: called `fetch_evidence(source-02)`, then `accepted`, no issues;
+  checked decision-02. All cited IDs passed the engine's evidence validation (real sources).
+- **Quality caveat:** the plan does not name task-01/task-02 (procedure step 3), and this Reviewer
+  accepted anyway; the earlier 2026-10-16 run's Reviewer flagged exactly that omission.
+  Model review strictness varies between runs.
+
+What this verifies / does not:
+- Gemini transient recovery: retries observed (3 attempts on 503 within budget) but **no
+  observed 503 → success recovery**; gemini-3.6-flash stayed unavailable.
+- Groq User-Agent: **fixed** (no Cloudflare 403); Groq still unusable with this protocol on
+  this account (tool_use_failed / json_validate_failed, 400 is non-retryable).
+- Final Review JSON correction: repair path **exercised** (run B) but **did not recover** in
+  that run; run rdiag needed no repair.
+- One completed real-model run with valid evidence: **yes** (rdiag, flash-lite).
+
+## Integrated agent branch 11b3620: live verification (2026-10-17 ~00:40–00:55 IST, Windows PC)
+
+`Jk` merge `44ea49b` (native Groq functions + `submit_result`, required affected-task coverage,
+`PlanStep.task_ids`). Live suite on Windows: **107 passed** (matches Codex's Mac count).
+Live-run evidence from before the reset was exported to
+`docs/ai-work-log/claude/evidence/2026-10-17-live-runs-before-reset.json` (14 runs, no secrets).
+Every attempt below used a fresh session and run ID, the real `GraphPlatformBridge` and the
+seeded `launch-01` graph (decision-02 supersedes decision-01; task-01/task-02 active).
+
+| # | Check | Provider / model | Result |
+|---|---|---|---|
+| 1 | Gemini addresses task-01/task-02 | gemini `gemini-3.5-flash-lite` | **3/3 completed**, every plan has `task_ids` = [task-01, task-02] cited in evidence; reviews `accepted` (11–31 s) |
+| 2 | Omission → needs_revision | SCRIPTED-FIXTURE planner (labelled), reviewer with **no model replies** | **9/9 `needs_revision`** (omit both, omit task-02, IDs only in evidence), issue lists exactly the missing IDs, zero model calls |
+| 3 | Groq native calls + submit_result | groq `openai/gpt-oss-120b` (×3) | Planning **works**: native calls (`fetch_evidence` ×3, `affected_tasks`), `submit_result` → valid plan with task-01/task-02 saved as handoff. Review **failed 3/3: HTTP 429** (free tier 8,000 tokens/min; planning used ~5k; reset ~35 s > 5 s retry cap) |
+| 3b | Groq alternative | groq `openai/gpt-oss-20b` | failed at planning: 429 then 400 after one protocol repair |
+| 4 | Browser flow | gemini flash-lite via API/UI | chat → paused r1 (decision-01) → evidence chip → seed change → Resume → deterministic `needs_revision` (decisions changed) → r2 names task-01/task-02 with task_ids, plus a step "proceed with task-03" **without citing task-03** → real Reviewer `needs_revision` (citation rule) → run ends `needs_revision` (one correction max). Evidence panel auto-refreshed to "SUPERSEDED by decision-02". Propose + Approve pause task-01 → "Applied: version 1 -> 2". |
+
+Conclusions: affected-task coverage works deterministically and Gemini now addresses both tasks.
+Groq is functional for planning but cannot complete a run on this free-tier account
+(per-minute token limit). The browser flow works end to end; the final review outcome depends
+on model output (this run: a correct citation catch).

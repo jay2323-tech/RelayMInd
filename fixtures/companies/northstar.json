@@ -1,0 +1,159 @@
+{
+  "schema_version": 1,
+  "synthetic": true,
+  "company_id": "northstar",
+  "company_name": "Northstar",
+  "industry": "Software development",
+  "teams": [
+    {
+      "id": "leadership",
+      "name": "Leadership"
+    },
+    {
+      "id": "product",
+      "name": "Product"
+    },
+    {
+      "id": "engineering",
+      "name": "Engineering"
+    },
+    {
+      "id": "people",
+      "name": "People and Operations"
+    }
+  ],
+  "employees": [
+    {
+      "employee_id": "northstar-leadership-01",
+      "name": "Maya Sen",
+      "team_id": "leadership",
+      "role": "Chief executive",
+      "status": "active",
+      "skills": [
+        "Strategy"
+      ],
+      "manager_id": null
+    },
+    {
+      "employee_id": "northstar-product-01",
+      "name": "Arjun Rao",
+      "team_id": "product",
+      "role": "Product lead",
+      "status": "active",
+      "skills": [
+        "Product planning"
+      ],
+      "manager_id": "northstar-leadership-01"
+    },
+    {
+      "employee_id": "northstar-product-02",
+      "name": "Nila Shah",
+      "team_id": "product",
+      "role": "Product designer",
+      "status": "active",
+      "skills": [
+        "UX"
+      ],
+      "manager_id": "northstar-product-01"
+    },
+    {
+      "employee_id": "northstar-product-03",
+      "name": "Leo Park",
+      "team_id": "product",
+      "role": "Product analyst",
+      "status": "active",
+      "skills": [
+        "Analytics"
+      ],
+      "manager_id": "northstar-product-01"
+    },
+    {
+      "employee_id": "northstar-engineering-01",
+      "name": "Zara Khan",
+      "team_id": "engineering",
+      "role": "Engineering lead",
+      "status": "active",
+      "skills": [
+        "Architecture"
+      ],
+      "manager_id": "northstar-leadership-01"
+    },
+    {
+      "employee_id": "northstar-engineering-02",
+      "name": "Ishan Das",
+      "team_id": "engineering",
+      "role": "Backend engineer",
+      "status": "active",
+      "skills": [
+        "Payments"
+      ],
+      "manager_id": "northstar-engineering-01"
+    },
+    {
+      "employee_id": "northstar-engineering-03",
+      "name": "Eva Chen",
+      "team_id": "engineering",
+      "role": "Web engineer",
+      "status": "active",
+      "skills": [
+        "React"
+      ],
+      "manager_id": "northstar-engineering-01"
+    },
+    {
+      "employee_id": "northstar-engineering-04",
+      "name": "Noah Reed",
+      "team_id": "engineering",
+      "role": "QA engineer",
+      "status": "active",
+      "skills": [
+        "Testing"
+      ],
+      "manager_id": "northstar-engineering-01"
+    },
+    {
+      "employee_id": "northstar-engineering-05",
+      "name": "Sara Ali",
+      "team_id": "engineering",
+      "role": "Platform engineer",
+      "status": "active",
+      "skills": [
+        "Infrastructure"
+      ],
+      "manager_id": "northstar-engineering-01"
+    },
+    {
+      "employee_id": "northstar-people-01",
+      "name": "Riya Mehta",
+      "team_id": "people",
+      "role": "People lead",
+      "status": "active",
+      "skills": [
+        "HR operations"
+      ],
+      "manager_id": "northstar-leadership-01"
+    },
+    {
+      "employee_id": "northstar-people-02",
+      "name": "Owen Cole",
+      "team_id": "people",
+      "role": "Recruiter",
+      "status": "active",
+      "skills": [
+        "Hiring"
+      ],
+      "manager_id": "northstar-people-01"
+    },
+    {
+      "employee_id": "northstar-people-03",
+      "name": "Anya Bose",
+      "team_id": "people",
+      "role": "Operations specialist",
+      "status": "active",
+      "skills": [
+        "Onboarding"
+      ],
+      "manager_id": "northstar-people-01"
+    }
+  ]
+}
