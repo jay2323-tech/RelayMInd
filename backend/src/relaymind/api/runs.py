@@ -128,14 +128,11 @@ def _summarize(scope: AgentJobScope, run_id: str):
     """Assistant message describing the persisted outcome, written with the captured scope."""
     engine = _engine(scope)
     run = _require_scoped(engine.store.get("run", run_id), scope)
-    text = f"Run {run_id}: {run['status']}."
+    from relaymind.agents.presentation import conversation_reply
+    plan = None
     if run["handoff_ids"]:
         plan = _require_scoped(engine.store.get("handoff", run["handoff_ids"][-1]), scope)["plan"]
-        text += f" Latest plan: {plan['summary']}"
-    if run.get("result"):
-        text += f" Review: {run['result']['review']['status']}."
-    if run.get("error"):
-        text += f" Error: {run['error']}"
+    text = conversation_reply(run, plan)
     save_message(get_client(), scope.trusted_context(), scope.project_id, scope.session_id,
                  f"{run_id}-{run['status']}-summary", "assistant", text[:16000])
 

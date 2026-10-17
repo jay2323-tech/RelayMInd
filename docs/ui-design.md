@@ -1,3 +1,10 @@
+Current chat-first milestone (18 October): the main surface is a conversation with
+inline saved plans and supported individual action controls. The conversation rail
+collapses, the composer stays at the bottom, and sources/history open on demand.
+Relay activity is expandable. Whole-plan review controls are capability-gated and
+remain unavailable until the backend implements the shared contract in
+chat-first-parallel-plan.md. Older dashboard layout details below are historical.
+
 # RelayMind UI design spec — "Glass Relay"
 
 Current visual direction (17 October, Jayanth): flat charcoal background, no visible
