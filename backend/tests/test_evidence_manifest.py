@@ -118,13 +118,34 @@ def test_engine_fetches_complete_authorized_source_text(monkeypatch):
     assert calls == [("demo-a", "launch-01", SOURCE_ID, True)]
 
 
-def test_planner_cannot_cite_only_a_search_excerpt(monkeypatch):
-    engine, model, store, _, run = setup_engine(monkeypatch,
+def test_engine_recovers_excerpt_citation_and_reviewer_sees_full_source(monkeypatch):
+    engine, model, store, source, run = setup_engine(monkeypatch,
         [_search_call(), {"final": PLAN}])
+    events=[]
+    engine._event=lambda run,agent,summary: events.append(summary)
     planned = engine._plan(run, PROCEDURE.id, PROCEDURE.version)
-    assert planned.status == "blocked"
-    assert ("handoff", "isolated-run-r1") not in store.records
+    assert planned.status == "awaiting_review",planned.error
     assert model.inputs[1][1][-1]["result"]["hits"][0]["evidence_id"] == SOURCE_ID
+    assert any('Engine fetched 1 cited search sources' in event for event in events)
+    handoff=HandoffRecord.model_validate(store.get('handoff',planned.handoff_ids[0]))
+    assert handoff.evidence_versions[0].content_sha256==hashlib.sha256(source['text'].encode()).hexdigest()
+    reviewer=ScriptedModel([{'final':{'status':'needs_revision','issues':[
+        {'reason':'Full source does not support the proposed action','evidence_ids':[SOURCE_ID]}]}}])
+    engine.loop=AgentLoop(reviewer)
+    result=engine.review_handoff(handoff.id)
+    import json
+    context=json.loads(reviewer.inputs[0][1][0]['content'])
+    assert context['independent_evidence'][0]['text']==source['text']
+    assert len(source['text'])>800
+    assert result.review.status=='needs_revision'
+
+
+def test_auto_fetch_failure_cannot_save_handoff(monkeypatch):
+    engine, _, store, _, run=setup_engine(monkeypatch,[_search_call(),{'final':PLAN}])
+    engine.evidence=lambda evidence_id: _deny()
+    planned=engine._plan(run,PROCEDURE.id,PROCEDURE.version)
+    assert planned.status=='blocked'
+    assert ('handoff','isolated-run-r1') not in store.records
 
 
 def test_full_source_read_is_saved_in_handoff_manifest(monkeypatch):
