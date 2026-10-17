@@ -1,5 +1,6 @@
 """Bounded read-tool loop shared by Planner and Reviewer."""
 import json
+import re
 import time
 from dataclasses import dataclass
 from pydantic import BaseModel, ValidationError
@@ -7,6 +8,24 @@ import logging
 
 logger=logging.getLogger(__name__)
 from relaymind.contracts.coordination import ModelReply
+from relaymind.graph.access import AccessDenied
+
+
+_SAFE_ID = re.compile(r'[A-Za-z0-9_.:-]{1,80}')
+
+
+def safe_id(value) -> str:
+    """Record IDs only; anything else (free text) is never logged or echoed."""
+    return str(value) if _SAFE_ID.fullmatch(str(value)) else '<non-id text>'
+
+
+class EvidenceUnavailable(LookupError):
+    """A requested record is missing OR outside the caller's scope (deliberately indistinguishable)."""
+    code = 'evidence_unavailable'
+
+    def __init__(self, evidence_id):
+        super().__init__('Evidence unavailable or access denied')
+        self.evidence_id = safe_id(evidence_id)
 
 
 class AgentBlocked(RuntimeError):
@@ -80,7 +99,15 @@ class AgentLoop:
                 seen.add(call.id)
                 tool=tools[call.name]
                 args=tool.arguments.model_validate(call.arguments)
-                result=tool.execute(**args.model_dump())
+                try:
+                    result=tool.execute(**args.model_dump())
+                except (AccessDenied,LookupError) as exc:
+                    # Same answer for "missing" and "not permitted", so nothing leaks; the
+                    # model can recover instead of the whole run failing. Access checks unchanged.
+                    requested=[safe_id(v) for v in args.model_dump().values() if isinstance(v,str)][:3]
+                    logger.warning('agent_tool_unavailable tool=%s ids=%s',call.name,requested)
+                    result={'status':'unavailable','requested':requested,
+                            'note':'No such record is available in your permitted project scope. Do not cite it.'}
                 calls+=1
                 encoded=json.dumps(result,default=lambda x:x.model_dump())
                 if len(encoded)>20000:

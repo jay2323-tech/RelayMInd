@@ -2,60 +2,181 @@
   "synthetic": true,
   "company_id": "harbor",
   "scenario_id": "hb-route-change",
-  "project": {"id": "hb-route-07", "name": "Harbor HB-O201 route change (synthetic)"},
+  "project": {
+    "id": "hb-route-07",
+    "name": "Harbor HB-O201 route change (synthetic)"
+  },
   "provenance": "Original fictional RelayMind scenario. Company, customer, ports, routes and orders are invented.",
   "people": [
-    {"id": "hb-dispatch-lead", "name": "Harbor dispatch lead"},
-    {"id": "hb-account-manager", "name": "Harbor account manager"}
+    {
+      "id": "hb-dispatch-lead",
+      "name": "Harbor dispatch lead"
+    },
+    {
+      "id": "hb-account-manager",
+      "name": "Harbor account manager"
+    }
   ],
   "sources": [
-    {"id": "hb-src-plan-v1", "kind": "carrier-plan", "title": "Carrier plan, 14 October", "stage": "before-change",
-     "text": "Approved: ship order HB-O201 (40 refrigerated pallets for Coldline Foods) via Route A through Port North. Depart Thursday, deliver Friday."},
-    {"id": "hb-src-contract", "kind": "contract", "title": "Coldline Foods delivery terms", "stage": "before-change",
-     "text": "Any change to a confirmed delivery date must be communicated to Coldline Foods at least 24 hours in advance. Refrigerated cargo must stay at or below 4 C. No penalty amount is defined for a one-day delay."},
-    {"id": "hb-src-port-closure", "kind": "port-notice", "title": "Port North closure notice, 16 October", "stage": "after-change",
-     "text": "Port North is closed Thursday to Saturday for crane maintenance. Bookings through Port North on those days are cancelled by the port."},
-    {"id": "hb-src-plan-v2", "kind": "carrier-plan", "title": "Revised carrier plan, 16 October", "stage": "after-change",
-     "text": "Approved replacement: ship HB-O201 via Route B through Port South. Depart Thursday, deliver Saturday (one day later). Tell Coldline Foods before confirming any delivery date."}
+    {
+      "id": "hb-src-plan-v1",
+      "kind": "carrier-plan",
+      "title": "Carrier plan, 14 October",
+      "stage": "before-change",
+      "text": "Approved: ship order HB-O201 (40 refrigerated pallets for Coldline Foods) via Route A through Port North. Depart Thursday, deliver Friday."
+    },
+    {
+      "id": "hb-src-contract",
+      "kind": "contract",
+      "title": "Coldline Foods delivery terms",
+      "stage": "before-change",
+      "text": "Any change to a confirmed delivery date must be communicated to Coldline Foods at least 24 hours in advance. Refrigerated cargo must stay at or below 4 C. No penalty amount is defined for a one-day delay."
+    },
+    {
+      "id": "hb-src-port-closure",
+      "kind": "port-notice",
+      "title": "Port North closure notice, 16 October",
+      "stage": "after-change",
+      "text": "Port North is closed Thursday to Saturday for crane maintenance. Bookings through Port North on those days are cancelled by the port."
+    },
+    {
+      "id": "hb-src-plan-v2",
+      "kind": "carrier-plan",
+      "title": "Revised carrier plan, 16 October",
+      "stage": "after-change",
+      "text": "Approved replacement: ship HB-O201 via Route B through Port South. Depart Thursday, deliver Saturday (one day later). Tell Coldline Foods before confirming any delivery date."
+    }
   ],
   "decisions": [
-    {"id": "hb-dec-route-v1", "topic": "route-hb-o201", "stage": "before-change", "source_ids": ["hb-src-plan-v1"],
-     "text": "Ship HB-O201 via Route A (Port North); depart Thursday, deliver Friday.", "supersedes": []},
-    {"id": "hb-dec-route-v2", "topic": "route-hb-o201", "stage": "after-change", "source_ids": ["hb-src-plan-v2", "hb-src-port-closure"],
-     "text": "Ship HB-O201 via Route B (Port South); depart Thursday, deliver Saturday (+1 day). Notify Coldline Foods before confirming.",
-     "supersedes": ["hb-dec-route-v1"], "reason": "Port North closed Thursday to Saturday"}
+    {
+      "id": "hb-dec-route-v1",
+      "topic": "route-hb-o201",
+      "stage": "before-change",
+      "source_ids": [
+        "hb-src-plan-v1"
+      ],
+      "text": "Ship HB-O201 via Route A (Port North); depart Thursday, deliver Friday.",
+      "supersedes": []
+    },
+    {
+      "id": "hb-dec-route-v2",
+      "topic": "route-hb-o201",
+      "stage": "after-change",
+      "source_ids": [
+        "hb-src-plan-v2",
+        "hb-src-port-closure"
+      ],
+      "text": "Ship HB-O201 via Route B (Port South); depart Thursday, deliver Saturday (+1 day). Notify Coldline Foods before confirming.",
+      "supersedes": [
+        "hb-dec-route-v1"
+      ],
+      "reason": "Port North closed Thursday to Saturday"
+    }
   ],
   "tasks": [
-    {"id": "hb-task-book-route-a", "stage": "before-change", "title": "Book carrier slot on Route A (Port North)", "status": "in_progress",
-     "assigned_to": "hb-dispatch-lead", "implements": ["hb-dec-route-v1"], "blocked_by": []},
-    {"id": "hb-task-confirm-friday", "stage": "before-change", "title": "Confirm Friday delivery with Coldline Foods", "status": "todo",
-     "assigned_to": "hb-account-manager", "implements": ["hb-dec-route-v1"], "blocked_by": ["hb-task-book-route-a"]},
-    {"id": "hb-task-book-route-b", "stage": "after-change", "title": "Book carrier slot on Route B (Port South)", "status": "todo",
-     "assigned_to": "hb-dispatch-lead", "implements": ["hb-dec-route-v2"], "blocked_by": []}
+    {
+      "id": "hb-task-book-route-a",
+      "stage": "before-change",
+      "title": "Book carrier slot on Route A (Port North)",
+      "status": "in_progress",
+      "assigned_to": "hb-dispatch-lead",
+      "implements": [
+        "hb-dec-route-v1"
+      ],
+      "blocked_by": []
+    },
+    {
+      "id": "hb-task-confirm-friday",
+      "stage": "before-change",
+      "title": "Confirm Friday delivery with Coldline Foods",
+      "status": "todo",
+      "assigned_to": "hb-account-manager",
+      "implements": [
+        "hb-dec-route-v1"
+      ],
+      "blocked_by": [
+        "hb-task-book-route-a"
+      ]
+    },
+    {
+      "id": "hb-task-book-route-b",
+      "stage": "after-change",
+      "title": "Book carrier slot on Route B (Port South)",
+      "status": "todo",
+      "assigned_to": "hb-dispatch-lead",
+      "implements": [
+        "hb-dec-route-v2"
+      ],
+      "blocked_by": []
+    }
   ],
-  "procedure": {"id": "route-change-review", "version": 1, "name": "Harbor route-change review",
+  "procedure": {
+    "id": "route-change-review",
+    "version": 1,
+    "name": "Harbor route-change review",
     "source": "Synthetic Harbor dispatch checklist",
     "steps": [
       "Every step cites the current approved route decision, a source or a task by ID.",
       "Plans made under a superseded route are history only; recompute bookings for the current route.",
       "Tasks implementing a superseded route get an explicit proposed action (cancel, pause or replace).",
       "Customer-facing date changes follow the contract notice rule; never confirm a date that is not approved.",
-      "Do not invent penalties, costs or owners that the sources do not state."]},
+      "Do not invent penalties, costs or owners that the sources do not state."
+    ]
+  },
   "history": {
     "session_id": "harbor-history-session-01",
     "messages": [
-      {"id": "harbor-history-msg-01", "role": "user",
-       "content": "Plan for HB-O201: Route A through Port North, depart Thursday, Friday delivery to Coldline Foods. Dispatch books the slot; account management confirms Friday."}
+      {
+        "id": "harbor-history-msg-01",
+        "role": "user",
+        "content": "Plan for HB-O201: Route A through Port North, depart Thursday, Friday delivery to Coldline Foods. Dispatch books the slot; account management confirms Friday."
+      }
     ],
     "episodes": [
-      {"id": "harbor-episode-01", "source_message_id": "harbor-history-msg-01", "occurred_at": 1792000000000,
-       "summary": "On 14 October the team planned HB-O201 via Route A (Port North) for Friday delivery: book the Route A slot (hb-task-book-route-a), then confirm Friday with Coldline Foods (hb-task-confirm-friday)."}
+      {
+        "id": "harbor-episode-01",
+        "source_message_id": "harbor-history-msg-01",
+        "occurred_at": 1792000000000,
+        "summary": "On 14 October the team planned HB-O201 via Route A (Port North) for Friday delivery: book the Route A slot (hb-task-book-route-a), then confirm Friday with Coldline Foods (hb-task-confirm-friday)."
+      }
     ]
   },
   "acceptance": [
-    {"id": "HB-01", "stage": "before-change", "question": "Current route for HB-O201?", "expected_current": ["hb-dec-route-v1"]},
-    {"id": "HB-02", "stage": "after-change", "question": "Current route after the closure?", "expected_current": ["hb-dec-route-v2"],
-     "expected_affected_tasks": ["hb-task-book-route-a", "hb-task-confirm-friday"]},
-    {"id": "HB-03", "stage": "after-change", "question": "May we confirm Friday?", "expected": "No: v1 is superseded; Saturday needs customer notice first (contract)."}
+    {
+      "id": "HB-01",
+      "stage": "before-change",
+      "question": "Current route for HB-O201?",
+      "expected_current": [
+        "hb-dec-route-v1"
+      ]
+    },
+    {
+      "id": "HB-02",
+      "stage": "after-change",
+      "question": "Current route after the closure?",
+      "expected_current": [
+        "hb-dec-route-v2"
+      ],
+      "expected_affected_tasks": [
+        "hb-task-book-route-a",
+        "hb-task-confirm-friday"
+      ]
+    },
+    {
+      "id": "HB-03",
+      "stage": "after-change",
+      "question": "May we confirm Friday?",
+      "expected": "No: v1 is superseded; Saturday needs customer notice first (contract)."
+    }
+  ],
+  "orders": [
+    {
+      "id": "HB-O201",
+      "status": "open",
+      "model": "refrigerated-pallets",
+      "units": 40,
+      "source_id": "hb-src-plan-v1",
+      "stage": "before-change"
+    }
   ]
 }

@@ -135,8 +135,12 @@ class GraphPlatformBridge:
             lines = [f"[Order {order.order_id}] version {order.version}, status {order.status}, "
                      f"model {order.model or 'unknown'}, units {order.units if order.units is not None else 'unknown'}, "
                      f"traceability {order.traceability}"]
-            lines += [f"Installed: assembly {a} uses batch {b} (source {src})" for a, b, src in via] or [
-                "No installation trace recorded: exposure is UNKNOWN, not safe."]
+            lines += [f"Installed: assembly {a} uses batch {b} (source {src})" for a, b, src in via]
+            has_traces = graph.ro_query("MATCH (a:Assembly {project_id: $p}) RETURN a.id LIMIT 1",
+                                        params={"p": project_id}).result_set
+            if not via and has_traces:   # only meaningful where installation traces exist (manufacturing)
+                lines.append("No installation trace recorded: exposure is UNKNOWN, not safe.")
+            lines.append(f"Source: {order.source_id}")
             return EvidenceRecord(id=order.order_id, text="\n".join(lines)[:_MAX], source_id=order.source_id)
         if graph.ro_query("MATCH (h:Hold {id: $id, project_id: $p}) RETURN h.id",
                           params={"id": evidence_id, "p": project_id}).result_set:
