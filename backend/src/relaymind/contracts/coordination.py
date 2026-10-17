@@ -81,6 +81,8 @@ class RunRecord(StrictModel):
     tenant_id: str | None = None
     company_id: str | None = None
     request: str
+    request_kind: Literal["planning", "capability"] = "planning"
+    answer: str | None = None
     status: Literal["planning", "awaiting_review", "paused", "completed", "needs_revision", "blocked", "failed"]
     handoff_ids: list[str] = Field(default_factory=list)
     events: list[AgentEvent] = Field(default_factory=list)
