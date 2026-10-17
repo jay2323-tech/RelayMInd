@@ -58,6 +58,7 @@ class HandoffRecord(StrictModel):
     plan: Plan
     decisions: list[DecisionReference]
     evidence_versions: list[EvidenceVersion] = Field(default_factory=list)
+    manufacturing_versions: list[EvidenceVersion] = Field(default_factory=list)
     procedure_id: str
     procedure_version: int = Field(ge=1)
     created_at: int = Field(ge=1)

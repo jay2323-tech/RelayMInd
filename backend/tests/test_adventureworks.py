@@ -8,11 +8,11 @@ ROOT = Path(__file__).resolve().parents[2] / "fixtures" / "adventureworks"
 
 
 def test_converted_fixture_and_scenario_sources():
-    directory = CompanyDirectory.model_validate_json((ROOT / "directory.json").read_text())
+    directory = CompanyDirectory.model_validate_json((ROOT / "directory.json").read_text(encoding="utf-8"))
     assert len(directory.employees) == 290
     assert len(directory.teams) == 16
     assert all(e.manager_id is None and e.skills == [] for e in directory.employees)
-    scenario = json.loads((ROOT / "quality-hold.json").read_text())
+    scenario = json.loads((ROOT / "quality-hold.json").read_text(encoding="utf-8"))
     sources = {s["id"] for s in scenario["sources"]}
     entities = {e["id"] for e in scenario["entities"]}
     assert len(sources) == len(scenario["sources"])
@@ -33,7 +33,7 @@ def test_converted_fixture_and_scenario_sources():
 def test_employee_workbook_round_trip():
     pytest.importorskip("openpyxl")
     from relaymind.services.employee_import import read_employee_xlsx
-    directory = CompanyDirectory.model_validate_json((ROOT / "directory.json").read_text())
+    directory = CompanyDirectory.model_validate_json((ROOT / "directory.json").read_text(encoding="utf-8"))
     assert read_employee_xlsx(ROOT / "employees.xlsx", directory) == directory
 
 
