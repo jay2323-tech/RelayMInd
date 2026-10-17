@@ -49,7 +49,7 @@ def _default_provider():
 provider_factory: Callable[[], object] = _default_provider   # replaced only by tests
 
 # Server-owned review procedure per project (approved procedure IDs; never chosen by the browser).
-PROJECT_PROCEDURES: dict[str, str] = {"aw-qh-17": "quality-hold-review"}
+PROJECT_PROCEDURES: dict[str, str] = {"aw-qh-17": "quality-hold-review", "hb-route-07": "route-change-review"}
 
 
 def procedure_for(project_id: str) -> str:

@@ -19,6 +19,10 @@ free tier only". The Planner is paused at its saved handoff, the decision change
 Reviewer detects the change, the plan is revised to address the tasks that implemented the old
 decision, and you approve pausing those tasks (`task-01 v1 → v2`).
 
+**Harbor (logistics route change).** Order HB-O201 was planned via Route A (Port North) for Friday; Port
+North closes and route v2 (Route B, Port South, Saturday) supersedes v1. The two tasks built on
+Route A become required affected tasks, and the plan must not confirm Friday to the customer.
+
 **AdventureWorks (manufacturing quality hold).** Hold QH-17 v1 covers batch AW-B101; an expanded
 notice v2 supersedes it and adds AW-B102. A graph traversal recomputes exposed orders
 (AW-O101, AW-O102 → + AW-O103), keeps AW-O105 as *unknown traceability* (never "safe"), marks the
@@ -80,7 +84,7 @@ Open http://127.0.0.1:5173 and sign in (password = `RELAYMIND_DEMO_PASSWORD`):
 |---|---|---|
 | `northstar.lead` | Northstar · `launch-01` | software launch story |
 | `northstar.peer` | Northstar · `launch-01` | same company, cannot see the lead's sessions |
-| `harbor.lead` | Harbor · `launch-01` (own graph) | cross-company isolation |
+| `harbor.lead` | Harbor · `hb-route-07` (own graph) | logistics route change + cross-company isolation |
 | `aw.quality` | AdventureWorks · `aw-qh-17` | manufacturing quality hold |
 
 ### Demo script

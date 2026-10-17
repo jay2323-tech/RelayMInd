@@ -28,6 +28,9 @@ docker compose up -d
 ## 2. Company isolation (≈20 s)
 
 Sign out → sign in as `harbor.lead`: different company graph, Northstar sessions/decisions invisible.
+Optional Harbor story: ask the first suggestion → apply `scripts/seed_harbor.py --stage after-change`
+(Port North closed; route v2 supersedes v1) → ask again → plan must address hb-task-book-route-a and
+hb-task-confirm-friday → Actions: propose pausing the Route A booking → approve.
 
 ## 3. Manufacturing change during execution — AdventureWorks (≈1 min)
 

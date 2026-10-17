@@ -2,6 +2,7 @@
 
   .venv/bin/python scripts/demo_reset.py --scenario northstar   # launch-01, decision-01 current
   .venv/bin/python scripts/demo_reset.py --scenario aw          # aw-qh-17, hold QH-17 v1 current
+  .venv/bin/python scripts/demo_reset.py --scenario harbor      # hb-route-07, route v1 current
   .venv/bin/python scripts/demo_reset.py --scenario all
 
 Runs the explicit reset script (platform/manufacturing records only; sessions, runs and procedures
@@ -19,14 +20,16 @@ STEPS = {
                   ["seed_northstar.py", "--stage", "before-change"]],
     "aw": [["reset_adventureworks.py", "--yes-reset-aw-qh-17"],
            ["seed_adventureworks.py", "--stage", "before-change"]],
+    "harbor": [["reset_harbor.py", "--yes-reset-hb-route-07"],
+               ["seed_harbor.py", "--stage", "before-change"]],
 }
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--scenario", choices=["northstar", "aw", "all"], required=True)
+    parser.add_argument("--scenario", choices=["northstar", "aw", "harbor", "all"], required=True)
     args = parser.parse_args()
-    for name in (["northstar", "aw"] if args.scenario == "all" else [args.scenario]):
+    for name in (["northstar", "aw", "harbor"] if args.scenario == "all" else [args.scenario]):
         print(f"== {name}")
         for script, *rest in STEPS[name]:
             result = subprocess.run([sys.executable, str(ROOT / "scripts" / script), *rest], cwd=ROOT,
