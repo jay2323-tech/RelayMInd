@@ -143,6 +143,22 @@ conversation implementation and its separate contract model file.
 
 ### Agent consumption and impact freshness (Kg)
 
+Planner and Reviewer now receive `required_affected_tasks` plus
+`required_exposed_orders` from the current graph. The historical IMPLEMENTS link
+to a superseded decision explains why a task needs triage; it is not a reason to
+reject its presence. The Reviewer judges the proposed new action against the
+current decision, and may still reject continued stale instructions.
+
+Each currently exposed order must appear as its exact stable order ID in at least
+one plan step's evidence_ids. This is a deterministic gate before model review and
+is rechecked afterward; a missing ID yields needs_revision with the missing IDs.
+Order IDs are not task_ids. Requirements come from current affected_orders results,
+deduplicated across paths/holds and bounded to 50 orders; no scenario IDs are baked
+into engine code. Unknown-traceability orders remain unknown and are not relabeled
+safe or included as confirmed exposed orders. Presence/citation does not establish
+semantic correctness: independent review, evidence freshness and action approval
+are still required. Older incomplete plans may now require revision.
+
 The engine exposes `current_hold(hold_id)`, `affected_orders(hold_id)` and
 `get_order(order_id)` as read-only tools calling the manufacturing functions below
 with its captured trusted context. Models never supply company, project or graph.
@@ -165,7 +181,9 @@ typed impact guard. The snapshot is not a substitute for approval-time checks.
 Gemini requests now carry responseJsonSchema for the calls/final envelope and the
 typed final Plan/Review payload. Runtime validation and one bounded repair remain
 mandatory. Decoder diagnostics use fixed stage labels, never raw response bodies.
-Live Gemini confirmation is pending: no model credentials were available on this Mac.
+Claude's f21bf22 reports no decode errors in two real Gemini runs; both remained
+needs_revision. No model credentials are available on this Mac. The current reviewer
+semantics/order-coverage change still needs a fresh real-model check on Claude's PC.
 Provider reference: https://ai.google.dev/gemini-api/docs/generate-content/structured-output
 
 **Authentication / scope (Claude, P2-01/P2-02/P2-04 HTTP side).** `platform/identity.py` owns the
