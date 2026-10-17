@@ -10,6 +10,7 @@ import { ChatStream, Composer, PlanCard, SessionRail } from './ui/conversation';
 import { ActionsTab, EvidenceTab, Inspector, WhyTab, type InspectorTab } from './ui/inspector';
 import { workflowApi } from './api/workflow';
 import type { PlanReview, WorkflowCapabilities, PlanDecision } from './types/workflow';
+import { ReminderControls } from './ui/ReminderControls';
 import { InlineActions, InlinePlanControls } from './ui/InlinePlanControls';
 import { LoginScreen } from './ui/LoginScreen';
 
@@ -83,9 +84,38 @@ function Workspace({ identity, healthy, onSignOut, onExpired }: {
   }, []);
 
   useEffect(() => {
-    workflowApi.capabilities().then(setCapabilities).catch(fail);
     Promise.all([api.sessions(), refreshPlatform()]).then(([s]) => setSessions(s)).catch(fail);
   }, [refreshPlatform, fail]);
+
+  // Worker availability can change while the app is open. Fail closed on refresh errors.
+  useEffect(() => {
+    let cancelled = false;
+    const refresh = async () => {
+      try { const next = await workflowApi.capabilities(); if (!cancelled) setCapabilities(next); }
+      catch (error) {
+        if (!cancelled) { setCapabilities({ plan_review: false, work_setup: false, reminders: false }); fail(error); }
+      }
+    };
+    void refresh();
+    const timer = window.setInterval(() => { if (!document.hidden) void refresh(); }, 30000);
+    const visible = () => { if (!document.hidden) void refresh(); };
+    document.addEventListener('visibilitychange', visible);
+    return () => { cancelled = true; clearInterval(timer); document.removeEventListener('visibilitychange', visible); };
+  }, [fail]);
+
+  // In-app reminder messages arrive independently of agent runs.
+  useEffect(() => {
+    if (!sessionId || !capabilities.reminders || jobActive) return;
+    let cancelled = false;
+    const timer = window.setInterval(async () => {
+      if (document.hidden) return;
+      try {
+        const incoming = await api.messages(sessionId);
+        if (!cancelled && activeSession.current === sessionId) setMessages(incoming);
+      } catch (error) { if (!cancelled) fail(error); }
+    }, 15000);
+    return () => { cancelled = true; clearInterval(timer); };
+  }, [sessionId, capabilities.reminders, jobActive, fail]);
 
   // Selected evidence shows derived state, so reload it whenever platform data refreshes.
   useEffect(() => {
@@ -274,6 +304,7 @@ function Workspace({ identity, healthy, onSignOut, onExpired }: {
           </div>
         </main>
         <div className="chat-composer-dock"><div className="chat-reading-column">
+          {capabilities.reminders && sessionId && <ReminderControls key={sessionId} sessionId={sessionId} onError={fail} />}
           <Composer busy={busy || jobActive} showSuggestions={!messages.length} pauseAfterPlan={pauseAfterPlan} project={currentProject()}
             onPauseChange={setPauseAfterPlan} onSend={send} />
           <p className="composer-note">Evidence-backed proposals. You control business changes.</p>
