@@ -18,7 +18,7 @@ from relaymind.memory.artifacts import ArtifactStore, ArtifactConflict
 from relaymind.memory.procedures import get_procedure
 from relaymind.memory.conversations import load_messages
 from relaymind.memory.episodes import load_episodes
-from relaymind.agents.loop import AgentLoop, AgentBlocked, ReadTool
+from relaymind.agents.loop import AgentLoop, AgentBlocked, ReadTool, EvidenceUnavailable
 from relaymind.contracts.retrieval import SearchArguments, EvidenceVersion
 from relaymind.contracts.agent_jobs import AgentJobScope
 from relaymind.memory.retrieval import search_sources
@@ -51,6 +51,8 @@ def failure_summary(exc,stage,run_id):
     logger.error('agent_failure run_id=%s stage=%s code=%s provider=%s http_status=%s',
                  safe_id,stage,code,provider,status)
     detail=f'{stage}: {code}'
+    if getattr(exc,'evidence_id',None):   # sanitized record ID only (see loop.safe_id)
+        detail+=f' ({exc.evidence_id})'
     if provider:detail+=f' ({provider}' + (f' HTTP {status}' if status else '') + ')'
     return detail
 
@@ -205,7 +207,10 @@ class CoordinationEngine:
             params={'owner':self.context.user_id,'project':self.project_id,'id':evidence_id}).result_set
         if len(rows)==1:
             return EvidenceRecord(id=rows[0][0],text=rows[0][1],source_id=rows[0][2])
-        result=self.platform.evidence(self.context,self.project_id,evidence_id)
+        try:
+            result=self.platform.evidence(self.context,self.project_id,evidence_id)
+        except AccessDenied:
+            raise EvidenceUnavailable(evidence_id) from None
         record=EvidenceRecord.model_validate(result) if isinstance(result,dict) else EvidenceRecord.model_validate(result.model_dump())
         if record.id!=evidence_id:
             raise AgentBlocked('Evidence tool returned a different record')

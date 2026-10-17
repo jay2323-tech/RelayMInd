@@ -6,7 +6,7 @@ def conversation_reply(run: dict, plan: dict | None = None) -> str:
         return run['answer']
     status = run['status']
     if plan is None:
-        if 'AccessDenied' in (run.get('error') or ''):
+        if 'evidence_unavailable' in (run.get('error') or '') or 'AccessDenied' in (run.get('error') or ''):
             return ('I could not retrieve some evidence needed to answer your request. '
                     'The record may be unavailable or outside your permitted scope. '
                     'I have not established an answer or applied any business changes.')
