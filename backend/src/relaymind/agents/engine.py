@@ -350,6 +350,17 @@ class CoordinationEngine:
                 json.dumps(prompt),self._tools(decisions,procedure,None,
                     discovered=discovered,fetched=fetched),Plan,
                 lambda summary:self._event(run,'planner',summary))
+            # task_ids already declares a citation to a work item. Normalize the
+            # redundant evidence list before validation/persistence; every added
+            # ID still goes through scoped evidence lookup and freshness hashing.
+            added=0
+            for step in plan.steps:
+                for task_id in step.task_ids:
+                    if task_id not in step.evidence_ids:
+                        step.evidence_ids.append(task_id)
+                        added+=1
+            if added:
+                self._event(run,'planner',f'Added {added} structured task citations to evidence')
             cited={i for step in plan.steps for i in step.evidence_ids}
             if (cited & discovered)-fetched:
                 raise AgentBlocked('Cited search sources must be fetched in full before planning')
