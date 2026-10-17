@@ -25,7 +25,14 @@ and a SHA-256 of the authorized evidence text shown to the agents. On independen
 review, a changed text/source ID causes `needs_revision` before model acceptance;
 the engine checks again after review. Older handoffs without a manifest still load
 with their original behavior. A Planner citation to a source it discovered through
-`search_sources` requires a successful `fetch_evidence` call first. Engine source
+`search_sources` requires a successful full evidence read before persistence.
+If the Planner omits its `fetch_evidence` call, engine code fetches each distinct
+cited, discovered source through the same authorized evidence lookup and records
+a count-only recovery event. Lookup failures still block; search excerpts never
+substitute for the full source in the manifest or independent review. The Reviewer
+receives complete cited source text and may reject an unsupported plan. This is
+an engine read, not a claim that the Planner saw the full text; no extra model
+call or automatic semantic acceptance is introduced. Engine source
 fetches return the complete authorized `SourceRecord.text` (bounded at 16,000
 characters by the existing contract), without the platform display truncation.
 The manifest's `state` is `unknown`: content equality alone cannot prove a

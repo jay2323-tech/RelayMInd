@@ -77,7 +77,11 @@ def test_scoped_engine_run_requires_affected_tasks(world):
                                  {"task": "Do not confirm Friday; notify Coldline Foods of Saturday per contract",
                                   "task_ids": ["hb-task-confirm-friday"],
                                   "evidence_ids": ["hb-dec-route-v2", "hb-src-contract", "hb-task-confirm-friday"]}]}}
-    done = CoordinationEngine.for_job(client, scope, ScriptedModel([cover, {"final": {"status": "accepted", "issues": []}}]),
+    # The Planner discovers a cited contract but omits its full-read tool call.
+    # Engine recovery must retain scoped validation rather than hard-blocking.
+    discover={"calls":[{"id":"search-contract","name":"search_sources",
+                        "arguments":{"query":"hb-src-contract"}}]}
+    done = CoordinationEngine.for_job(client, scope, ScriptedModel([discover, cover, {"final": {"status": "accepted", "issues": []}}]),
                                       bridge).run("What changed?", run_id=f"{pid}-r2", procedure_id="route-change-review")
     assert done.status == "completed", done.error
     assert (done.company_id, done.tenant_id) == ("harbor", "demo-b")
