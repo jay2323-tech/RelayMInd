@@ -91,3 +91,29 @@ def test_complete_coverage_never_forces_reviewer_acceptance(world):
     review=e.review_handoff(run.handoff_ids[0])
     assert review.review.status=='needs_revision'
     assert 'Shipping contradicts' in review.review.issues[0].reason
+
+
+def test_structured_task_citations_are_recovered_and_persisted(world):
+    plan=revised_plan(['AW-O101','AW-O102','AW-O103'])
+    tasks=plan['final']['steps'][0]['task_ids']
+    plan['final']['steps'][0]['evidence_ids']=[
+        i for i in plan['final']['steps'][0]['evidence_ids'] if i not in tasks]
+    model=ScriptedModel([plan,{'final':{'status':'accepted','issues':[]}}])
+    e=engine(world,model)
+    load_incident(world[0],AW,world[2],'after-change')
+    run=e.plan_run('Revise incident work',procedure_id='quality-hold-review')
+    assert run.status=='awaiting_review',run.error
+    handoff=e.store.get('handoff',run.handoff_ids[0])
+    citations=handoff['plan']['steps'][0]['evidence_ids']
+    assert all(citations.count(t)==1 for t in tasks)
+    assert set(tasks).issubset({v['evidence_id'] for v in handoff['evidence_versions']})
+    assert e.review_handoff(run.handoff_ids[0]).review.status=='accepted'
+
+
+def test_normalization_does_not_make_unknown_task_evidence_valid(world):
+    plan=copy.deepcopy(PLAN)
+    plan['final']['steps'][0]['task_ids']=['other-company-or-invented-task']
+    e=engine(world,ScriptedModel([plan]))
+    run=e.plan_run('Investigate hold',procedure_id='quality-hold-review')
+    assert run.status=='blocked'
+    assert run.handoff_ids==[]
