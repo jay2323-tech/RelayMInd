@@ -45,7 +45,7 @@ class SearchResult(StrictModel):
 
 
 class EvidenceVersion(StrictModel):
-    """Proposed handoff manifest item; freshness enforcement is not yet wired."""
+    """Saved evidence-view snapshot; state remains unknown without typed authority."""
     evidence_id: str
     source_id: str
     content_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")

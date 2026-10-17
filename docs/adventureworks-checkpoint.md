@@ -66,8 +66,30 @@ search results. No lookup in another company is performed to confirm absence.
 The UI may use a consistent sentence template; the status must come from query rows.
 
 Sources are not approved truth. Current decisions and deterministic reviewer gates
-remain authoritative. `EvidenceVersion` is a shared schema proposal only: a hash in
-a search hit does not itself invalidate a stale handoff or grant an approval.
+remain authoritative. New handoffs snapshot cited evidence-view hashes and source
+IDs; review rejects changed views before model acceptance. The hash describes the
+authorized text shown to the agent, not a complete typed business-record version.
+Older handoffs have no manifest. A search-hit hash does not grant an approval or
+prove a historical decision is current.
+
+## Isolated retrieval evaluation (17 October)
+
+`backend/tests/test_retrieval_evaluation.py` runs the actual `search_sources`
+function against isolated, stage-specific synthetic Source rows. It uses the
+fixture's acceptance oracle only in test assertions; those answers are never sent
+to an agent. Authored query sequences recovered every expected supporting source
+for AW-01 through AW-09 (9/9), while AW-10 returned a genuine empty scoped result.
+The 23 checks also cover exact and mixed-case IDs, multiple hits and truncation,
+database error, denied identity, historical/current notice visibility, and an
+instruction embedded in source text. The instruction test verifies that tools
+return it as data; it does not prove a live model will ignore it.
+
+Before-change storage excludes `aw-src-hold-v2`; after-change storage includes it.
+The opt-in real FalkorDB test now seeds those stages separately and checks approved
+decision supersession, but it was not run on this checkout because Docker Desktop's
+engine was unavailable. The isolated evaluation measures source recall for these
+authored queries, not answer accuracy, relevance ranking or typed manufacturing
+retrieval.
 
 ## Remaining path to the end-to-end checkpoint
 
@@ -75,8 +97,9 @@ a search hit does not itself invalidate a stale handoff or grant an approval.
    explicitly through server membership; do not rename Cedar's graph or demo identity.
 2. Claude implements staged manufacturing storage/queries, approved holds and procedure.
    Source IDs should retain this fixture's provenance; revise fixtures and contracts together.
-3. Codex extends discovery to those typed entities and directory snapshots after the
-   contracts land, then enforces the full evidence manifest on review/resume.
+3. Codex extends discovery to typed entities and directory snapshots after those
+   contracts land, then adds their authoritative versions/current-state to the
+   evidence manifest on review/resume.
 4. Claude wires profile login, imports, tickets and human approvals. Codex verifies
    cross-profile isolation and search/no-result/error behavior through those interfaces.
 5. Run a fresh-session real-model manufacturing flow, change the hold mid-run, reject
