@@ -48,6 +48,13 @@ def _default_provider():
 
 provider_factory: Callable[[], object] = _default_provider   # replaced only by tests
 
+# Server-owned review procedure per project (approved procedure IDs; never chosen by the browser).
+PROJECT_PROCEDURES: dict[str, str] = {"aw-qh-17": "quality-hold-review"}
+
+
+def procedure_for(project_id: str) -> str:
+    return PROJECT_PROCEDURES.get(project_id, "launch-review")
+
 
 class _NoModel:
     """Read-only endpoints never call a model; fail loudly if something tries."""
@@ -182,7 +189,7 @@ def start_run(project_id: str, session_id: str, body: RunBody, me: Principal = D
 
     def work(scope: AgentJobScope = scope, provider=provider):   # bound now; never re-resolved
         engine = _engine(scope, provider)
-        run = engine.plan_run(body.request, run_id=run_id)
+        run = engine.plan_run(body.request, run_id=run_id, procedure_id=procedure_for(scope.project_id))
         if run.status == "awaiting_review":
             if body.mode == "plan_then_pause":
                 engine.pause_run(run_id)

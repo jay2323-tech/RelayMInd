@@ -134,3 +134,27 @@ def reject(project_id: str, action_id: str, body: RejectBody | None = None, me: 
     with api_errors():
         return am.reject_action(get_client(), me.context(), project_id, action_id,
                                 (body or RejectBody()).reason)
+
+
+# ---------------------------------------------------------------- manufacturing (AdventureWorks)
+
+@router.get("/holds/{hold_id}")
+def hold_state(project_id: str, hold_id: str, me: Principal = Depends(project_member)):
+    from relaymind.memory import manufacturing as mf
+    with api_errors():
+        return mf.current_hold(get_client(), me.context(), project_id, hold_id)
+
+
+@router.get("/holds/{hold_id}/impact")
+def hold_impact(project_id: str, hold_id: str, me: Principal = Depends(project_member)):
+    """Deterministic affected-order query from the CURRENT hold decision (+ unknown traceability)."""
+    from relaymind.memory import manufacturing as mf
+    with api_errors():
+        return mf.affected_orders(get_client(), me.context(), project_id, hold_id)
+
+
+@router.get("/orders/{order_id}")
+def order(project_id: str, order_id: str, me: Principal = Depends(project_member)):
+    from relaymind.memory import manufacturing as mf
+    with api_errors():
+        return mf.get_order(get_client(), me.context(), project_id, order_id)
