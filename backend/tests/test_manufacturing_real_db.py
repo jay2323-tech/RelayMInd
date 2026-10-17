@@ -79,6 +79,8 @@ def test_after_change_supersedes_and_expands_impact(world):
     text = bridge.evidence(AW, pid, "aw-dec-hold-v2").text
     assert "AW-O103" in text and "Unknown traceability" in text
     assert "superseded" in bridge.evidence(AW, pid, "aw-dec-hold-v1").text.lower()
+    hold = bridge.evidence(AW, pid, "QH-17")                      # models may cite the hold ID itself
+    assert "aw-dec-hold-v2" in hold.text and "AW-O103" in hold.text and hold.source_id == "aw-src-hold-v2"
     assert ids(load_incident(client, AW, pid, "after-change")) == ids(report)            # idempotent
 
 

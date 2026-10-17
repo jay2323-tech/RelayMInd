@@ -138,6 +138,22 @@ class GraphPlatformBridge:
             lines += [f"Installed: assembly {a} uses batch {b} (source {src})" for a, b, src in via] or [
                 "No installation trace recorded: exposure is UNKNOWN, not safe."]
             return EvidenceRecord(id=order.order_id, text="\n".join(lines)[:_MAX], source_id=order.source_id)
+        if graph.ro_query("MATCH (h:Hold {id: $id, project_id: $p}) RETURN h.id",
+                          params={"id": evidence_id, "p": project_id}).result_set:
+            try:
+                report = mf.affected_orders(self.client, context, project_id, evidence_id)
+            except (AccessDenied, mf.ManufacturingError) as exc:
+                text = f"[Hold {evidence_id}] current scope unavailable: {exc}"
+                return EvidenceRecord(id=evidence_id, text=text[:_MAX], source_id=evidence_id)
+            h = report.hold
+            lines = [f"[Hold {evidence_id}] current version {h.decision_id} (v{h.decision_version})"
+                     + (f", supersedes {', '.join(h.supersedes)}" if h.supersedes else ""),
+                     f"Text: {h.decision_text}", f"Held batches: {', '.join(h.held_batches)}",
+                     "Exposed orders: " + "; ".join(f"{a.order.order_id} ({a.order.status}, {a.exposure})" for a in report.affected)]
+            if report.unknown_traceability:
+                lines.append("Unknown traceability (not proven safe): "
+                             + ", ".join(o.order_id for o in report.unknown_traceability))
+            return EvidenceRecord(id=evidence_id, text="\n".join(lines)[:_MAX], source_id=h.source_ids[0])
         for label in ("Batch", "Assembly"):
             if not graph.ro_query(f"MATCH (x:{label} {{id: $id, project_id: $p}}) RETURN x.id",
                                   params={"id": evidence_id, "p": project_id}).result_set:
