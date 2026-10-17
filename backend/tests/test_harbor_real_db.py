@@ -68,7 +68,7 @@ def test_scoped_engine_run_requires_affected_tasks(world):
     omit = {"final": {"summary": "Reroute", "decision_ids": ["hb-dec-route-v2"],
                       "steps": [{"task": "Book Route B", "evidence_ids": ["hb-dec-route-v2", "hb-src-plan-v2"]}]}}
     run = CoordinationEngine.for_job(client, scope, ScriptedModel([omit]), bridge).plan_run(
-        "What changed?", run_id=f"{pid}-r1", procedure_id="route-change-review")
+        "What changed and what should dispatch do next?", run_id=f"{pid}-r1", procedure_id="route-change-review")
     review = CoordinationEngine.for_job(client, scope, ScriptedModel([]), bridge).review_handoff(run.handoff_ids[0])
     assert review.review.status == "needs_revision"                                     # deterministic, no model call
     cover = {"final": {"summary": "Reroute HB-O201 via Route B and hold the Friday confirmation",
