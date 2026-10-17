@@ -1,5 +1,9 @@
-# Owner: agent-engine teammate (A)
+# Agent engine — teammate side
 
-Implement provider adapter, bounded engine, Planner, Reviewer, and correction flow
-here. Begin with docs/implementation-plan.md. No model or agent behavior is
-implemented in this scaffold. Do not add fake responses to live endpoints.
+engine.py: Planner/Reviewer orchestration with persisted handoffs and one correction.
+loop.py: validated, bounded read-tool execution.
+providers.py: Gemini/Groq adapters and retryable-error fallback.
+
+Start with docs/agent-platform-integration.md. The real model API is not exercised
+until you configure server-side keys and explicit model IDs. Scripted models exist
+only in tests. Claude implements PlatformBridge and HTTP/UI integration on Jk.

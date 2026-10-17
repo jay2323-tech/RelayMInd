@@ -1,0 +1,46 @@
+{
+  "date": "2026-10-16",
+  "note": "Observed CLI runs: real FalkorDB; scripted model and synthetic platform fixture. No live Gemini/Groq claim.",
+  "results": [
+    {
+      "scenario": "launch",
+      "model_mode": "scripted-fixture",
+      "platform_mode": "synthetic-graph-fixture",
+      "paused_status": "paused",
+      "resumed_status": "completed",
+      "handoff_count": 2,
+      "before": "Launch Friday with payments enabled.",
+      "after": "Postpone payments; launch only the free tier Friday.",
+      "original_plan": "Launch Friday with payments enabled.",
+      "revised_plan": "Postpone payments; launch only the free tier Friday.",
+      "dependency_hops": [
+        0,
+        1,
+        2
+      ],
+      "action_applied": false,
+      "fresh_process_per_phase": true,
+      "scoped_cleanup_completed": true
+    },
+    {
+      "scenario": "coding",
+      "model_mode": "scripted-fixture",
+      "platform_mode": "synthetic-graph-fixture",
+      "paused_status": "paused",
+      "resumed_status": "completed",
+      "handoff_count": 2,
+      "before": "Implement password login with locally stored password hashes.",
+      "after": "Use organization SSO through OIDC; do not build local password authentication.",
+      "original_plan": "Implement password login with locally stored password hashes.",
+      "revised_plan": "Use organization SSO through OIDC; do not build local password authentication.",
+      "dependency_hops": [
+        0,
+        1,
+        2
+      ],
+      "action_applied": false,
+      "fresh_process_per_phase": true,
+      "scoped_cleanup_completed": true
+    }
+  ]
+}

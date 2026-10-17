@@ -1,0 +1,135 @@
+{
+  "synthetic": true,
+  "notes": "Expected answers, not model-generated evaluations.",
+  "cases": [
+    {
+      "company_id": "northstar",
+      "question": "How many active employees and teams are there?",
+      "expected_active_employees": 12,
+      "expected_team_count": 4
+    },
+    {
+      "company_id": "northstar",
+      "question": "Who is in Leadership?",
+      "expected_employee_ids": [
+        "northstar-leadership-01"
+      ]
+    },
+    {
+      "company_id": "northstar",
+      "question": "Who is in Product?",
+      "expected_employee_ids": [
+        "northstar-product-01",
+        "northstar-product-02",
+        "northstar-product-03"
+      ]
+    },
+    {
+      "company_id": "northstar",
+      "question": "Who is in Engineering?",
+      "expected_employee_ids": [
+        "northstar-engineering-01",
+        "northstar-engineering-02",
+        "northstar-engineering-03",
+        "northstar-engineering-04",
+        "northstar-engineering-05"
+      ]
+    },
+    {
+      "company_id": "northstar",
+      "question": "Who is in People and Operations?",
+      "expected_employee_ids": [
+        "northstar-people-01",
+        "northstar-people-02",
+        "northstar-people-03"
+      ]
+    },
+    {
+      "company_id": "harbor",
+      "question": "How many active employees and teams are there?",
+      "expected_active_employees": 15,
+      "expected_team_count": 4
+    },
+    {
+      "company_id": "harbor",
+      "question": "Who is in Leadership?",
+      "expected_employee_ids": [
+        "harbor-leadership-01"
+      ]
+    },
+    {
+      "company_id": "harbor",
+      "question": "Who is in Operations?",
+      "expected_employee_ids": [
+        "harbor-operations-01",
+        "harbor-operations-02",
+        "harbor-operations-03",
+        "harbor-operations-04",
+        "harbor-operations-05",
+        "harbor-operations-06"
+      ]
+    },
+    {
+      "company_id": "harbor",
+      "question": "Who is in Platform?",
+      "expected_employee_ids": [
+        "harbor-platform-01",
+        "harbor-platform-02",
+        "harbor-platform-03",
+        "harbor-platform-04",
+        "harbor-platform-05"
+      ]
+    },
+    {
+      "company_id": "harbor",
+      "question": "Who is in People and Operations?",
+      "expected_employee_ids": [
+        "harbor-people-01",
+        "harbor-people-02",
+        "harbor-people-03"
+      ]
+    },
+    {
+      "company_id": "cedar",
+      "question": "How many active employees and teams are there?",
+      "expected_active_employees": 12,
+      "expected_team_count": 4
+    },
+    {
+      "company_id": "cedar",
+      "question": "Who is in Leadership?",
+      "expected_employee_ids": [
+        "cedar-leadership-01"
+      ]
+    },
+    {
+      "company_id": "cedar",
+      "question": "Who is in Curriculum?",
+      "expected_employee_ids": [
+        "cedar-curriculum-01",
+        "cedar-curriculum-02",
+        "cedar-curriculum-03",
+        "cedar-curriculum-04"
+      ]
+    },
+    {
+      "company_id": "cedar",
+      "question": "Who is in Platform?",
+      "expected_employee_ids": [
+        "cedar-platform-01",
+        "cedar-platform-02",
+        "cedar-platform-03",
+        "cedar-platform-04"
+      ]
+    },
+    {
+      "company_id": "cedar",
+      "question": "Who is in People and Operations?",
+      "expected_employee_ids": [
+        "cedar-people-01",
+        "cedar-people-02",
+        "cedar-people-03"
+      ]
+    }
+  ]
+}

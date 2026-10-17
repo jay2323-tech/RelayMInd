@@ -1,0 +1,930 @@
+{
+ "exported_at": "2026-10-17",
+ "graph": "relaymind_demo_a",
+ "project": "launch-01",
+ "synthetic_data": true,
+ "note": "Live-run evidence exported before demo reset. Model output and synthetic Northstar data only; no credentials.",
+ "runs": [
+  {
+   "session_id": "live-20261016-234504",
+   "run": {
+    "id": "live-20261016-234504-gemini-3.6-flash-1792174597",
+    "project_id": "launch-01",
+    "session_id": "live-20261016-234504",
+    "owner_id": "developer-a",
+    "request": "Continue launch preparation. What changed, and what should we do next?",
+    "status": "failed",
+    "handoff_ids": [],
+    "events": [
+     {
+      "seq": 1,
+      "agent": "planner",
+      "summary": "Retrieved approved decisions and procedure"
+     },
+     {
+      "seq": 2,
+      "agent": "planner",
+      "summary": "Read fetch_evidence"
+     },
+     {
+      "seq": 3,
+      "agent": "planner",
+      "summary": "Read trace_dependencies"
+     },
+     {
+      "seq": 4,
+      "agent": "planner",
+      "summary": "Read trace_dependencies"
+     }
+    ],
+    "result": null,
+    "error": "ProviderError: planning could not complete"
+   }
+  },
+  {
+   "session_id": "live-20261016-234504",
+   "run": {
+    "id": "live-20261016-234504-gemini-3.5-flash-lite-1792174627",
+    "project_id": "launch-01",
+    "session_id": "live-20261016-234504",
+    "owner_id": "developer-a",
+    "request": "Continue launch preparation. What changed, and what should we do next?",
+    "status": "failed",
+    "handoff_ids": [
+     "live-20261016-234504-gemini-3.5-flash-lite-1792174627-r1",
+     "live-20261016-234504-gemini-3.5-flash-lite-1792174627-r2"
+    ],
+    "events": [
+     {
+      "seq": 1,
+      "agent": "planner",
+      "summary": "Retrieved approved decisions and procedure"
+     },
+     {
+      "seq": 2,
+      "agent": "planner",
+      "summary": "Saved handoff live-20261016-234504-gemini-3.5-flash-lite-1792174627-r1"
+     },
+     {
+      "seq": 3,
+      "agent": "reviewer",
+      "summary": "Review needs_revision"
+     },
+     {
+      "seq": 4,
+      "agent": "planner",
+      "summary": "Retrieved approved decisions and procedure"
+     },
+     {
+      "seq": 5,
+      "agent": "planner",
+      "summary": "Saved handoff live-20261016-234504-gemini-3.5-flash-lite-1792174627-r2"
+     }
+    ],
+    "result": {
+     "handoff_id": "live-20261016-234504-gemini-3.5-flash-lite-1792174627-r1",
+     "review": {
+      "status": "needs_revision",
+      "issues": [
+       {
+        "reason": "The procedure requires that tasks implementing superseded decisions are identified with a proposed next action. The plan fails to identify task-01 and task-02 which implement the superseded decision-01.",
+        "evidence_ids": [
+         "decision-02"
+        ]
+       }
+      ]
+     },
+     "procedure_id": "launch-review",
+     "procedure_version": 1,
+     "decision_ids": [
+      "decision-02"
+     ],
+     "created_at": 1792174655674
+    },
+    "error": "ProviderError: review could not complete"
+   }
+  },
+  {
+   "session_id": "live-20261016-234504",
+   "run": {
+    "id": "live-20261016-234504-diag1",
+    "project_id": "launch-01",
+    "session_id": "live-20261016-234504",
+    "owner_id": "developer-a",
+    "request": "Continue launch preparation. What changed, and what should we do next?",
+    "status": "failed",
+    "handoff_ids": [],
+    "events": [
+     {
+      "seq": 1,
+      "agent": "planner",
+      "summary": "Retrieved approved decisions and procedure"
+     }
+    ],
+    "result": null,
+    "error": "ProviderError: planning could not complete"
+   }
+  },
+  {
+   "session_id": "live-20261016-234504",
+   "run": {
+    "id": "live-20261016-234504-gemini-3.8-flash-1792174618",
+    "project_id": "launch-01",
+    "session_id": "live-20261016-234504",
+    "owner_id": "developer-a",
+    "request": "Continue launch preparation. What changed, and what should we do next?",
+    "status": "failed",
+    "handoff_ids": [],
+    "events": [
+     {
+      "seq": 1,
+      "agent": "planner",
+      "summary": "Retrieved approved decisions and procedure"
+     },
+     {
+      "seq": 2,
+      "agent": "planner",
+      "summary": "Read fetch_evidence"
+     },
+     {
+      "seq": 3,
+      "agent": "planner",
+      "summary": "Read trace_dependencies"
+     },
+     {
+      "seq": 4,
+      "agent": "planner",
+      "summary": "Read trace_dependencies"
+     }
+    ],
+    "result": null,
+    "error": "ProviderError: planning could not complete"
+   }
+  },
+  {
+   "session_id": "live-20261016-234504",
+   "run": {
+    "id": "live-20261016-234504-run2",
+    "project_id": "launch-01",
+    "session_id": "live-20261016-234504",
+    "owner_id": "developer-a",
+    "request": "Continue launch preparation. What changed, and what should we do next?",
+    "status": "failed",
+    "handoff_ids": [],
+    "events": [
+     {
+      "seq": 1,
+      "agent": "planner",
+      "summary": "Retrieved approved decisions and procedure"
+     }
+    ],
+    "result": null,
+    "error": "ProviderError: planning could not complete"
+   }
+  },
+  {
+   "session_id": "live-20261016-234504",
+   "run": {
+    "id": "live-20261016-234504-run1",
+    "project_id": "launch-01",
+    "session_id": "live-20261016-234504",
+    "owner_id": "developer-a",
+    "request": "Continue launch preparation. What changed, and what should we do next?",
+    "status": "failed",
+    "handoff_ids": [],
+    "events": [
+     {
+      "seq": 1,
+      "agent": "planner",
+      "summary": "Retrieved approved decisions and procedure"
+     }
+    ],
+    "result": null,
+    "error": "ProviderError: planning could not complete"
+   }
+  },
+  {
+   "session_id": "live-20261016-234504",
+   "run": {
+    "id": "live-20261016-234504-gemini-2.5-flash-1792174626",
+    "project_id": "launch-01",
+    "session_id": "live-20261016-234504",
+    "owner_id": "developer-a",
+    "request": "Continue launch preparation. What changed, and what should we do next?",
+    "status": "failed",
+    "handoff_ids": [],
+    "events": [
+     {
+      "seq": 1,
+      "agent": "planner",
+      "summary": "Retrieved approved decisions and procedure"
+     }
+    ],
+    "result": null,
+    "error": "ProviderError: planning could not complete"
+   }
+  },
+  {
+   "session_id": "live2-20261017-000650",
+   "run": {
+    "id": "live2-20261017-000650-B",
+    "project_id": "launch-01",
+    "session_id": "live2-20261017-000650",
+    "owner_id": "developer-a",
+    "request": "Continue launch preparation. What changed, and what should we do next?",
+    "status": "failed",
+    "handoff_ids": [
+     "live2-20261017-000650-B-r1"
+    ],
+    "events": [
+     {
+      "seq": 1,
+      "agent": "planner",
+      "summary": "Retrieved approved decisions and procedure"
+     },
+     {
+      "seq": 2,
+      "agent": "planner",
+      "summary": "Saved handoff live2-20261017-000650-B-r1"
+     }
+    ],
+    "result": null,
+    "error": "review: invalid_response (gemini)"
+   }
+  },
+  {
+   "session_id": "live2-20261017-000650",
+   "run": {
+    "id": "live2-20261017-000650-A",
+    "project_id": "launch-01",
+    "session_id": "live2-20261017-000650",
+    "owner_id": "developer-a",
+    "request": "Continue launch preparation. What changed, and what should we do next?",
+    "status": "failed",
+    "handoff_ids": [],
+    "events": [
+     {
+      "seq": 1,
+      "agent": "planner",
+      "summary": "Retrieved approved decisions and procedure"
+     }
+    ],
+    "result": null,
+    "error": "planning: http_error (groq HTTP 400)"
+   }
+  },
+  {
+   "session_id": "live2-20261017-000650",
+   "run": {
+    "id": "live2-20261017-000650-groq-openai-gpt-oss-20b-1792175881",
+    "project_id": "launch-01",
+    "session_id": "live2-20261017-000650",
+    "owner_id": "developer-a",
+    "request": "Continue launch preparation. What changed, and what should we do next?",
+    "status": "failed",
+    "handoff_ids": [],
+    "events": [
+     {
+      "seq": 1,
+      "agent": "planner",
+      "summary": "Retrieved approved decisions and procedure"
+     }
+    ],
+    "result": null,
+    "error": "planning: http_error (groq HTTP 400)"
+   }
+  },
+  {
+   "session_id": "live2-20261017-000650",
+   "run": {
+    "id": "live2-20261017-000650-groq-qwen-qwen3-8-27b-1792175880",
+    "project_id": "launch-01",
+    "session_id": "live2-20261017-000650",
+    "owner_id": "developer-a",
+    "request": "Continue launch preparation. What changed, and what should we do next?",
+    "status": "failed",
+    "handoff_ids": [],
+    "events": [
+     {
+      "seq": 1,
+      "agent": "planner",
+      "summary": "Retrieved approved decisions and procedure"
+     }
+    ],
+    "result": null,
+    "error": "planning: http_error (groq HTTP 400)"
+   }
+  },
+  {
+   "session_id": "live2-20261017-000650",
+   "run": {
+    "id": "live2-20261017-000650-rdiag-1792175927",
+    "project_id": "launch-01",
+    "session_id": "live2-20261017-000650",
+    "owner_id": "developer-a",
+    "request": "Continue launch preparation. What changed, and what should we do next?",
+    "status": "completed",
+    "handoff_ids": [
+     "live2-20261017-000650-rdiag-1792175927-r1"
+    ],
+    "events": [
+     {
+      "seq": 1,
+      "agent": "planner",
+      "summary": "Retrieved approved decisions and procedure"
+     },
+     {
+      "seq": 2,
+      "agent": "planner",
+      "summary": "Saved handoff live2-20261017-000650-rdiag-1792175927-r1"
+     },
+     {
+      "seq": 3,
+      "agent": "reviewer",
+      "summary": "Review accepted"
+     }
+    ],
+    "result": {
+     "handoff_id": "live2-20261017-000650-rdiag-1792175927-r1",
+     "review": {
+      "status": "accepted",
+      "issues": []
+     },
+     "procedure_id": "launch-review",
+     "procedure_version": 1,
+     "decision_ids": [
+      "decision-02"
+     ],
+     "created_at": 1792175946291
+    },
+    "error": null
+   }
+  },
+  {
+   "session_id": "live2-20261017-000650",
+   "run": {
+    "id": "live2-20261017-000650-groqdiag",
+    "project_id": "launch-01",
+    "session_id": "live2-20261017-000650",
+    "owner_id": "developer-a",
+    "request": "Continue launch preparation. What changed, and what should we do next?",
+    "status": "failed",
+    "handoff_ids": [],
+    "events": [
+     {
+      "seq": 1,
+      "agent": "planner",
+      "summary": "Retrieved approved decisions and procedure"
+     }
+    ],
+    "result": null,
+    "error": "planning: http_error (groq HTTP 400)"
+   }
+  },
+  {
+   "session_id": "c737f1cb-575b-4c25-bc61-55757b0154ee",
+   "run": {
+    "id": "e8762837-f7c2-4c24-85b4-32a4fd00b39c",
+    "project_id": "launch-01",
+    "session_id": "c737f1cb-575b-4c25-bc61-55757b0154ee",
+    "owner_id": "developer-a",
+    "request": "Continue launch preparation. What changed, and what should we do next?",
+    "status": "completed",
+    "handoff_ids": [
+     "e8762837-f7c2-4c24-85b4-32a4fd00b39c-r1",
+     "e8762837-f7c2-4c24-85b4-32a4fd00b39c-r2"
+    ],
+    "events": [
+     {
+      "seq": 1,
+      "agent": "planner",
+      "summary": "Retrieved approved decisions and procedure"
+     },
+     {
+      "seq": 2,
+      "agent": "planner",
+      "summary": "Saved handoff e8762837-f7c2-4c24-85b4-32a4fd00b39c-r1"
+     },
+     {
+      "seq": 3,
+      "agent": "system",
+      "summary": "Paused at saved handoff; review has not started"
+     },
+     {
+      "seq": 4,
+      "agent": "system",
+      "summary": "Resumed saved handoff; rechecking current decisions"
+     },
+     {
+      "seq": 5,
+      "agent": "reviewer",
+      "summary": "Review needs_revision"
+     },
+     {
+      "seq": 6,
+      "agent": "planner",
+      "summary": "Retrieved approved decisions and procedure"
+     },
+     {
+      "seq": 7,
+      "agent": "planner",
+      "summary": "Saved handoff e8762837-f7c2-4c24-85b4-32a4fd00b39c-r2"
+     },
+     {
+      "seq": 8,
+      "agent": "reviewer",
+      "summary": "Final review accepted"
+     }
+    ],
+    "result": {
+     "handoff_id": "e8762837-f7c2-4c24-85b4-32a4fd00b39c-r2",
+     "review": {
+      "status": "accepted",
+      "issues": []
+     },
+     "procedure_id": "launch-review",
+     "procedure_version": 1,
+     "decision_ids": [
+      "decision-02"
+     ],
+     "created_at": 1792176740020
+    },
+    "error": null
+   }
+  }
+ ],
+ "handoffs": [
+  {
+   "created_at": 1792174662796,
+   "decisions": [
+    {
+     "id": "decision-02",
+     "source_id": "source-02",
+     "text": "Postpone payments; launch only the free tier Friday.",
+     "topic": "launch-scope",
+     "version": 2
+    }
+   ],
+   "id": "live-20261016-234504-gemini-3.5-flash-lite-1792174627-r2",
+   "owner_id": "developer-a",
+   "plan": {
+    "decision_ids": [
+     "decision-02"
+    ],
+    "steps": [
+     {
+      "evidence_ids": [
+       "decision-02"
+      ],
+      "task": "Identify task-01 and task-02 as implementing the superseded decision and propose postponing or cancelling them."
+     },
+     {
+      "evidence_ids": [
+       "decision-02"
+      ],
+      "task": "Continue launch preparation focusing exclusively on the free tier for Friday."
+     }
+    ],
+    "summary": "Based on the current approved decision to postpone payments and launch only the free tier on Friday (decision-02), tasks task-01 (payment webhooks) and task-02 (pricing page with checkout) which implement the superseded decision are identified for cancellation or postponement, and the launch preparation continues for the free tier.",
+    "uncertainties": [
+     "Exact owners and completion dates for the remaining free tier launch preparation steps are not specified."
+    ]
+   },
+   "procedure_id": "launch-review",
+   "procedure_version": 1,
+   "project_id": "launch-01",
+   "request": "Continue launch preparation. What changed, and what should we do next?",
+   "revision": 2,
+   "run_id": "live-20261016-234504-gemini-3.5-flash-lite-1792174627",
+   "session_id": "live-20261016-234504"
+  },
+  {
+   "created_at": 1792174632888,
+   "decisions": [
+    {
+     "id": "decision-02",
+     "source_id": "source-02",
+     "text": "Postpone payments; launch only the free tier Friday.",
+     "topic": "launch-scope",
+     "version": 2
+    }
+   ],
+   "id": "live-20261016-234504-gemini-3.5-flash-lite-1792174627-r1",
+   "owner_id": "developer-a",
+   "plan": {
+    "decision_ids": [
+     "decision-02"
+    ],
+    "steps": [
+     {
+      "evidence_ids": [
+       "decision-02",
+       "source-02"
+      ],
+      "task": "Review launch scope to ensure payments are excluded and only the free tier is prepared for Friday, in accordance with decision-02."
+     }
+    ],
+    "summary": "Continue launch preparation based on the current approved decision to postpone payments and launch only the free tier on Friday.",
+    "uncertainties": [
+     "Exact owners for the remaining free tier tasks are not specified.",
+     "Specific completion dates for the free tier launch tasks are not defined."
+    ]
+   },
+   "procedure_id": "launch-review",
+   "procedure_version": 1,
+   "project_id": "launch-01",
+   "request": "Continue launch preparation. What changed, and what should we do next?",
+   "revision": 1,
+   "run_id": "live-20261016-234504-gemini-3.5-flash-lite-1792174627",
+   "session_id": "live-20261016-234504"
+  },
+  {
+   "created_at": 1792176734590,
+   "decisions": [
+    {
+     "id": "decision-02",
+     "source_id": "source-02",
+     "text": "Postpone payments; launch only the free tier Friday.",
+     "topic": "launch-scope",
+     "version": 2
+    }
+   ],
+   "id": "e8762837-f7c2-4c24-85b4-32a4fd00b39c-r2",
+   "owner_id": "developer-a",
+   "plan": {
+    "decision_ids": [
+     "decision-02"
+    ],
+    "steps": [
+     {
+      "evidence_ids": [
+       "decision-02"
+      ],
+      "task": "Review launch scope to ensure payments are postponed and only the free tier is prepared for Friday."
+     }
+    ],
+    "summary": "Continue launch preparation aligned with the current approved decision to postpone payments and launch only the free tier on Friday.",
+    "uncertainties": [
+     "Exact owner and specific release timing on Friday are not specified."
+    ]
+   },
+   "procedure_id": "launch-review",
+   "procedure_version": 1,
+   "project_id": "launch-01",
+   "request": "Continue launch preparation. What changed, and what should we do next?",
+   "revision": 2,
+   "run_id": "e8762837-f7c2-4c24-85b4-32a4fd00b39c",
+   "session_id": "c737f1cb-575b-4c25-bc61-55757b0154ee"
+  },
+  {
+   "created_at": 1792175455352,
+   "decisions": [
+    {
+     "id": "decision-02",
+     "source_id": "source-02",
+     "text": "Postpone payments; launch only the free tier Friday.",
+     "topic": "launch-scope",
+     "version": 2
+    }
+   ],
+   "id": "976db4e5-3c60-47b1-871d-263e199c19f4-r2",
+   "owner_id": "developer-a",
+   "plan": {
+    "decision_ids": [
+     "decision-02"
+    ],
+    "steps": [
+     {
+      "evidence_ids": [
+       "decision-02"
+      ],
+      "task": "Update launch preparation to postpone payment integration and focus exclusively on launching the free tier on Friday, in accordance with decision-02."
+     }
+    ],
+    "summary": "Based on the updated approved decision-02, the launch scope has changed to postpone payments and launch only the free tier on Friday. The plan is updated to reflect this new scope.",
+    "uncertainties": [
+     "Exact ownership and precise completion dates for tasks under the new free-tier-only scope are currently unassigned."
+    ]
+   },
+   "procedure_id": "launch-review",
+   "procedure_version": 1,
+   "project_id": "launch-01",
+   "request": "Continue launch preparation. What changed, and what should we do next?",
+   "revision": 2,
+   "run_id": "976db4e5-3c60-47b1-871d-263e199c19f4",
+   "session_id": "ef4f0ad1-6899-415b-b218-053afb876582"
+  },
+  {
+   "created_at": 1792175424756,
+   "decisions": [
+    {
+     "id": "decision-01",
+     "source_id": "source-01",
+     "text": "Launch Friday with payments enabled.",
+     "topic": "launch-scope",
+     "version": 1
+    }
+   ],
+   "id": "976db4e5-3c60-47b1-871d-263e199c19f4-r1",
+   "owner_id": "developer-a",
+   "plan": {
+    "decision_ids": [
+     "decision-01"
+    ],
+    "steps": [
+     {
+      "evidence_ids": [
+       "source-01"
+      ],
+      "task": "Review payment webhooks setup (task-01) in alignment with approved decision-01."
+     },
+     {
+      "evidence_ids": [
+       "source-01"
+      ],
+      "task": "Review pricing page with checkout (task-02) in alignment with approved decision-01."
+     }
+    ],
+    "summary": "Continue launch preparation for Friday launch with payments enabled based on approved decision-01.",
+    "uncertainties": [
+     "Exact launch date, specific task ownership, and task evidence IDs are not fully detailed in the current approved decision source."
+    ]
+   },
+   "procedure_id": "launch-review",
+   "procedure_version": 1,
+   "project_id": "launch-01",
+   "request": "Continue launch preparation. What changed, and what should we do next?",
+   "revision": 1,
+   "run_id": "976db4e5-3c60-47b1-871d-263e199c19f4",
+   "session_id": "ef4f0ad1-6899-415b-b218-053afb876582"
+  },
+  {
+   "created_at": 1792175935511,
+   "decisions": [
+    {
+     "id": "decision-02",
+     "source_id": "source-02",
+     "text": "Postpone payments; launch only the free tier Friday.",
+     "topic": "launch-scope",
+     "version": 2
+    }
+   ],
+   "id": "live2-20261017-000650-rdiag-1792175927-r1",
+   "owner_id": "developer-a",
+   "plan": {
+    "decision_ids": [
+     "decision-02"
+    ],
+    "steps": [
+     {
+      "evidence_ids": [
+       "source-02"
+      ],
+      "task": "Review current decision-02 to launch only the free tier on Friday, postponing payments."
+     }
+    ],
+    "summary": "Continue launch preparation under the updated decision to postpone payments and launch only the free tier this Friday.",
+    "uncertainties": [
+     "Exact owners for the revised free-tier launch tasks are missing.",
+     "Exact timestamps for the Friday launch tasks are missing."
+    ]
+   },
+   "procedure_id": "launch-review",
+   "procedure_version": 1,
+   "project_id": "launch-01",
+   "request": "Continue launch preparation. What changed, and what should we do next?",
+   "revision": 1,
+   "run_id": "live2-20261017-000650-rdiag-1792175927",
+   "session_id": "live2-20261017-000650"
+  },
+  {
+   "created_at": 1792175902970,
+   "decisions": [
+    {
+     "id": "decision-02",
+     "source_id": "source-02",
+     "text": "Postpone payments; launch only the free tier Friday.",
+     "topic": "launch-scope",
+     "version": 2
+    }
+   ],
+   "id": "live2-20261017-000650-B-r1",
+   "owner_id": "developer-a",
+   "plan": {
+    "decision_ids": [
+     "decision-02"
+    ],
+    "steps": [
+     {
+      "evidence_ids": [
+       "decision-02",
+       "source-02"
+      ],
+      "task": "Verify free tier launch readiness for Friday in accordance with decision-02."
+     }
+    ],
+    "summary": "Continue launch preparation by focusing exclusively on launching the free tier on Friday, per decision-02. Payment-related tasks are postponed.",
+    "uncertainties": [
+     "Exact time of Friday launch is unspecified.",
+     "Owners for the remaining free tier launch tasks are not specified."
+    ]
+   },
+   "procedure_id": "launch-review",
+   "procedure_version": 1,
+   "project_id": "launch-01",
+   "request": "Continue launch preparation. What changed, and what should we do next?",
+   "revision": 1,
+   "run_id": "live2-20261017-000650-B",
+   "session_id": "live2-20261017-000650"
+  },
+  {
+   "created_at": 1792176686277,
+   "decisions": [
+    {
+     "id": "decision-01",
+     "source_id": "source-01",
+     "text": "Launch Friday with payments enabled.",
+     "topic": "launch-scope",
+     "version": 1
+    }
+   ],
+   "id": "e8762837-f7c2-4c24-85b4-32a4fd00b39c-r1",
+   "owner_id": "developer-a",
+   "plan": {
+    "decision_ids": [
+     "decision-01"
+    ],
+    "steps": [
+     {
+      "evidence_ids": [
+       "source-01"
+      ],
+      "task": "Verify payment webhooks implementation (task-01) in accordance with launch scope."
+     },
+     {
+      "evidence_ids": [
+       "source-01"
+      ],
+      "task": "Verify pricing page and checkout implementation (task-02) in accordance with launch scope."
+     }
+    ],
+    "summary": "Continue launch preparation aligned with the approved decision to launch Friday with payments enabled.",
+    "uncertainties": [
+     "Exact completion status of tasks task-01 and task-02 is unconfirmed in the current evidence.",
+     "Assigned owners and specific calendar dates for remaining preparation steps are not specified in current approved decisions."
+    ]
+   },
+   "procedure_id": "launch-review",
+   "procedure_version": 1,
+   "project_id": "launch-01",
+   "request": "Continue launch preparation. What changed, and what should we do next?",
+   "revision": 1,
+   "run_id": "e8762837-f7c2-4c24-85b4-32a4fd00b39c",
+   "session_id": "c737f1cb-575b-4c25-bc61-55757b0154ee"
+  }
+ ],
+ "reviews": [
+  {
+   "created_at": 1792174655674,
+   "decision_ids": [
+    "decision-02"
+   ],
+   "handoff_id": "live-20261016-234504-gemini-3.5-flash-lite-1792174627-r1",
+   "procedure_id": "launch-review",
+   "procedure_version": 1,
+   "review": {
+    "issues": [
+     {
+      "evidence_ids": [
+       "decision-02"
+      ],
+      "reason": "The procedure requires that tasks implementing superseded decisions are identified with a proposed next action. The plan fails to identify task-01 and task-02 which implement the superseded decision-01."
+     }
+    ],
+    "status": "needs_revision"
+   }
+  },
+  {
+   "created_at": 1792175437535,
+   "decision_ids": [
+    "decision-02"
+   ],
+   "handoff_id": "976db4e5-3c60-47b1-871d-263e199c19f4-r1",
+   "procedure_id": "launch-review",
+   "procedure_version": 1,
+   "review": {
+    "issues": [
+     {
+      "evidence_ids": [
+       "decision-02"
+      ],
+      "reason": "Approved decisions changed after planning"
+     }
+    ],
+    "status": "needs_revision"
+   }
+  },
+  {
+   "created_at": 1792175946291,
+   "decision_ids": [
+    "decision-02"
+   ],
+   "handoff_id": "live2-20261017-000650-rdiag-1792175927-r1",
+   "procedure_id": "launch-review",
+   "procedure_version": 1,
+   "review": {
+    "issues": [],
+    "status": "accepted"
+   }
+  },
+  {
+   "created_at": 1792176740020,
+   "decision_ids": [
+    "decision-02"
+   ],
+   "handoff_id": "e8762837-f7c2-4c24-85b4-32a4fd00b39c-r2",
+   "procedure_id": "launch-review",
+   "procedure_version": 1,
+   "review": {
+    "issues": [],
+    "status": "accepted"
+   }
+  },
+  {
+   "created_at": 1792176729552,
+   "decision_ids": [
+    "decision-02"
+   ],
+   "handoff_id": "e8762837-f7c2-4c24-85b4-32a4fd00b39c-r1",
+   "procedure_id": "launch-review",
+   "procedure_version": 1,
+   "review": {
+    "issues": [
+     {
+      "evidence_ids": [
+       "decision-02"
+      ],
+      "reason": "Approved decisions changed after planning"
+     }
+    ],
+    "status": "needs_revision"
+   }
+  }
+ ],
+ "platform_state": {
+  "decisions": [
+   [
+    "decision-02",
+    2,
+    "Postpone payments; launch only the free tier Friday.",
+    [
+     "decision-01"
+    ]
+   ],
+   [
+    "decision-01",
+    1,
+    "Launch Friday with payments enabled.",
+    []
+   ]
+  ],
+  "task_versions": [
+   [
+    "task-01",
+    1,
+    "in_progress",
+    null,
+    null
+   ],
+   [
+    "task-01",
+    2,
+    "paused",
+    "task-01:v1",
+    "9f007bde-0be6-46a0-9322-f396a813da71"
+   ],
+   [
+    "task-02",
+    1,
+    "todo",
+    null,
+    null
+   ],
+   [
+    "task-03",
+    1,
+    "todo",
+    null,
+    null
+   ]
+  ],
+  "actions": [
+   [
+    "9f007bde-0be6-46a0-9322-f396a813da71",
+    "task-01",
+    "applied",
+    "Applied: version 1 -> 2"
+   ]
+  ]
+ }
+}
