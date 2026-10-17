@@ -99,7 +99,7 @@ def test_capabilities_are_truthful(world):
     pid, _ = world
     c = login("northstar.lead")
     assert c.get(f"/api/projects/{pid}/workflow/capabilities").json() == {
-        "plan_review": True, "work_setup": False, "reminders": False}
+        "plan_review": True, "work_setup": True, "reminders": False}
     assert TestClient(app).get(f"/api/projects/{pid}/workflow/capabilities").status_code == 401
 
 

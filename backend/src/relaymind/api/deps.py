@@ -53,12 +53,13 @@ def api_errors():
     from relaymind.memory.tasks import TaskMemoryError
     from relaymind.services.actions import ActionError
     from relaymind.workflow.plan_reviews import PlanReviewConflict
+    from relaymind.workflow.work_setup import WorkSetupConflict
     try:
         yield
     except AccessDenied:
         raise HTTPException(404, "Not found or access denied") from None
     except (ActionError, ArtifactConflict, DecisionMemoryError, ManufacturingError, TaskMemoryError,
-            PlanReviewConflict) as exc:
+            PlanReviewConflict, WorkSetupConflict) as exc:
         raise HTTPException(409, f"{type(exc).__name__}: {exc}") from None
     except (ValueError, LookupError) as exc:
         raise HTTPException(422, f"{type(exc).__name__}: {exc}") from None
