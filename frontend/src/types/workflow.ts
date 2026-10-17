@@ -5,3 +5,8 @@ export interface PlanReview {
   id: string; run_id: string; handoff_id: string; decision: PlanDecision;
   feedback: string | null; reviewed_by: string; created_at: number; next_run_id?: string | null;
 }
+export interface Reminder {
+  id: string; work_item_id: string; session_id: string; label: string; due_at: number;
+  snoozed_until: number | null; status: 'scheduled' | 'delivering' | 'delivered' | 'stopped' | 'failed';
+  delivered_at: number | null; attempts: number; last_error: string | null;
+}
