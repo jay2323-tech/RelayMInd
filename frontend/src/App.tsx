@@ -58,7 +58,7 @@ function Workspace({ identity, healthy, onSignOut, onExpired }: {
 
   const toast = useCallback((tone: ToastMsg['tone'], text: string) =>
     setToasts(t => [...t, { id: ++toastId.current, tone, text }]), []);
-  const fail = useCallback((e: unknown) => { if (e instanceof UnauthorizedError) onExpired(); else fail(e); },
+  const fail = useCallback((e: unknown) => { if (e instanceof UnauthorizedError) onExpired(); else toast('danger', message(e)); },
     [onExpired, toast]);
   const dismiss = useCallback((id: number) => setToasts(t => t.filter(x => x.id !== id)), []);
 
@@ -177,8 +177,8 @@ function Workspace({ identity, healthy, onSignOut, onExpired }: {
           onSelect={id => { openSession(id).catch(e => fail(e)); }} onNew={newSession} />
         <main className="column">
           <section className="glass panel" aria-labelledby="chat-title">
-            <div className="panel__head"><h1 id="chat-title" className="h2">Continue with context</h1>
-              <span className="caption">Memory persists in FalkorDB across sessions</span></div>
+            <div className="panel__head"><h1 id="chat-title" className="h2">Your workspace</h1>
+              <span className="caption">Grounded in your decisions and history</span></div>
             <ChatStream messages={messages} onEvidence={showEvidence} />
             <Composer busy={jobActive} showSuggestions={!messages.length} pauseAfterPlan={pauseAfterPlan} project={currentProject()}
               onPauseChange={setPauseAfterPlan} onSend={send} />
@@ -198,7 +198,7 @@ function Workspace({ identity, healthy, onSignOut, onExpired }: {
             onReject={id => act(() => api.reject(id), 'Reject')} />}
         </Inspector>
       </div>
-      <footer className="caption" style={{ textAlign: 'center' }}>FalkorDB Graph Hacks · Agent Memory and Coordination · synthetic Northstar data</footer>
+      <footer className="caption" style={{ textAlign: 'center' }}>FalkorDB Graph Hacks · Agent Memory and Coordination · synthetic demo data</footer>
     </div>
     <button type="button" className="btn btn--primary sheet-toggle" aria-expanded={sheetOpen} onClick={() => setSheetOpen(o => !o)}>
       {sheetOpen ? 'Close inspector' : `Inspector${pendingCount ? ` · ${pendingCount}` : ''}`}</button>

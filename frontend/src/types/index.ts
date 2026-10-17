@@ -45,6 +45,7 @@ export interface RunRecord {
   id: string; status: RunStatus; request: string; handoff_ids: string[]; events: AgentEvent[];
   result: { review: Review; procedure_id: string; procedure_version: number; decision_ids: string[] } | null;
   error: string | null;
+  request_kind?: 'planning' | 'capability'; answer?: string | null;
 }
 export interface Job { state: 'queued' | 'running' | 'done' | 'error'; error: string | null }
 export interface RunView { run: RunRecord | null; job: Job | null; handoffs: Handoff[] }

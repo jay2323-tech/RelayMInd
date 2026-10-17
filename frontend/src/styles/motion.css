@@ -15,19 +15,19 @@
 /* ---------- Relay Track ---------- */
 .track { position: relative; padding: 18px 22px 14px; border-radius: 22px; overflow: hidden; }
 .track__light { position: absolute; inset: 0; pointer-events: none; z-index: -1;
-  background: radial-gradient(260px circle at var(--mx, -999px) var(--my, -999px), rgba(255,255,255,.08), transparent 60%); }
+  background: none; }
 .track__head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
 .track__status { flex: 1; min-width: 200px; font-size: 14px; color: var(--text-1); }
 .track__status small { display: block; color: var(--text-3); font-size: 12px; }
 .track__rail { position: relative; display: grid; grid-template-columns: repeat(5, 1fr); align-items: start; }
 .track__line { position: absolute; left: 10%; right: 10%; top: 28px; height: 2px; background: rgba(255,255,255,.10); border-radius: 2px; overflow: hidden; }
-.track__progress { position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(90deg, var(--memory), var(--planner), var(--reviewer), var(--ok));
+.track__progress { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent);
   transform-origin: left; transition: transform var(--t-slow) var(--ease-out); }
-.track__sweep { position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(46,230,197,.7), transparent); animation: sweep 1.2s var(--ease-in-out) 2; }
+.track__sweep { position: absolute; inset: 0; background: rgba(160,210,199,.35); animation: sweep 1.2s var(--ease-in-out) 2; }
 
 .station { position: relative; display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
 .orb { --orb: var(--superseded); position: relative; width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center;
-  background: radial-gradient(circle at 35% 30%, rgba(255,255,255,.18), rgba(255,255,255,.03) 60%), rgba(10,16,30,.6);
+  background: rgba(255,255,255,.055); box-shadow: inset 0 1px 0 rgba(255,255,255,.16);
   border: 1.5px solid color-mix(in srgb, var(--orb) 55%, transparent); color: var(--orb); font: 600 13px/1 var(--font-mono);
   transition: border-color var(--t-base), transform var(--t-base) var(--ease-out), opacity var(--t-base); }
 .orb svg { width: 24px; height: 24px; }
@@ -73,4 +73,17 @@
   .aurora__blob, .station[data-active="true"] .orb, .station[data-waiting="true"] .orb { animation: none !important; }
   .pulse-lane, .track__sweep, .dgraph__ripple { display: none; }
   .baton { transition: none !important; }
+}
+
+/* Keep the relay visible without competing with its content. */
+.track { padding: 18px 24px; }
+.station__label { font-size: 13px; }
+.station__sub { font-size: 12px; }
+.station[data-active="true"] .orb { animation: breathe 2s var(--ease-in-out) infinite; }
+.baton, .baton[data-tone="ok"], .baton[data-tone="danger"], .pulse { box-shadow: none; }
+.seal--accepted .seal__icon { animation: rise 240ms var(--ease-out); }
+.gate-item.is-shake { animation: fade 180ms var(--ease-out); }
+
+@media (prefers-reduced-motion: reduce) {
+  .station[data-active="true"] .orb { animation: none !important; }
 }
