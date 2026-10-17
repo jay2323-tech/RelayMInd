@@ -193,3 +193,19 @@ Conclusions: affected-task coverage works deterministically and Gemini now addre
 Groq is functional for planning but cannot complete a run on this free-tier account
 (per-minute token limit). The browser flow works end to end; the final review outcome depends
 on model output (this run: a correct citation catch).
+
+## Incident: FalkorDB crash loop on restart, and persistence mount fix (2026-10-17 21:05–21:20 IST)
+
+- Symptom: after a Docker restart the container crash-looped (exit 139, segfault). Logs showed the crash
+  while replaying the AOF for key `relaymind_compat_218f57ea52ab` (a throwaway graph from
+  `scripts/check_falkordb_compat.py` C-2/C-3: unique constraint created, graph deleted right away),
+  stack in `GraphContext_Free`. Treated as a FalkorDB 4.22.1 AOF-replay bug triggered by that pattern.
+- Recovery (no demo data lost): stopped container; copied `/var/lib/falkordb/data` out
+  (backup in `C:\Users\Lenovo\RelayMind-backups\`); filtered the incr AOF with a RESP parser, dropping
+  only the 348 entries for 14 throwaway graphs (`relaymind_compat_*`, `relaymind_awtest_*`), keeping
+  13,927; copied back; server started and all four demo graphs loaded with their data.
+- **Persistence bug found:** `compose.yaml` mounted the volume at `/data`, but this image stores data in
+  `/var/lib/falkordb/data` (`/data` is only a symlink inside the volume). Data survived only in the
+  container layer; `docker compose down` or a fresh container would have lost it. Fixed the mount to
+  `/var/lib/falkordb/data`, copied the live data into the volume, recreated the container, verified counts.
+- Prevention: `check_falkordb_compat.py` now warns to run only against a disposable FalkorDB instance.

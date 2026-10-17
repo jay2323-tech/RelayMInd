@@ -6,6 +6,11 @@ graph. Never touches the demo graphs. Writes no application records.
 Usage (repo root, FalkorDB running, .env present):
     .venv/bin/python scripts/check_falkordb_compat.py
 Exit code 0 only if every check passes.
+
+WARNING (observed 2026-10-17): on FalkorDB 4.22.1 with --appendonly yes, replaying the AOF entries of
+these throwaway graphs (unique constraint created, graph deleted right after) crashed the server on
+restart (segfault in GraphContext_Free). Run this only against a disposable FalkorDB instance, never
+against the server that holds demo data. Recovery steps: docs/verification.md.
 """
 import secrets
 import sys
