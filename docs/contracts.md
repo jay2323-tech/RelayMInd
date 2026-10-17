@@ -221,3 +221,15 @@ open_order_hold|shipped_exposure_review, source_ids}], unknown_traceability[]}`;
 `GET /holds/{hold_id}`, `/holds/{hold_id}/impact`, `/orders/{order_id}`. Bridge evidence serves Order,
 Batch and Assembly IDs, and current hold decisions list exposed orders + unknown traceability.
 Verified: before = AW-O101, AW-O102 (AW-01); after = AW-O101, AW-O102, AW-O103 (AW-02); AW-O105 unknown (AW-07).
+
+### Recoverable redundant task citations (Kg)
+
+After each Planner response (including correction rounds), engine code appends any
+structured task_ids missing from that step's evidence_ids, preserving existing
+citation order and avoiding new duplicates. This repairs redundant representation,
+not substantive missing tasks or unsupported claims. A planner event records the
+number added. The normalized plan then undergoes the existing authorized evidence
+lookups, decision validation and freshness snapshots before persistence. Unknown or
+inaccessible IDs still block; omitted required tasks/orders still need revision.
+Stored handoffs are never silently rewritten during review. No extra model call is
+needed for this repair, and it does not force Reviewer acceptance.
