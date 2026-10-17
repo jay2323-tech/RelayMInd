@@ -90,12 +90,12 @@ export function RelayTrack({ view, busy, onPause, onResume, onRetry }: {
       {STATIONS.map(s => {
         const sub = s === 'handoff' && state.handoffRev ? `r${state.handoffRev}${state.phase === 'paused' ? ' · paused' : ''}`
           : s === 'reviewer' && state.reviewStamp ? state.reviewStamp.replace('_', ' ')
-          : s === 'memory' ? 'FalkorDB' : s === 'you' ? (state.phase === 'completed' && run?.request_kind !== 'capability' ? 'review actions' : 'approves changes') : '';
+          : s === 'memory' ? 'FalkorDB' : s === 'you' ? (state.phase === 'completed' && (run?.request_kind ?? 'planning') === 'planning' ? 'review actions' : 'approves changes') : '';
         const tone = state.failedAt === s ? 'danger'
           : s === 'handoff' && state.phase === 'paused' ? 'warn'
           : s === 'reviewer' && state.reviewStamp === 'needs_revision' ? 'warn'
           : s === 'reviewer' && state.reviewStamp === 'accepted' ? 'ok'
-          : s === 'you' && state.phase === 'completed' && run?.request_kind !== 'capability' ? 'ok' : undefined;
+          : s === 'you' && state.phase === 'completed' && (run?.request_kind ?? 'planning') === 'planning' ? 'ok' : undefined;
         return <div key={s} className="station" data-role={s} data-active={state.active === s} data-waiting={state.active === s && state.waiting}
           data-reached={state.reached.includes(s) || state.phase === 'idle'} data-tone={tone}>
           <div className="orb"><Icon role={s} /></div>

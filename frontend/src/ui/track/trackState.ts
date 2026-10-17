@@ -87,9 +87,9 @@ export function deriveTrack(view: RunView | null): TrackState {
       return { ...base, ...common, phase: 'paused', baton: 'handoff', active: null, tone: 'warn', reached: upTo('handoff'),
         label: 'Paused at saved handoff', detail: 'Review has not started. Resume rechecks current decisions first.' };
     case 'completed':
-      if (run.request_kind === 'capability') return { ...base, phase: 'completed', baton: 'memory',
-        tone: 'ok', reached: ['memory'], label: 'Informational reply',
-        detail: 'Informational reply · no plan, agent review or business change.' };
+      if (run.request_kind && run.request_kind !== 'planning') return { ...base, phase: 'completed', baton: 'memory',
+        tone: 'ok', reached: ['memory'], label: run.request_kind === 'factual' ? 'Answered from project records' : run.request_kind === 'work_setup' ? 'Work setup response' : 'Informational reply',
+        detail: 'Direct response · no plan or agent review.' };
       return { ...base, ...common, phase: 'completed', baton: 'you', active: null, tone: 'ok', reached: STATIONS,
         reviewStamp: 'accepted', label: 'Reviewer accepted', detail: run.result
           ? `Procedure ${run.result.procedure_id} v${run.result.procedure_version} · checked ${run.result.decision_ids.join(', ')}` : null };
