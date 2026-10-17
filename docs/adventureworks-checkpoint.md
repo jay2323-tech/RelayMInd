@@ -1,5 +1,33 @@
 # AdventureWorks checkpoint
 
+## Agent integration after Claude's 7671d1f
+
+Kg incorporates the authenticated job scope and manufacturing contract from Jk.
+The engine now binds current_hold, affected_orders and get_order directly to the
+authorized platform functions. New manufacturing handoffs snapshot the complete
+impact report, including order versions and unknown traceability; changes during
+planning block a handoff, and changes before/during review force needs_revision.
+Legacy handoffs must be replanned to obtain this additional typed impact guard.
+
+Gemini uses a schema-constrained protocol envelope and final output. Malformed
+responses still fail after bounded repair; no automatic acceptance or fabricated
+review is introduced. The reported f5e2be93/03ce3d76 provider failures have not been
+reproduced on this Mac because no Gemini/Groq keys are configured. The exact remote
+root cause remains unconfirmed; safe decode-stage logs aid the next real-model run.
+
+Claude's next real-model check after integrating Kg:
+
+1. Verify the local .env contains the chosen model and keys without printing them.
+2. Use a fresh, scoped AdventureWorks session and the server-selected quality-hold
+   review procedure. Do not reset a shared demo just to run the check.
+3. Plan, inspect the saved manufacturing_versions, then continue independent review.
+4. Record whether the reviewer returns accepted, needs_revision or blocked; a
+   legitimate rejection is a valid Review, distinct from invalid_response.
+5. With separate test storage, pause before review, expand the hold and resume.
+   Confirm stale rejection and a revised impact including AW-O103.
+
+No live-model reliability claim should be made from scripted provider tests.
+
 ## Implemented
 
 - Microsoft fictional HR data converted to 290 employees and 16 departments.
