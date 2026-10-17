@@ -141,6 +141,33 @@ conversation implementation and its separate contract model file.
 
 ## Platform: authenticated job scope + AdventureWorks manufacturing (Jk, 2026-10-17)
 
+### Agent consumption and impact freshness (Kg)
+
+The engine exposes `current_hold(hold_id)`, `affected_orders(hold_id)` and
+`get_order(order_id)` as read-only tools calling the manufacturing functions below
+with its captured trusted context. Models never supply company, project or graph.
+
+New HandoffRecord.manufacturing_versions stores EvidenceVersion items for each
+current approved `hold-*` topic. evidence_id is the stable hold ID; source_id and
+version_id identify its approved decision; content_sha256 fingerprints the entire
+canonical ImpactReport, including affected/unknown orders, current order versions
+and sourced trace paths. These are query-result snapshots, not raw document hashes.
+The engine compares impact before and after planning, before review and after the
+Reviewer returns. A changed snapshot requires revision even for an uncited order
+or a model acceptance. Missing records/integrity errors fail closed. Source and
+approved-decision checks still run independently. This is optimistic checking,
+not a database transaction spanning a model call, and does not authorize actions.
+
+Legacy handoffs default manufacturing_versions to an empty list and retain their
+old source/decision behavior. Replan older manufacturing handoffs to obtain the
+typed impact guard. The snapshot is not a substitute for approval-time checks.
+
+Gemini requests now carry responseJsonSchema for the calls/final envelope and the
+typed final Plan/Review payload. Runtime validation and one bounded repair remain
+mandatory. Decoder diagnostics use fixed stage labels, never raw response bodies.
+Live Gemini confirmation is pending: no model credentials were available on this Mac.
+Provider reference: https://ai.google.dev/gemini-api/docs/generate-content/structured-output
+
 **Authentication / scope (Claude, P2-01/P2-02/P2-04 HTTP side).** `platform/identity.py` owns the
 synthetic account registry (username → user, tenant, company, projects); local demo login with
 server-side sessions. Every `/api/projects/{project_id}/...` route requires an authenticated project
