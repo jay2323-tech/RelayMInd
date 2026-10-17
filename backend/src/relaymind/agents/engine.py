@@ -8,7 +8,7 @@ import re
 import hashlib
 from typing import Protocol
 from uuid import uuid4
-from relaymind.contracts.models import Plan, Review, ReviewIssue, AgentEvent
+from relaymind.contracts.models import Plan, Review, ReviewIssue, AgentEvent, TrustedContext
 from relaymind.contracts.coordination import (
     DecisionReference, EvidenceRecord, HandoffRecord, ReviewRecord, RunRecord,
     NoArguments, EvidenceArguments, DependencyArguments, RequiredTaskReference,
@@ -20,6 +20,7 @@ from relaymind.memory.conversations import load_messages
 from relaymind.memory.episodes import load_episodes
 from relaymind.agents.loop import AgentLoop, AgentBlocked, ReadTool
 from relaymind.contracts.retrieval import SearchArguments, EvidenceVersion
+from relaymind.contracts.agent_jobs import AgentJobScope
 from relaymind.memory.retrieval import search_sources
 from relaymind.memory.decisions import get_source
 
@@ -61,12 +62,78 @@ def snapshot(decisions):
 
 
 class CoordinationEngine:
-    def __init__(self,client,context,project_id,session_id,provider,platform: PlatformBridge):
-        self.client,self.context=client,context
-        self.project_id,self.session_id=project_id,session_id
-        self.store=ArtifactStore(client,context,project_id,session_id)
+    def __init__(self,client,context,project_id,session_id,provider,platform: PlatformBridge,
+                 *,job_scope: AgentJobScope | None=None):
+        if job_scope is not None:
+            if not isinstance(job_scope,AgentJobScope):
+                raise TypeError('Agent job scope must be a server-created AgentJobScope')
+            if (context.tenant_id,context.user_id,project_id,session_id)!=(
+                    job_scope.tenant_id,job_scope.user_id,job_scope.project_id,job_scope.session_id):
+                raise ValueError('Agent job scope does not match engine context')
+        self._job_scope=job_scope
+        self.client,self._context=client,TrustedContext.model_validate(context.model_dump())
+        self._project_id,self._session_id=project_id,session_id
+        self.store=ArtifactStore(client,self.context,project_id,session_id)
         self.platform=platform
         self.loop=AgentLoop(provider)
+
+    @property
+    def job_scope(self):
+        return getattr(self,'_job_scope',None)
+
+    @property
+    def project_id(self):
+        return self.job_scope.project_id if self.job_scope is not None else self._project_id
+
+    @project_id.setter
+    def project_id(self,value):
+        if self.job_scope is not None:
+            raise AttributeError('Scoped job project cannot be replaced')
+        self._project_id=value
+
+    @property
+    def session_id(self):
+        return self.job_scope.session_id if self.job_scope is not None else self._session_id
+
+    @session_id.setter
+    def session_id(self,value):
+        if self.job_scope is not None:
+            raise AttributeError('Scoped job session cannot be replaced')
+        self._session_id=value
+
+    @property
+    def context(self):
+        # Scoped jobs always derive a fresh identity from the frozen snapshot.
+        return (self.job_scope.trusted_context() if self.job_scope is not None
+                else self._context)
+
+    @context.setter
+    def context(self,value):
+        if getattr(self,'job_scope',None) is not None:
+            raise AttributeError('Scoped job context cannot be replaced')
+        self._context=TrustedContext.model_validate(value.model_dump())
+
+    @classmethod
+    def for_job(cls,client,scope: AgentJobScope,provider,platform: PlatformBridge):
+        """Build from a verified, frozen scope captured before queue submission."""
+        if not isinstance(scope,AgentJobScope):
+            raise TypeError('Agent job scope must be a server-created AgentJobScope')
+        return cls(client,scope.trusted_context(),scope.project_id,scope.session_id,
+                   provider,platform,job_scope=scope)
+
+    def _scope_fields(self):
+        return ({'tenant_id':self.job_scope.tenant_id,'company_id':self.job_scope.company_id}
+                if self.job_scope is not None else {})
+
+    def _check_artifact_scope(self,record):
+        if self.job_scope is None:
+            return  # Existing local-demo artifacts retain their original access rules.
+        scope=self.job_scope
+        if (record.tenant_id,record.company_id,record.owner_id,
+                record.project_id,record.session_id)!=(
+                scope.tenant_id,scope.company_id,scope.user_id,
+                scope.project_id,scope.session_id):
+            raise AccessDenied('Agent artifact unavailable or access denied')
 
     def decisions(self):
         result=[DecisionReference.model_validate(x) if isinstance(x,dict) else DecisionReference.model_validate(x.model_dump())
@@ -216,15 +283,18 @@ class CoordinationEngine:
         except AccessDenied:
             existing=None
         if existing is not None:
+            self._check_artifact_scope(existing)
             if existing.request!=request:
                 raise ArtifactConflict('Run ID reused with a different request')
             return existing
         run=RunRecord(id=run_id,project_id=self.project_id,session_id=self.session_id,
-                      owner_id=self.context.user_id,request=request,status='planning')
+                      owner_id=self.context.user_id,request=request,status='planning',
+                      **self._scope_fields())
         self.store.put('run',run.id,run.model_dump())
         return self._plan(run,procedure_id,procedure_version)
 
     def _plan(self,run,procedure_id,procedure_version,revision=1,feedback=None):
+        self._check_artifact_scope(run)
         try:
             decisions=self.decisions()
             procedure=get_procedure(self.client,self.context,self.project_id,procedure_id,procedure_version)
@@ -256,7 +326,8 @@ class CoordinationEngine:
                 session_id=self.session_id,project_id=self.project_id,owner_id=self.context.user_id,
                 request=run.request,revision=revision,plan=plan,decisions=decisions,
                 evidence_versions=self.evidence_manifest(plan),
-                procedure_id=procedure.id,procedure_version=procedure.version,created_at=stamp())
+                procedure_id=procedure.id,procedure_version=procedure.version,created_at=stamp(),
+                **self._scope_fields())
             self.store.put('handoff',handoff.id,handoff.model_dump())
             run.handoff_ids.append(handoff.id)
             run.status='awaiting_review'
@@ -271,6 +342,7 @@ class CoordinationEngine:
     def review_handoff(self,handoff_id):
         # Can be called by a new process with only trusted scope + handoff ID.
         handoff=HandoffRecord.model_validate(self.store.get('handoff',handoff_id))
+        self._check_artifact_scope(handoff)
         try:
             return ReviewRecord.model_validate(self.store.get('review',handoff_id))
         except AccessDenied:
@@ -337,6 +409,7 @@ class CoordinationEngine:
 
     def continue_run(self,run_id):
         run=RunRecord.model_validate(self.store.get('run',run_id))
+        self._check_artifact_scope(run)
         if run.status!='awaiting_review':
             return run
         try:
@@ -345,6 +418,7 @@ class CoordinationEngine:
             self._event(run,'reviewer','Review '+reviewed.review.status)
             if reviewed.review.status=='needs_revision' and len(run.handoff_ids)==1:
                 handoff=HandoffRecord.model_validate(self.store.get('handoff',run.handoff_ids[-1]))
+                self._check_artifact_scope(handoff)
                 run.status='planning'
                 self.store.update_run(run)
                 run=self._plan(run,handoff.procedure_id,handoff.procedure_version,revision=2,
@@ -364,6 +438,7 @@ class CoordinationEngine:
     def pause_run(self,run_id):
         """Pause only at a saved, unclaimed handoff. Does not interrupt model calls."""
         run=RunRecord.model_validate(self.store.get('run',run_id))
+        self._check_artifact_scope(run)
         if run.status=='paused':
             return run
         if run.status!='awaiting_review' or not run.handoff_ids:
@@ -377,6 +452,7 @@ class CoordinationEngine:
     def resume_run(self,run_id):
         """Explicit operator resume, safe to call from a fresh backend process."""
         run=RunRecord.model_validate(self.store.get('run',run_id))
+        self._check_artifact_scope(run)
         if run.status=='paused':
             run.status='awaiting_review'
             run.events.append(AgentEvent(seq=len(run.events)+1,agent='system',
@@ -391,10 +467,13 @@ class CoordinationEngine:
         rewrite old plans. Dependency results come from the authorized bridge.
         """
         run=RunRecord.model_validate(self.store.get('run',run_id))
+        self._check_artifact_scope(run)
         if not run.handoff_ids:
             raise LookupError('No saved plan to compare')
         first=HandoffRecord.model_validate(self.store.get('handoff',run.handoff_ids[0]))
         latest=HandoffRecord.model_validate(self.store.get('handoff',run.handoff_ids[-1]))
+        self._check_artifact_scope(first)
+        self._check_artifact_scope(latest)
         current=self.decisions()
         changes=[]
         for topic in sorted({d.topic for d in first.decisions+current}):

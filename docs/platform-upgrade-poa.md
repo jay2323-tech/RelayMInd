@@ -17,6 +17,9 @@ quality-hold scenario/answer key and actual project-source search in both agents
 P1-04/P1-05 artifacts are ready; P1-06 contracts need Claude's review. This is not
 completion of Phases 1–5. Typed incident retrieval, membership and manufacturing
 approval integration still depend on Claude's shared platform contracts.
+The engine side of P2-04 now has a frozen `AgentJobScope` and persisted scope checks;
+the authenticated HTTP/job boundary remains Claude-owned and pending. See
+`agent-job-scope.md`.
 
 Commit 23d572c contains synthetic directory fixtures, XLSX validation, explicit
 snapshot write/read and CLI preview/apply. It does not contain real login, HTTP

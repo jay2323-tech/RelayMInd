@@ -59,6 +59,7 @@ def setup_engine(monkeypatch, replies):
     store = IsolatedStore()
     model = ScriptedModel(replies)
     engine = CoordinationEngine.__new__(CoordinationEngine)
+    engine._job_scope = None
     engine.client = None
     engine.context = TrustedContext(tenant_id="demo-a", user_id="developer-a")
     engine.project_id, engine.session_id = "launch-01", "isolated-session"
@@ -107,6 +108,7 @@ def test_engine_fetches_complete_authorized_source_text(monkeypatch):
         return source
     monkeypatch.setattr(engine_module, "get_source", source_lookup)
     engine = CoordinationEngine.__new__(CoordinationEngine)
+    engine._job_scope = None
     engine.client = None
     engine.context = TrustedContext(tenant_id="demo-a", user_id="developer-a")
     engine.project_id = "launch-01"
