@@ -1,5 +1,26 @@
 # Ownership
 
+## Current assistant branches and integration
+
+Jayanth assigned Codex to **Kg** and Claude to **Jk** on 17 October 2026.
+Capitalization matters: use the existing remote branch names exactly.
+Codex opens focused `Kg -> Jk` pull requests. Claude develops the platform on Jk
+and integrates reviewed work there. Jk -> main is a separate submission PR.
+No automatic merge, force-push, or parallel edits to the same checkout.
+
+Current ticket ownership and prerequisites are recorded in
+[platform-upgrade-poa.md](platform-upgrade-poa.md). That assignment governs the
+new platform milestones; the original two-person ownership below remains context.
+One owner implements each shared contract; the other reviews before depending on
+it. In particular, Claude owns HTTP/API files and Codex owns engine internals.
+For context-bound jobs, Claude wires the HTTP/job boundary to the explicit engine
+context contract supplied by Codex. This avoids competing edits to api/runs.py.
+
+The directory/import foundation is already implemented in commit 23d572c. Its
+graph helper change and demo-c mapping need Claude's review before integration.
+AdventureWorks conversion, authentication, retrieval upgrades, tickets UI and
+the new incident scenarios remain planned, not implemented by that commit.
+
 A (agent-engine teammate): agents/, memory/conversations.py, episodes.py,
 procedures.py, handoffs.py; frontend chat/ and activity/; conversation history UI.
 B (platform teammate): graph/, memory/decisions.py and semantic.py, api/,
