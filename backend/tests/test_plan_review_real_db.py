@@ -99,7 +99,7 @@ def test_capabilities_are_truthful(world):
     pid, _ = world
     c = login("northstar.lead")
     assert c.get(f"/api/projects/{pid}/workflow/capabilities").json() == {
-        "plan_review": True, "work_setup": False, "reminders": False}
+        "plan_review": True, "work_setup": True, "reminders": False}
     assert TestClient(app).get(f"/api/projects/{pid}/workflow/capabilities").status_code == 401
 
 
@@ -211,3 +211,25 @@ def test_concurrent_reviews_of_one_revision_record_exactly_one(world):
     assert sorted(codes) == [200, 409, 409, 409, 409, 409]
     graph = authorized_graph(create_client(), NS, pid)
     assert graph.ro_query("MATCH (r:PlanReview {handoff_id: $h}) RETURN count(r)", params={"h": handoff}).result_set == [[1]]
+
+
+def test_what_did_i_approve_reads_human_reviews_in_chat(world):
+    pid, _ = world
+    c = login("northstar.lead")
+    sid = c.post(f"/api/projects/{pid}/sessions").json()["id"]
+    ask = lambda: wait_done(c, pid, sid, c.post(f"/api/projects/{pid}/sessions/{sid}/runs",
+                                                json={"request": "What did I approve?"}).json()["run_id"])["run"]
+    first = ask()
+    assert first["request_kind"] == "factual" and "have not approved" in first["answer"]
+    assert f"{pid}-dec" not in first["answer"]                     # seeded decision is not "my approval"
+    rid, done = start(c, pid, sid)
+    handoff = done["run"]["handoff_ids"][-1]
+    assert decide(c, pid, sid, rid, handoff, "approved").status_code == 200
+    second = ask()
+    assert f"Approved plan {handoff}" in second["answer"]
+    msgs = c.get(f"/api/projects/{pid}/sessions/{sid}/messages").json()
+    assert any(f"Approved plan {handoff}" in m["content"] for m in msgs if m["role"] == "assistant")
+    other = login("northstar.peer")                                # same company, other user: not their approval
+    osid = other.post(f"/api/projects/{pid}/sessions").json()["id"]
+    orid = other.post(f"/api/projects/{pid}/sessions/{osid}/runs", json={"request": "What did I approve?"}).json()["run_id"]
+    assert "have not approved" in wait_done(other, pid, osid, orid)["run"]["answer"]
