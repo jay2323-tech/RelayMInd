@@ -15,7 +15,7 @@ pytestmark=pytest.mark.skipif(os.getenv('RUN_LIVE_FALKORDB_TESTS')!='1',reason='
 PLAN={'final':{'summary':'Investigate current hold with QA',
     'decision_ids':['aw-dec-hold-v1'],
     'steps':[{'task':'Keep batch quarantine pending human disposition',
-              'evidence_ids':['aw-src-hold-v1']}],'uncertainties':['Named assignee unknown']}}
+              'evidence_ids':['aw-src-hold-v1','AW-O101','AW-O102']}],'uncertainties':['Named assignee unknown']}}
 
 
 def engine(world,model):
@@ -26,12 +26,13 @@ def engine(world,model):
     return CoordinationEngine(client,AW,pid,sid,model,GraphPlatformBridge(client))
 
 
-def change_order(graph,pid):
-    graph.query("MATCH (o:Order {id:'AW-O101',project_id:$p})-[:HAS_VERSION]->(v:OrderVersion) "
+def change_order(graph,pid,order_id='AW-O101'):
+    graph.query("MATCH (o:Order {id:$oid,project_id:$p})-[:HAS_VERSION]->(v:OrderVersion) "
         "WHERE NOT (v)<-[:PREVIOUS]-(:OrderVersion) "
-        "CREATE (o)-[:HAS_VERSION]->(n:OrderVersion {id:'AW-O101:v2',order_id:'AW-O101',"
-        "project_id:$p,version:2,version_key:'AW-O101:2',status:'on_hold',model:'AW-M1',"
-        "units:12,traceability:'known',source_id:'aw-src-trace'}) CREATE (n)-[:PREVIOUS]->(v)",params={'p':pid})
+        "CREATE (o)-[:HAS_VERSION]->(n:OrderVersion {id:$vid,order_id:$oid,"
+        "project_id:$p,version:2,version_key:$vkey,status:'on_hold',model:'AW-M1',"
+        "units:12,traceability:'known',source_id:'aw-src-trace'}) CREATE (n)-[:PREVIOUS]->(v)",
+        params={'p':pid,'oid':order_id,'vid':order_id+':v2','vkey':order_id+':2'})
 
 
 def test_typed_tools_scope_and_manifest_catches_uncited_order_version(world):
@@ -46,7 +47,7 @@ def test_typed_tools_scope_and_manifest_catches_uncited_order_version(world):
     report=tools['affected_orders'].execute(hold_id='QH-17')
     assert sorted(a['order']['order_id'] for a in report['affected'])==['AW-O101','AW-O102']
     assert report['unknown_traceability'][0]['order_id']=='AW-O105'
-    change_order(world[1],world[2])
+    change_order(world[1],world[2],'AW-O105')
     # This order was NOT cited in the plan; impact manifest must still detect it.
     review=e.review_handoff(handoff.id)
     assert review.review.status=='needs_revision'

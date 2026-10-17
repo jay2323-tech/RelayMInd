@@ -111,7 +111,7 @@ def test_http_isolation_and_scoped_aw_run(world, monkeypatch):
                                  "evidence_ids": ["aw-dec-hold-v2", "aw-src-hold-v2", "aw-task-quarantine-b101"]},
                                 {"task": "Hold shipment of AW-O103 pending QA disposition",
                                  "task_ids": ["aw-task-ship-o103"],
-                                 "evidence_ids": ["aw-dec-hold-v2", "AW-O103", "aw-task-ship-o103"]}]}}
+                                 "evidence_ids": ["aw-dec-hold-v2", "AW-O101", "AW-O102", "AW-O103", "aw-task-ship-o103"]}]}}
     monkeypatch.setattr(runs_api, "provider_factory",
                         lambda: ScriptedModel([plan, {"final": {"status": "accepted", "issues": []}}]))
     ns = TestClient(app)
