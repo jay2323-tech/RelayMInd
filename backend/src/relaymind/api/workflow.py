@@ -25,7 +25,9 @@ CAPABILITIES = WorkflowCapabilities(plan_review=True, work_setup=True, reminders
 
 
 def capabilities_now() -> WorkflowCapabilities:
-    return CAPABILITIES
+    # Reminders count as available only while a delivery worker is running (heartbeat under 2 minutes old).
+    from relaymind.workflow.reminders import worker_alive
+    return CAPABILITIES.model_copy(update={"reminders": worker_alive(get_client())})
 
 
 @router.get("/workflow/capabilities", response_model=WorkflowCapabilities)
@@ -151,3 +153,50 @@ def transition_work_item(project_id: str, item_id: str, body: WorkItemTransition
     with api_errors():
         scope = _item_scope(me, project_id, item_id)
         return ws.transition(get_client(), scope, item_id, body.action, body.expected_version)
+
+
+# ------------------------------------------------------------------ B4 reminders
+
+from pydantic import Field as _Field
+
+from relaymind.contracts.models import StrictModel as _Strict
+from relaymind.contracts.workflow import ReminderPreference
+from relaymind.workflow import reminders as rem
+
+
+class SnoozeBody(_Strict):
+    minutes: int = _Field(ge=5, le=7 * 24 * 60)
+
+
+class RescheduleBody(_Strict):
+    expected_version: int = _Field(ge=1)
+    reminder: ReminderPreference
+
+
+@router.get("/reminders")
+def list_reminders(project_id: str,
+                   status: str | None = Query(None, pattern="^(scheduled|delivering|delivered|stopped|failed)$"),
+                   me: Principal = Depends(project_member)):
+    with api_errors():
+        return rem.list_reminders(get_client(), _reader_scope(me, project_id), status=status)
+
+
+@router.get("/work-items/{item_id}/reminders")
+def work_item_reminders(project_id: str, item_id: str, me: Principal = Depends(project_member)):
+    with api_errors():
+        scope = _reader_scope(me, project_id)
+        ws.get_item(get_client(), scope, item_id)                      # 404 unless visible
+        return rem.list_reminders(get_client(), scope, item_id=item_id)
+
+
+@router.post("/work-items/{item_id}/reminders", response_model=WorkItem)
+def reschedule_reminders(project_id: str, item_id: str, body: RescheduleBody, me: Principal = Depends(project_member)):
+    with api_errors():
+        scope = _item_scope(me, project_id, item_id)
+        return ws.update_reminder(get_client(), scope, item_id, body.reminder, body.expected_version)
+
+
+@router.post("/reminders/{reminder_id}/snooze")
+def snooze_reminder(project_id: str, reminder_id: str, body: SnoozeBody, me: Principal = Depends(project_member)):
+    with api_errors():
+        return rem.snooze(get_client(), _reader_scope(me, project_id), reminder_id, body.minutes)
