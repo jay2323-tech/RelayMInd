@@ -51,6 +51,8 @@ class HandoffRecord(StrictModel):
     session_id: str
     project_id: str
     owner_id: str
+    tenant_id: str | None = None
+    company_id: str | None = None
     request: str = Field(min_length=1, max_length=16000)
     revision: int = Field(ge=1, le=2)
     plan: Plan
@@ -75,6 +77,8 @@ class RunRecord(StrictModel):
     project_id: str
     session_id: str
     owner_id: str
+    tenant_id: str | None = None
+    company_id: str | None = None
     request: str
     status: Literal["planning", "awaiting_review", "paused", "completed", "needs_revision", "blocked", "failed"]
     handoff_ids: list[str] = Field(default_factory=list)

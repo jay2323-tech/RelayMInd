@@ -1,5 +1,16 @@
 # Shared contracts
 
+## Agent job scope (P2-04 engine boundary)
+
+`contracts/agent_jobs.py` defines frozen `AgentJobScope` with tenant, user, company,
+project and session IDs. `CoordinationEngine.for_job` accepts a server-verified
+scope, persists tenant/company IDs in new run and handoff records and checks all
+five IDs before resuming or reviewing a scoped artifact. Existing unscoped demo
+records remain readable only through the legacy demo path. The HTTP background
+queue, account membership and polling authorization still need Claude's platform
+integration; this contract alone is not authentication. See
+`agent-job-scope.md` for the exact handoff.
+
 ## AdventureWorks retrieval milestone (17 October)
 
 `contracts/retrieval.py` adds `SearchArguments`, `SearchHit`, `SearchResult` and
