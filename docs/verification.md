@@ -229,3 +229,21 @@ because its steps reference tasks that "implement superseded decision aw-dec-hol
 exactly the graph-required affected tasks the plan must address (deterministic coverage), and r2 does
 propose updated actions for them (quarantine B101+B102 under v2; hold/review O103). In run B the Reviewer
 also noted r2 cites no order IDs, which is a fair gap. **No completed real-model AW run yet.**
+
+## AdventureWorks real-Gemini after Kg 8a6e0e6 (2026-10-17 ~22:00 IST, Windows PC)
+
+`Jk` merge `50f1ae4` (reviewer guidance for inherited tasks, exposed-order coverage). Live suite **199 passed**.
+Provider gemini `gemini-3.5-flash-lite`; responses/keys not printed; only engine-authored block messages shown.
+
+| Run | Path | Outcome |
+|---|---|---|
+| A `f014cb9b…` | API, fresh after-change | **completed, Reviewer accepted on first review.** Plan cites AW-O101, AW-O102, AW-O103, aw-dec-hold-v2, aw-src-hold-v2, aw-src-trace and both required tasks; snapshot hold v2; procedure quality-hold-review; no provider errors |
+| B `d6047e0f…` | API, pause → hold v2 → resume | resume → deterministic `needs_revision` ("Approved decisions changed after planning", r1 snapshot hold v1) → revision **blocked** (AgentBlocked) |
+| replay 1 | in-process, same flow | **completed**: needs_revision → r2 → final review accepted |
+| replay 2 | in-process | revision **blocked: "Structured task IDs must also appear in the step evidence IDs"** |
+| replay 3 | in-process | r2 → final review `needs_revision` |
+
+Conclusion: the first **completed real-model AdventureWorks run** exists (fresh flow), and pause/change/resume
+completed once in three replays. The most common failure is an engine hard block when the model lists a task in
+`task_ids` without repeating it in `evidence_ids`; that is a recoverable formatting slip that could be repaired
+(auto-include) or returned as a correction instead of blocking. Handed to Codex.
