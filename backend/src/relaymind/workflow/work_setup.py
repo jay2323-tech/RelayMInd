@@ -354,3 +354,36 @@ def chat_turn(client: Any, scope: AgentJobScope, text: str, operation_id: str) -
         target = draft or create_draft(client, scope, WorkFields(title=fields.title), operation_id)
         return _guide(client, scope, target, errors + str(exc).split("; "))
     return _guide(client, scope, item, errors)
+
+
+@serialized_write
+def update_reminder(client: Any, scope: AgentJobScope, item_id: str, reminder: ReminderPreference,
+                    expected_version: int) -> WorkItem:
+    """Change the reminder preference of a CONFIRMED item (reschedule). Other fields stay fixed."""
+    from relaymind.workflow import reminders
+    item = get_item(client, scope, item_id)
+    if item.status != "confirmed":
+        raise WorkSetupConflict(f"Reminders can only be rescheduled on confirmed work (this is {item.status})")
+    merged = _merge(item, WorkFields(reminder=reminder))
+    errors = validate(client, scope, merged)
+    if errors:
+        raise WorkSetupInvalid("; ".join(errors))
+    rows = _graph(client, scope).query(
+        f"MATCH (w:WorkItem {{id: $id}}) WHERE {_SCOPE} AND w.version = $expected AND w.status = 'confirmed' "
+        "SET w.reminder_json = $reminder, w.version = w.version + 1, w.updated_at = $now " + _SNAPSHOT + "RETURN w.id",
+        params={**_params(scope), "id": item_id, "expected": expected_version, "now": _now(),
+                "reminder": reminder.model_dump_json(), "snapshot": merged.model_dump_json()}).result_set
+    if len(rows) != 1:
+        raise WorkSetupConflict("Work item changed since you loaded it (stale version); reload and retry")
+    done = get_item(client, scope, item_id)
+    reminders.reschedule(client, scope, done)
+    return done
+
+
+def _register_hooks():
+    from relaymind.workflow import reminders
+    if reminders.on_transition not in TRANSITION_HOOKS:
+        TRANSITION_HOOKS.append(reminders.on_transition)
+
+
+_register_hooks()

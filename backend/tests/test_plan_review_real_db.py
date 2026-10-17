@@ -96,10 +96,15 @@ def decide(c, pid, sid, rid, handoff, decision, feedback=None, op=None):
 
 
 def test_capabilities_are_truthful(world):
-    pid, _ = world
+    from relaymind.workflow import reminders
+    pid, client = world
     c = login("northstar.lead")
+    client.connection.delete(reminders.HEARTBEAT_KEY)                 # no worker running
     assert c.get(f"/api/projects/{pid}/workflow/capabilities").json() == {
         "plan_review": True, "work_setup": True, "reminders": False}
+    reminders.heartbeat(client)                                       # a worker reported in
+    assert c.get(f"/api/projects/{pid}/workflow/capabilities").json()["reminders"] is True
+    client.connection.delete(reminders.HEARTBEAT_KEY)
     assert TestClient(app).get(f"/api/projects/{pid}/workflow/capabilities").status_code == 401
 
 
