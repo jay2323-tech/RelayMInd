@@ -5,11 +5,21 @@ Approved direction: three distinct profiles, one company per profile; Northstar
 the main quality-hold scenario. Existing Cedar fixture is retained as a directory
 sample, not silently renamed into AdventureWorks.
 
-Codex branch: **Kg**. Claude branch/integration: **Jk**. PR direction: Kg -> Jk.
+Codex branch: **Kg**. Claude branch: **Jk**. PR direction: Kg -> main.
 Each assistant uses a separate checkout and updates only its own AI work log.
-Public submission to main is a later reviewed PR. Read AGENTS.md before work.
+Changes reach main through reviewed PRs. Read AGENTS.md before work.
 
 ## Current implemented milestone
+
+Latest Codex checkpoint: `adventureworks-checkpoint.md` documents the converted
+290-person/16-department directory and Excel import workbook, attributed sources,
+quality-hold scenario/answer key and actual project-source search in both agents.
+P1-04/P1-05 artifacts are ready; P1-06 contracts need Claude's review. This is not
+completion of Phases 1–5. Typed incident retrieval, membership and manufacturing
+approval integration still depend on Claude's shared platform contracts.
+The engine side of P2-04 now has a frozen `AgentJobScope` and persisted scope checks;
+the authenticated HTTP/job boundary remains Claude-owned and pending. See
+`agent-job-scope.md`.
 
 Commit 23d572c contains synthetic directory fixtures, XLSX validation, explicit
 snapshot write/read and CLI preview/apply. It does not contain real login, HTTP

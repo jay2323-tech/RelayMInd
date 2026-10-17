@@ -34,13 +34,13 @@ def test_missing_task_is_rejected_without_calling_reviewer_model(world):
     assert not model.inputs
 
 
-def test_structured_task_ids_require_supporting_evidence(world):
+def test_structured_task_ids_recover_supporting_evidence(world):
     client,pid,sid,n=world
     response=_plan(n)
     response['final']['steps'][0]['evidence_ids']=[n('d2')]
     run=CoordinationEngine(client,CTX,pid,sid,ScriptedModel([response]),GraphPlatformBridge(client)).plan_run(
         'Review launch',run_id=pid+'-bad-evidence',procedure_id=pid+'-review')
-    assert run.status=='blocked'
+    assert run.status=='awaiting_review',run.error
 
 
 def test_correction_can_cover_missing_tasks_and_finish(world):
@@ -48,7 +48,9 @@ def test_correction_can_cover_missing_tasks_and_finish(world):
     incomplete=_plan(n)
     incomplete['final']['steps'][0]['task_ids']=[]
     accepted={'final':{'status':'accepted','issues':[]}}
-    engine=CoordinationEngine(client,CTX,pid,sid,ScriptedModel([incomplete,_plan(n),accepted]),GraphPlatformBridge(client))
+    corrected=_plan(n)
+    corrected['final']['steps'][0]['evidence_ids']=[n('d2')]
+    engine=CoordinationEngine(client,CTX,pid,sid,ScriptedModel([incomplete,corrected,accepted]),GraphPlatformBridge(client))
     run=engine.run('Review launch',run_id=pid+'-fixed-coverage',procedure_id=pid+'-review')
     assert run.status=='completed',run.error
     assert len(run.handoff_ids)==2

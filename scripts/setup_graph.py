@@ -16,7 +16,9 @@ from relaymind.graph.access import authorized_graph
 from relaymind.graph.connection import create_client
 
 UNIQUE = [("Decision", "id"), ("Source", "id"), ("Task", "id"),
-          ("TaskVersion", "id"), ("TaskVersion", "version_key"), ("ProposedAction", "id")]
+          ("TaskVersion", "id"), ("TaskVersion", "version_key"), ("ProposedAction", "id"),
+          ("Order", "id"), ("OrderVersion", "id"), ("OrderVersion", "version_key"),
+          ("Batch", "id"), ("Assembly", "id"), ("Hold", "id")]
 INDEXED = [("Decision", "topic"), ("Project", "id"), ("Person", "id")]
 
 
@@ -48,8 +50,13 @@ def ensure(graph):
 def main():
     load_dotenv()
     client = create_client()
-    for tenant, user in [("demo-a", "developer-a"), ("demo-b", "developer-b")]:
-        graph = authorized_graph(client, TrustedContext(tenant_id=tenant, user_id=user), "launch-01")
+    from relaymind.graph.access import _DEMO_ACCESS
+    seen = set()
+    for (tenant, user), (graph_name, projects) in sorted(_DEMO_ACCESS.items()):
+        if graph_name in seen:
+            continue
+        seen.add(graph_name)
+        graph = authorized_graph(client, TrustedContext(tenant_id=tenant, user_id=user), sorted(projects)[0])
         graph.query("RETURN 1")  # initialize the graph key if absent
         print(graph.name)
         ensure(graph)

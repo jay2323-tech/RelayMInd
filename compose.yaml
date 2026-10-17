@@ -9,7 +9,9 @@ services:
     environment:
       REDIS_ARGS: "--appendonly yes --requirepass ${FALKORDB_PASSWORD:?Set FALKORDB_PASSWORD in .env}"
     volumes:
-      - falkordb-data:/data
+      # This image stores data in /var/lib/falkordb/data (/data is only a symlink to it).
+      # Mounting /data persisted nothing; fixed 2026-10-17.
+      - falkordb-data:/var/lib/falkordb/data
     restart: unless-stopped
 volumes:
   falkordb-data:

@@ -193,3 +193,57 @@ Conclusions: affected-task coverage works deterministically and Gemini now addre
 Groq is functional for planning but cannot complete a run on this free-tier account
 (per-minute token limit). The browser flow works end to end; the final review outcome depends
 on model output (this run: a correct citation catch).
+
+## Incident: FalkorDB crash loop on restart, and persistence mount fix (2026-10-17 21:05–21:20 IST)
+
+- Symptom: after a Docker restart the container crash-looped (exit 139, segfault). Logs showed the crash
+  while replaying the AOF for key `relaymind_compat_218f57ea52ab` (a throwaway graph from
+  `scripts/check_falkordb_compat.py` C-2/C-3: unique constraint created, graph deleted right away),
+  stack in `GraphContext_Free`. Treated as a FalkorDB 4.22.1 AOF-replay bug triggered by that pattern.
+- Recovery (no demo data lost): stopped container; copied `/var/lib/falkordb/data` out
+  (backup in `C:\Users\Lenovo\RelayMind-backups\`); filtered the incr AOF with a RESP parser, dropping
+  only the 348 entries for 14 throwaway graphs (`relaymind_compat_*`, `relaymind_awtest_*`), keeping
+  13,927; copied back; server started and all four demo graphs loaded with their data.
+- **Persistence bug found:** `compose.yaml` mounted the volume at `/data`, but this image stores data in
+  `/var/lib/falkordb/data` (`/data` is only a symlink inside the volume). Data survived only in the
+  container layer; `docker compose down` or a fresh container would have lost it. Fixed the mount to
+  `/var/lib/falkordb/data`, copied the live data into the volume, recreated the container, verified counts.
+- Prevention: `check_falkordb_compat.py` now warns to run only against a disposable FalkorDB instance.
+
+## AdventureWorks real-Gemini runs after Kg b73961f (2026-10-17 ~21:30 IST, Windows PC)
+
+`Jk` merge `23ec001` (Gemini schema-constrained output, manufacturing agent tools, impact snapshots).
+Live suite: **190 passed, 0 failed** (Windows UTF-8 test fixed by Codex). Provider: gemini
+`gemini-3.5-flash-lite` through the authenticated API as `aw.quality`; responses and keys not printed.
+
+| Run | Flow | Outcome | Provider/decode errors |
+|---|---|---|---|
+| A `97ef3d17…` | fresh, after-change | Planner used `current_hold`, `affected_orders`, `affected_tasks`; r1 and r2 cover both required tasks; **final review `needs_revision`** | none logged |
+| B `0b76ea69…` | before-change → pause → hold v2 → resume | paused at r1 (snapshot hold v1); resume → review `needs_revision` → r2 (snapshot hold v2, both tasks); **final review `needs_revision`** | none logged |
+
+`manufacturing_versions` saved on handoffs: r1 (B) `{evidence_id: QH-17, version_id: aw-dec-hold-v1, state: current}`,
+r2 `{evidence_id: QH-17, version_id: aw-dec-hold-v2, state: current, content_sha256: …}` — correct per stage.
+
+Review quality finding (model behaviour, not a provider failure): in both runs the Reviewer rejected r2
+because its steps reference tasks that "implement superseded decision aw-dec-hold-v1". Those tasks are
+exactly the graph-required affected tasks the plan must address (deterministic coverage), and r2 does
+propose updated actions for them (quarantine B101+B102 under v2; hold/review O103). In run B the Reviewer
+also noted r2 cites no order IDs, which is a fair gap. **No completed real-model AW run yet.**
+
+## AdventureWorks real-Gemini after Kg 8a6e0e6 (2026-10-17 ~22:00 IST, Windows PC)
+
+`Jk` merge `50f1ae4` (reviewer guidance for inherited tasks, exposed-order coverage). Live suite **199 passed**.
+Provider gemini `gemini-3.5-flash-lite`; responses/keys not printed; only engine-authored block messages shown.
+
+| Run | Path | Outcome |
+|---|---|---|
+| A `f014cb9b…` | API, fresh after-change | **completed, Reviewer accepted on first review.** Plan cites AW-O101, AW-O102, AW-O103, aw-dec-hold-v2, aw-src-hold-v2, aw-src-trace and both required tasks; snapshot hold v2; procedure quality-hold-review; no provider errors |
+| B `d6047e0f…` | API, pause → hold v2 → resume | resume → deterministic `needs_revision` ("Approved decisions changed after planning", r1 snapshot hold v1) → revision **blocked** (AgentBlocked) |
+| replay 1 | in-process, same flow | **completed**: needs_revision → r2 → final review accepted |
+| replay 2 | in-process | revision **blocked: "Structured task IDs must also appear in the step evidence IDs"** |
+| replay 3 | in-process | r2 → final review `needs_revision` |
+
+Conclusion: the first **completed real-model AdventureWorks run** exists (fresh flow), and pause/change/resume
+completed once in three replays. The most common failure is an engine hard block when the model lists a task in
+`task_ids` without repeating it in `evidence_ids`; that is a recoverable formatting slip that could be repaired
+(auto-include) or returned as a correction instead of blocking. Handed to Codex.

@@ -4,8 +4,9 @@
 
 Jayanth assigned Codex to **Kg** and Claude to **Jk** on 17 October 2026.
 Capitalization matters: use the existing remote branch names exactly.
-Codex opens focused `Kg -> Jk` pull requests. Claude develops the platform on Jk
-and integrates reviewed work there. Jk -> main is a separate submission PR.
+Codex opens focused `Kg -> main` pull requests, as Jayanth requested after PR #5.
+Claude develops the platform on Jk and opens separate reviewed PRs to main.
+Both branches should incorporate reviewed shared contracts before depending on them.
 No automatic merge, force-push, or parallel edits to the same checkout.
 
 Current ticket ownership and prerequisites are recorded in

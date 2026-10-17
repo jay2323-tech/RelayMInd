@@ -55,7 +55,7 @@ def list_actions(client: Any, context: TrustedContext, project_id: str, *,
                  status: Optional[str] = None, action_id: Optional[str] = None) -> list[ProposedActionRecord]:
     graph = authorized_graph(client, context, project_id)
     rows = graph.ro_query(
-        "MATCH (a:ProposedAction {project_id: $project})-[:TARGETS]->(:Task) "
+        "MATCH (a:ProposedAction {project_id: $project})-[:TARGETS]->() "
         "WHERE ($status IS NULL OR a.status = $status) AND ($id IS NULL OR a.id = $id) "
         "OPTIONAL MATCH (a)-[:BASED_ON]->(d:Decision) "
         "RETURN " + ", ".join(f"a.{f}" for f in _FIELDS) + ", collect(d.id) ORDER BY a.created_at DESC, a.id",
@@ -132,6 +132,62 @@ _APPLY = (
 )
 
 
+_APPLY_ORDER_HOLD = (
+    "MATCH (a:ProposedAction {id: $id, project_id: $project, status: 'proposed', kind: 'hold_order'})"
+    "-[:TARGETS]->(o:Order) "
+    "MATCH (o)-[:HAS_VERSION]->(cur:OrderVersion) "
+    "WHERE cur.version = a.expected_task_version AND NOT (cur)<-[:PREVIOUS]-(:OrderVersion) "
+    "  AND NOT (a)-[:BASED_ON]->(:Decision)<-[:SUPERSEDES]-(:Decision) "
+    "CREATE (nv:OrderVersion {id: o.id + ':v' + toString(cur.version + 1), order_id: o.id, project_id: o.project_id, "
+    "  version: cur.version + 1, version_key: o.id + ':' + toString(cur.version + 1), status: 'on_hold', "
+    "  model: cur.model, units: cur.units, traceability: cur.traceability, source_id: cur.source_id, created_at: $now}) "
+    "CREATE (o)-[:HAS_VERSION]->(nv), (nv)-[:PREVIOUS]->(cur), (nv)-[:CAUSED_BY]->(a) "
+    "SET a.status = 'applied', a.decided_by = $user, a.decided_at = $now, "
+    "    a.result = 'Applied: order version ' + toString(cur.version) + ' -> ' + toString(cur.version + 1) + ' (on_hold)', "
+    "    a.applied_version_id = nv.id "
+    "RETURN nv.id, nv.version"
+)
+
+
+@serialized_write
+def propose_order_hold(
+    client: Any, context: TrustedContext, project_id: str, action_id: str, order_id: str, reason: str,
+    based_on: Iterable[str], *, expected_order_version: Optional[int] = None, run_id: Optional[str] = None,
+) -> ProposedActionRecord:
+    """Propose putting an OPEN order on hold. Basis decisions must be current and not in conflict.
+    Shipped orders are not held here: they need a QA exposure review, not a hold (fixture AW-04)."""
+    from relaymind.memory.manufacturing import get_order
+    based_on = sorted(set(based_on))
+    order = get_order(client, context, project_id, order_id)
+    expected = expected_order_version or order.version
+    if expected != order.version:
+        raise InvalidActionError(f"Order {order_id} is at version {order.version}, not {expected}")
+    if order.status != "open":
+        raise InvalidActionError(f"Order {order_id} is {order.status}; only open orders can be put on hold")
+    state = get_current_decisions(client, context, project_id)
+    current, conflicted = {d.id for d in state.current}, {d.id for d in state.conflicting}
+    for decision_id in based_on:
+        if decision_id in conflicted:
+            raise InvalidActionError(f"Decision {decision_id} is in conflict; resolve it first")
+        if decision_id not in current:
+            raise InvalidActionError(f"Decision {decision_id} is not a current decision")
+    graph = authorized_graph(client, context, project_id)
+    rows = graph.query(
+        "MATCH (o:Order {id: $order})-[:ABOUT]->(:Project {id: $project}) "
+        "OPTIONAL MATCH (x:ProposedAction {id: $id}) WITH o, x WHERE x IS NULL "
+        "OPTIONAL MATCH (d:Decision {project_id: $project}) WHERE d.id IN $based_on "
+        "WITH o, collect(DISTINCT d) AS basis WHERE size(basis) = size($based_on) "
+        "CREATE (a:ProposedAction {id: $id, project_id: $project, task_id: $order, kind: 'hold_order', "
+        "  new_status: 'on_hold', reason: $reason, expected_task_version: $expected, run_id: $run_id, "
+        "  status: 'proposed', created_at: $now, created_by: $by})-[:TARGETS]->(o) "
+        "FOREACH (d IN basis | CREATE (a)-[:BASED_ON]->(d)) RETURN a.id",
+        params={"order": order_id, "project": project_id, "id": action_id, "based_on": based_on, "reason": reason,
+                "expected": expected, "run_id": run_id, "now": _now(), "by": context.user_id}).result_set
+    if not rows:
+        raise InvalidActionError("Action ID already used or basis decision missing")
+    return get_action(client, context, project_id, action_id)
+
+
 def _close(graph, project_id, action_id, status, result, user):
     """Move a still-proposed action to a terminal non-applied status."""
     graph.query(
@@ -159,8 +215,9 @@ def approve_action(client: Any, context: TrustedContext, project_id: str, action
         return get_action(client, context, project_id, action_id)
 
     # 2. Guarded write: base version still current and basis not superseded.
-    rows = graph.query(_APPLY, params={"id": action_id, "project": project_id,
-                                       "now": _now(), "user": context.user_id}).result_set
+    query = _APPLY_ORDER_HOLD if action.kind == "hold_order" else _APPLY
+    rows = graph.query(query, params={"id": action_id, "project": project_id,
+                                      "now": _now(), "user": context.user_id}).result_set
     if rows:
         return get_action(client, context, project_id, action_id)
 
@@ -168,10 +225,14 @@ def approve_action(client: Any, context: TrustedContext, project_id: str, action
     latest = get_action(client, context, project_id, action_id)
     if latest.status != "proposed":
         raise ActionAlreadyDecidedError(f"Action already {latest.status}")
-    task = get_task(client, context, project_id, action.task_id)
+    if action.kind == "hold_order":
+        from relaymind.memory.manufacturing import get_order
+        target_version, label = get_order(client, context, project_id, action.task_id).version, "order"
+    else:
+        target_version, label = get_task(client, context, project_id, action.task_id).version, "task"
     reasons = []
-    if task.version != action.expected_task_version:
-        reasons.append(f"task {task.task_id} moved from version {action.expected_task_version} to {task.version}")
+    if target_version != action.expected_task_version:
+        reasons.append(f"{label} {action.task_id} moved from version {action.expected_task_version} to {target_version}")
     current_ids = {d.id for d in state.current + state.conflicting}
     stale_basis = [d for d in action.based_on if d not in current_ids]
     if stale_basis:

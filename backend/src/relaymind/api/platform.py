@@ -1,16 +1,19 @@
 """Platform read/approval endpoints: decisions, evidence, tasks, actions.
 
-All routes use the server-side trusted context; project access is checked by
-authorized_graph inside every memory function.
+Every route requires an authenticated project member (api.deps.project_member); the
+principal's server-side context is passed down, and authorized_graph re-checks the project.
 """
 from __future__ import annotations
 
 from uuid import uuid4
 
-from fastapi import APIRouter, Query
+from typing import Literal
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import Field
 
-from relaymind.api.deps import api_errors, get_client, trusted_context
+from relaymind.api.deps import api_errors, get_client, project_member
+from relaymind.platform.identity import Principal
 from relaymind.contracts.models import StrictModel
 from relaymind.contracts.tasks import TaskStatus
 from relaymind.graph.access import AccessDenied, authorized_graph
@@ -23,22 +26,22 @@ router = APIRouter(prefix="/projects/{project_id}")
 
 
 @router.get("/decisions")
-def current_decisions(project_id: str):
+def current_decisions(project_id: str, me: Principal = Depends(project_member)):
     with api_errors():
-        return dm.get_current_decisions(get_client(), trusted_context(), project_id)
+        return dm.get_current_decisions(get_client(), me.context(), project_id)
 
 
 @router.get("/decisions/topics/{topic}")
-def decision_history(project_id: str, topic: str):
+def decision_history(project_id: str, topic: str, me: Principal = Depends(project_member)):
     with api_errors():
-        return dm.get_decision_history(get_client(), trusted_context(), project_id, topic)
+        return dm.get_decision_history(get_client(), me.context(), project_id, topic)
 
 
 @router.get("/evidence/{evidence_id}")
-def evidence(project_id: str, evidence_id: str):
+def evidence(project_id: str, evidence_id: str, me: Principal = Depends(project_member)):
     """Source, Decision (with topic history) or Task from the platform; otherwise a
     message/episode only if it belongs to a session owned by the trusted user."""
-    client, ctx = get_client(), trusted_context()
+    client, ctx = get_client(), me.context()
     with api_errors():
         try:
             record = GraphPlatformBridge(client).evidence(ctx, project_id, evidence_id)
@@ -78,26 +81,27 @@ def _conversation_evidence(client, ctx, project_id, evidence_id):
 
 
 @router.get("/tasks")
-def tasks(project_id: str):
+def tasks(project_id: str, me: Principal = Depends(project_member)):
     with api_errors():
-        return tm.list_tasks(get_client(), trusted_context(), project_id)
+        return tm.list_tasks(get_client(), me.context(), project_id)
 
 
 @router.get("/tasks/affected")
-def affected_tasks(project_id: str):
+def affected_tasks(project_id: str, me: Principal = Depends(project_member)):
     with api_errors():
-        return tm.find_affected_tasks(get_client(), trusted_context(), project_id)
+        return tm.find_affected_tasks(get_client(), me.context(), project_id)
 
 
 @router.get("/tasks/{task_id}/history")
-def task_history(project_id: str, task_id: str):
+def task_history(project_id: str, task_id: str, me: Principal = Depends(project_member)):
     with api_errors():
-        return tm.get_task_history(get_client(), trusted_context(), project_id, task_id)
+        return tm.get_task_history(get_client(), me.context(), project_id, task_id)
 
 
 class ProposeBody(StrictModel):
-    task_id: str = Field(min_length=1, max_length=200)
-    new_status: TaskStatus
+    target: Literal["task", "order"] = "task"
+    task_id: str = Field(min_length=1, max_length=200, description="Target task or order ID")
+    new_status: TaskStatus | Literal["on_hold"]
     reason: str = Field(min_length=1, max_length=2000)
     based_on: list[str] = Field(min_length=1, max_length=10)
     expected_task_version: int | None = Field(default=None, ge=1)
@@ -105,23 +109,31 @@ class ProposeBody(StrictModel):
 
 
 @router.get("/actions")
-def list_actions(project_id: str, status: str | None = Query(default=None)):
+def list_actions(project_id: str, status: str | None = Query(default=None), me: Principal = Depends(project_member)):
     with api_errors():
-        return am.list_actions(get_client(), trusted_context(), project_id, status=status)
+        return am.list_actions(get_client(), me.context(), project_id, status=status)
 
 
 @router.post("/actions", status_code=201)
-def propose(project_id: str, body: ProposeBody):
+def propose(project_id: str, body: ProposeBody, me: Principal = Depends(project_member)):
     with api_errors():
-        return am.propose_action(get_client(), trusted_context(), project_id, str(uuid4()), body.task_id,
+        if body.target == "order":
+            if body.new_status != "on_hold":
+                raise HTTPException(422, "Orders can only be proposed for on_hold")
+            return am.propose_order_hold(get_client(), me.context(), project_id, str(uuid4()), body.task_id,
+                                         body.reason, body.based_on, expected_order_version=body.expected_task_version,
+                                         run_id=body.run_id)
+        if body.new_status == "on_hold":
+            raise HTTPException(422, "on_hold applies to orders only")
+        return am.propose_action(get_client(), me.context(), project_id, str(uuid4()), body.task_id,
                                  body.new_status, body.reason, body.based_on,
                                  expected_task_version=body.expected_task_version, run_id=body.run_id)
 
 
 @router.post("/actions/{action_id}/approve")
-def approve(project_id: str, action_id: str):
+def approve(project_id: str, action_id: str, me: Principal = Depends(project_member)):
     with api_errors():
-        return am.approve_action(get_client(), trusted_context(), project_id, action_id)
+        return am.approve_action(get_client(), me.context(), project_id, action_id)
 
 
 class RejectBody(StrictModel):
@@ -129,7 +141,40 @@ class RejectBody(StrictModel):
 
 
 @router.post("/actions/{action_id}/reject")
-def reject(project_id: str, action_id: str, body: RejectBody | None = None):
+def reject(project_id: str, action_id: str, body: RejectBody | None = None, me: Principal = Depends(project_member)):
     with api_errors():
-        return am.reject_action(get_client(), trusted_context(), project_id, action_id,
+        return am.reject_action(get_client(), me.context(), project_id, action_id,
                                 (body or RejectBody()).reason)
+
+
+# ---------------------------------------------------------------- manufacturing (AdventureWorks)
+
+@router.get("/holds/{hold_id}")
+def hold_state(project_id: str, hold_id: str, me: Principal = Depends(project_member)):
+    from relaymind.memory import manufacturing as mf
+    with api_errors():
+        return mf.current_hold(get_client(), me.context(), project_id, hold_id)
+
+
+@router.get("/holds/{hold_id}/impact")
+def hold_impact(project_id: str, hold_id: str, me: Principal = Depends(project_member)):
+    """Deterministic affected-order query from the CURRENT hold decision (+ unknown traceability)."""
+    from relaymind.memory import manufacturing as mf
+    with api_errors():
+        return mf.affected_orders(get_client(), me.context(), project_id, hold_id)
+
+
+@router.get("/orders/{order_id}")
+def order(project_id: str, order_id: str, me: Principal = Depends(project_member)):
+    from relaymind.memory import manufacturing as mf
+    with api_errors():
+        return mf.get_order(get_client(), me.context(), project_id, order_id)
+
+
+@router.get("/holds")
+def holds(project_id: str, me: Principal = Depends(project_member)):
+    """Hold IDs in this project (empty for projects without a manufacturing incident)."""
+    with api_errors():
+        graph = authorized_graph(get_client(), me.context(), project_id)
+        return [r[0] for r in graph.ro_query("MATCH (h:Hold {project_id: $p}) RETURN h.id ORDER BY h.id",
+                                             params={"p": project_id}).result_set]

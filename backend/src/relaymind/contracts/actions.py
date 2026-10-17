@@ -17,9 +17,9 @@ ActionStatus = Literal["proposed", "applied", "stale", "blocked_by_conflict", "r
 class ProposedActionRecord(StrictModel):
     id: str = Field(min_length=1, max_length=200)
     project_id: str
-    task_id: str
-    kind: Literal["set_status"] = "set_status"
-    new_status: TaskStatus
+    task_id: str = Field(description="Target record ID: a Task for set_status, an Order for hold_order")
+    kind: Literal["set_status", "hold_order"] = "set_status"
+    new_status: TaskStatus | Literal["on_hold"]
     reason: str = Field(min_length=1, max_length=2000)
     expected_task_version: int = Field(ge=1)
     based_on: list[str] = Field(min_length=1, description="Decision IDs that justify the change")
