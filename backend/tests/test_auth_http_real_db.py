@@ -153,7 +153,9 @@ def test_account_switch_while_job_is_queued_keeps_the_captured_scope(world):
     assert run["status"] == "completed"
     assert (run["tenant_id"], run["company_id"], run["owner_id"], run["session_id"]) == ("demo-a", "northstar", "developer-a", sid)
     msgs = back.get(f"/api/projects/{pid}/sessions/{sid}/messages").json()
-    assert any(m["role"] == "assistant" and rid in m["content"] for m in msgs)   # summary written with captured scope
+    # Summary written with the captured scope. Its text is now a plain-language reply (agents/presentation.py),
+    # so identify it by the message id, which is derived from the run id.
+    assert any(m["role"] == "assistant" and m["id"].startswith(rid) for m in msgs)
     assert all(s["id"] != sid for s in c.get(f"/api/projects/{pid}/sessions").json())  # Harbor never sees it
 
 

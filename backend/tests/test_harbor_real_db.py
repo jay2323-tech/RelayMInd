@@ -52,6 +52,7 @@ def test_stages_match_answer_key(world):
     history = get_decision_history(client, HB, pid, "route-hb-o201")
     assert [(d.id, d.is_current) for d in history] == [("hb-dec-route-v1", False), ("hb-dec-route-v2", True)]
     assert load_scenario(client, HB, pid, "after-change") == after                     # idempotent
+    assert "HB-O201" in GraphPlatformBridge(client).evidence(HB, pid, "HB-O201").text   # order named in sources resolves
     with pytest.raises(AccessDenied):
         get_current_decisions(client, TrustedContext(tenant_id="demo-a", user_id="developer-a"), pid)
 
