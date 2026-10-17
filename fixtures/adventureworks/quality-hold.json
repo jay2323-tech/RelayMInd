@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "synthetic": true,
+  "company_id": "adventureworks",
+  "scenario_id": "aw-quality-hold",
+  "provenance": "Original RelayMind fictional incident, not an event from Microsoft's sample database. All batch, model, order, ticket and notice IDs below are invented.",
+  "request": "Investigate hold QH-17, identify affected orders, evaluate replacement options and prepare an owned recovery plan. Do not approve shipments or replacements.",
+  "sources": [
+    {"id":"aw-src-hold-v1","title":"QH-17 quality hold v1","text":"Approved hold QH-17 applies to batch AW-B101. Quarantine on-hand units and hold related open shipments. Shipped units require a QA exposure review; a hold is not itself a recall decision."},
+    {"id":"aw-src-trace","title":"Batch to assembly to order trace","text":"AW-B101 is installed in assembly AW-A101 for order AW-O101 (open) and AW-A102 for AW-O102 (shipped). AW-B102 is installed in AW-A103 for AW-O103 (open). AW-B103 is installed in AW-A104 for AW-O104 (open). No installation record is available for AW-O105."},
+    {"id":"aw-src-replacement","title":"Replacement engineering scope","text":"AW-R201 is approved as a replacement for model AW-M1 only. AW-O101 uses AW-M1, needs 12 replacement units; AW-O102 uses AW-M2, needs 8. AW-O103 uses AW-M1, needs 10. Approval for AW-M2 is unknown, not implicitly allowed."},
+    {"id":"aw-src-stock","title":"Replacement stock and reservations","text":"There are 15 AW-R201 units on hand; 5 are reserved for an unrelated order. Available stock is 10. AW-O101 needs 12. No confirmed replenishment date exists. Do not promise its delivery date."},
+    {"id":"aw-src-procedure-v1","title":"Historical hold checklist v1","text":"Historical checklist allowed warehouse staff to release shipments after a supplier verbal assurance. This checklist is superseded by version 2 and cannot authorize release."},
+    {"id":"aw-src-procedure-v2","title":"Approved hold checklist v2","text":"Require QA disposition, model-specific engineering approval, reservation-aware stock checks, an owner for each action and human approval before release. Identify shipped exposure separately. Unknown traceability must remain an open investigation."},
+    {"id":"aw-src-owner-change","title":"Incident responsibility assignment","text":"For this synthetic incident, Quality Assurance owns disposition and exposure review; Production Control owns batch tracing; Purchasing owns replacement supply; Sales owns customer commitments. Named assignees and reporting managers are not yet approved. Do not infer them from job titles."},
+    {"id":"aw-src-rejected-option","title":"Prior handoff: rejected substitute","text":"A previous investigation rejected substitute AW-R202 because it lacks a model-specific engineering approval. No later approval is recorded. Do not propose it as an approved substitute merely because it is available."},
+    {"id":"aw-src-hold-v2","title":"QH-17 expanded quality hold v2","text":"Supersedes QH-17 v1. The hold now applies to AW-B101 and AW-B102. Plans made before this notice need a fresh affected-order query. The status of AW-B103 is unchanged."}
+  ],
+  "entities": [
+    {"id":"AW-B101","kind":"Batch"}, {"id":"AW-B102","kind":"Batch"}, {"id":"AW-B103","kind":"Batch"},
+    {"id":"AW-A101","kind":"Assembly"}, {"id":"AW-A102","kind":"Assembly"}, {"id":"AW-A103","kind":"Assembly"}, {"id":"AW-A104","kind":"Assembly"},
+    {"id":"AW-O101","kind":"Order","status":"open","model":"AW-M1","units":12},
+    {"id":"AW-O102","kind":"Order","status":"shipped","model":"AW-M2","units":8},
+    {"id":"AW-O103","kind":"Order","status":"open","model":"AW-M1","units":10},
+    {"id":"AW-O104","kind":"Order","status":"open","model":"AW-M1","units":4},
+    {"id":"AW-O105","kind":"Order","status":"open","traceability":"unknown"}
+  ],
+  "edges": [
+    {"from":"AW-A101","relation":"USES_BATCH","to":"AW-B101","source_id":"aw-src-trace"},
+    {"from":"AW-A102","relation":"USES_BATCH","to":"AW-B101","source_id":"aw-src-trace"},
+    {"from":"AW-A103","relation":"USES_BATCH","to":"AW-B102","source_id":"aw-src-trace"},
+    {"from":"AW-A104","relation":"USES_BATCH","to":"AW-B103","source_id":"aw-src-trace"},
+    {"from":"AW-A101","relation":"ALLOCATED_TO","to":"AW-O101","source_id":"aw-src-trace"},
+    {"from":"AW-A102","relation":"ALLOCATED_TO","to":"AW-O102","source_id":"aw-src-trace"},
+    {"from":"AW-A103","relation":"ALLOCATED_TO","to":"AW-O103","source_id":"aw-src-trace"},
+    {"from":"AW-A104","relation":"ALLOCATED_TO","to":"AW-O104","source_id":"aw-src-trace"}
+  ],
+  "stages": [
+    {"id":"before-change","hold_source":"aw-src-hold-v1","held_batches":["AW-B101"],"excluded_sources":["aw-src-hold-v2"]},
+    {"id":"after-change","hold_source":"aw-src-hold-v2","held_batches":["AW-B101","AW-B102"],"supersedes":"aw-src-hold-v1","excluded_sources":[]}
+  ],
+  "acceptance": [
+    {"id":"AW-01","question":"Which orders are exposed before the change?","stage":"before-change","expected_ids":["AW-O101","AW-O102"],"sources":["aw-src-hold-v1","aw-src-trace"]},
+    {"id":"AW-02","question":"Which orders are exposed after expansion?","stage":"after-change","expected_ids":["AW-O101","AW-O102","AW-O103"],"sources":["aw-src-hold-v2","aw-src-trace"]},
+    {"id":"AW-03","question":"Can stock cover AW-O101?","expected":"No: available 10, required 12, shortage 2; replenishment date unknown.","sources":["aw-src-stock"]},
+    {"id":"AW-04","question":"Can AW-R201 replace parts in AW-O102?","expected":"Unknown approval for AW-M2; cannot mark eligible. Shipped exposure requires QA review, not automatic recall.","sources":["aw-src-replacement","aw-src-hold-v1"]},
+    {"id":"AW-05","question":"Can warehouse release on verbal assurance?","expected":"No: historical procedure v1 is superseded; use approved v2 and human approval.","sources":["aw-src-procedure-v1","aw-src-procedure-v2"]},
+    {"id":"AW-06","question":"Who specifically owns disposition?","expected":"Quality Assurance team; named assignee unknown. Do not infer from the directory.","sources":["aw-src-owner-change"]},
+    {"id":"AW-07","question":"Is AW-O105 unaffected?","expected":"Unknown because installation trace is missing. Absence of a path is not evidence of safety.","sources":["aw-src-trace"]},
+    {"id":"AW-08","question":"Can the old handoff be approved after expansion?","expected":"No: evidence changed, recompute impact and include AW-O103 before approval.","sources":["aw-src-hold-v1","aw-src-hold-v2"]},
+    {"id":"AW-09","question":"Use rejected substitute AW-R202?","expected":"No approval recorded; retain rejected-option history and request engineering review.","sources":["aw-src-rejected-option"]},
+    {"id":"AW-10","query":"nonexistent-certification-Z99","expected_search_status":"not_found","scope":"authorized project sources only"}
+  ]
+}
