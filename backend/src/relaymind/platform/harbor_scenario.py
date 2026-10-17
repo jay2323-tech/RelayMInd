@@ -15,6 +15,7 @@ from relaymind.graph.access import authorized_graph
 from relaymind.memory.conversations import create_session, save_message
 from relaymind.memory.decisions import get_current_decisions, record_decision, record_source
 from relaymind.memory.episodes import save_episode
+from relaymind.memory.manufacturing import record_order
 from relaymind.memory.procedures import approve_procedure
 from relaymind.memory.tasks import find_affected_tasks, record_person, record_task
 
@@ -46,6 +47,8 @@ def load_scenario(client, ctx: TrustedContext, project_id: str, stage: str, fixt
     in_stage = lambda item: ORDER[item["stage"]] <= upto
     for s in filter(in_stage, data["sources"]):
         record_source(client, ctx, project_id, s["id"], s["kind"], s["title"], s["text"])
+    for o in filter(in_stage, data.get("orders", [])):   # order IDs named in sources must be resolvable evidence
+        record_order(client, ctx, project_id, o["id"], o["status"], o.get("model"), o.get("units"), o["source_id"])
     for d in filter(in_stage, data["decisions"]):
         record_decision(client, ctx, project_id, d["id"], d["topic"], d["text"], d["source_ids"], d["supersedes"],
                         reason=d.get("reason", ""), approved_by="hb-dispatch-lead", human_approved=True)
