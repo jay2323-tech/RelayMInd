@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import type { Identity } from '../types';
 
 // ---------- evidence chips ----------
@@ -37,26 +37,75 @@ export function Linkified({ text, onOpen }: { text: string; onOpen: (id: string)
   return <>{parts}</>;
 }
 
+/** Safe text rendering: headings, lists and bold; never injects HTML. */
+export function ReadableReply({ text, onOpen }: { text: string; onOpen: (id: string) => void }) {
+  function inline(value: string) {
+    return value.split(/(\*\*[^*]+\*\*)/g).map((part, i) => part.startsWith('**')
+      ? <strong key={i}><Linkified text={part.slice(2, -2)} onOpen={onOpen} /></strong>
+      : <Linkified key={i} text={part} onOpen={onOpen} />);
+  }
+  return <div className="readable-reply">{text.split(/\n\s*\n/).map((block, i) => {
+    const lines = block.split('\n');
+    const heading = /^\*\*(.+)\*\*$/.exec(lines[0]);
+    const body = heading ? lines.slice(1) : lines;
+    const numbered = body.length > 0 && body.every(line => /^\d+\. /.test(line));
+    const bulleted = body.length > 0 && body.every(line => /^- /.test(line));
+    return <div className="reply-section" key={i}>
+      {heading && <h3>{heading[1]}</h3>}
+      {numbered ? <ol>{body.map((line, j) => <li key={j}>{inline(line.replace(/^\d+\. /, ''))}</li>)}</ol>
+        : bulleted ? <ul>{body.map((line, j) => <li key={j}>{inline(line.slice(2))}</li>)}</ul>
+        : body.map((line, j) => <p key={j}>{inline(line)}</p>)}
+    </div>;
+  })}</div>;
+}
+
+declare global {
+  interface Window {
+    liquidGlass?: (element: Element, options?: Record<string, unknown>) => { destroy: () => void };
+  }
+}
+
 // ---------- background ----------
 export function AuroraBackground() {
-  const [hidden, setHidden] = useState(false);
   useEffect(() => {
-    const onVis = () => setHidden(document.hidden);
-    document.addEventListener('visibilitychange', onVis);
-    return () => document.removeEventListener('visibilitychange', onVis);
+    const effects = new Map<HTMLElement, { destroy: () => void }>();
+    const reduced = window.matchMedia('(prefers-reduced-transparency: reduce)');
+    function sync() {
+      effects.forEach((effect, element) => {
+        if (!element.isConnected || reduced.matches) {
+          effect.destroy(); effects.delete(element);
+        }
+      });
+      if (reduced.matches) return;
+      // Refraction is reserved for bounded controls; large panels retain frosted blur.
+      document.querySelectorAll<HTMLElement>('.glass--liquid').forEach(element => {
+        const bounds = element.getBoundingClientRect();
+        if (!effects.has(element) && bounds.width <= 800 && bounds.height <= 800 && window.liquidGlass) {
+          effects.set(element, window.liquidGlass(element, { scale: -60, chroma: 2, blur: 3, fallbackBlur: 22 }));
+        }
+      });
+    }
+    sync();
+    // Auth loading and account changes mount surfaces after the background mounts.
+    const observer = new MutationObserver(sync);
+    observer.observe(document.getElementById('root')!, { childList: true, subtree: true });
+    reduced.addEventListener('change', sync);
+    return () => {
+      observer.disconnect(); reduced.removeEventListener('change', sync);
+      effects.forEach(effect => effect.destroy());
+    };
   }, []);
-  return <>
-    <div className="aurora" data-paused={hidden} aria-hidden>
-      <div className="aurora__blob aurora__blob--a" /><div className="aurora__blob aurora__blob--b" /><div className="aurora__blob aurora__blob--c" />
-    </div>
-    {/* Liquid rim refraction, used only by .glass--liquid where supported (Chromium). */}
-    <svg width="0" height="0" style={{ position: 'absolute' }} aria-hidden>
-      <filter id="liquid" x="0" y="0" width="100%" height="100%">
-        <feTurbulence type="fractalNoise" baseFrequency="0.008 0.012" numOctaves={2} seed={7} result="noise" />
-        <feDisplacementMap in="SourceGraphic" in2="noise" scale={18} xChannelSelector="R" yChannelSelector="G" />
-      </filter>
-    </svg>
-  </>;
+  return <div className="aurora" aria-hidden />;
+}
+
+export function projectLabel(project: string) {
+  return ({ 'aw-qh-17': 'AdventureWorks · Quality hold', 'hb-route-07': 'Harbor · Route change',
+    'launch-01': 'Northstar · Launch planning' } as Record<string, string>)[project]
+    ?? project.replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+export function readableTopic(topic: string) {
+  return topic.replace(/[-_]/g, ' ').replace(/^\w/, c => c.toUpperCase());
 }
 
 // ---------- top bar ----------
@@ -65,7 +114,7 @@ export function TopBar({ identity, healthy, project, onSignOut }: {
 }) {
   return <header className="topbar glass">
     <a className="brand" href="/"><span className="brand__mark" aria-hidden /><span>Relay<b>Mind</b></span></a>
-    <span className="badge">{project}</span>
+    <span className="workspace-name" title={project}>{projectLabel(project)}</span>
     <span className="topbar__spacer" />
     <span className="row caption" title={healthy ? 'Backend connected' : 'Backend unavailable'}>
       <span className={`dot ${healthy ? 'dot--ok' : healthy === false ? 'dot--danger' : ''}`} aria-hidden />

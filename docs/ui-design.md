@@ -1,5 +1,12 @@
 # RelayMind UI design spec — "Glass Relay"
 
+Current visual direction (17 October, Jayanth): flat charcoal background, no visible
+gradients or animated background blobs. Preserve clear liquid and frosted glass;
+use neutral translucent fills, rim highlights and restrained shadows. This direction
+supersedes the aurora/gradient styling below; existing workflow and truthful-state
+requirements still apply. Active styles are tokens.css, glass.css and motion.css;
+the older src/styles.css is not imported by main.tsx.
+
 Version 1 · 2026-10-17 · Owner: platform (app shell, evidence, actions). Chat, history and
 activity components belong to the agent-engine side; restyle them through props/CSS or agree
 changes with their owner first (AGENTS.md, docs/team-ownership.md).

@@ -23,7 +23,7 @@ export function LoginScreen({ onSignedIn, notice }: { onSignedIn: (who: Identity
     finally { setBusy(false); }
   }
   return <main className="login">
-    <form className="glass glass--l2 panel login__card" onSubmit={submit} aria-labelledby="login-title">
+    <form className="glass glass--l2 glass--liquid panel login__card" onSubmit={submit} aria-labelledby="login-title">
       <div className="brand" style={{ marginBottom: 18 }}><span className="brand__mark" aria-hidden /><span>Relay<b>Mind</b></span></div>
       <h1 id="login-title" className="h2">Sign in to your company workspace</h1>
       <p className="caption" style={{ margin: '6px 0 18px' }}>Each account sees only its own company graph and its own sessions.</p>
