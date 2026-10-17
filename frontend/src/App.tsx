@@ -8,6 +8,9 @@ import { AuroraBackground, Toasts, TopBar, type ToastMsg } from './ui/common';
 import { RelayTrack } from './ui/track/RelayTrack';
 import { ChatStream, Composer, PlanCard, SessionRail } from './ui/conversation';
 import { ActionsTab, EvidenceTab, Inspector, WhyTab, type InspectorTab } from './ui/inspector';
+import { workflowApi } from './api/workflow';
+import type { PlanReview, WorkflowCapabilities, PlanDecision } from './types/workflow';
+import { InlineActions, InlinePlanControls } from './ui/InlinePlanControls';
 import { LoginScreen } from './ui/LoginScreen';
 
 const message = (e: unknown) => (e instanceof Error ? e.message : 'Request failed');
@@ -39,6 +42,11 @@ function Workspace({ identity, healthy, onSignOut, onExpired }: {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [runId, setRunId] = useState<string>();
   const [view, setView] = useState<RunView | null>(null);
+  const [runViews, setRunViews] = useState<Record<string, RunView>>({});
+  const [planReviews, setPlanReviews] = useState<Record<string, PlanReview | null>>({});
+  const [capabilities, setCapabilities] = useState<WorkflowCapabilities>({ plan_review: false, work_setup: false, reminders: false });
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const activeSession = useRef<string | undefined>(undefined);
   const [pauseAfterPlan, setPauseAfterPlan] = useState(false);
   const [comparison, setComparison] = useState<ChangeComparison>();
   const [decisions, setDecisions] = useState<CurrentDecisions | null>(null);
@@ -75,6 +83,7 @@ function Workspace({ identity, healthy, onSignOut, onExpired }: {
   }, []);
 
   useEffect(() => {
+    workflowApi.capabilities().then(setCapabilities).catch(fail);
     Promise.all([api.sessions(), refreshPlatform()]).then(([s]) => setSessions(s)).catch(fail);
   }, [refreshPlatform, fail]);
 
@@ -84,10 +93,19 @@ function Workspace({ identity, healthy, onSignOut, onExpired }: {
   }, [decisions, actions, evidenceId]);
 
   const openSession = useCallback(async (id: string) => {
-    setSessionId(id); setRunId(undefined); setView(null); setComparison(undefined);
-    setMessages(await api.messages(id));
-    const runs = await api.runs(id);
-    if (runs.length) setRunId(runs[runs.length - 1].id);
+    activeSession.current = id;
+    setSessionId(id); setRunId(undefined); setView(null); setComparison(undefined); setRunViews({}); setPlanReviews({}); setMessages([]);
+    const [savedMessages, runs] = await Promise.all([api.messages(id), api.runs(id)]);
+    if (activeSession.current !== id) return;
+    setMessages(savedMessages);
+    // Only hydrate run cards represented in the loaded message window.
+    const visible = runs.filter(run => savedMessages.some(message => message.id.startsWith(run.id + '-')));
+    const results = await Promise.allSettled(visible.map(async run => [run.id, await api.run(id, run.id)] as const));
+    if (activeSession.current !== id) return;
+    const loaded = results.flatMap(result => result.status === 'fulfilled' ? [result.value] : []);
+    setRunViews(Object.fromEntries(loaded));
+    const last = [...savedMessages].reverse().map(message => runs.find(run => message.id.startsWith(run.id + '-'))).find(Boolean);
+    if (last && loaded.some(([runId]) => runId === last.id)) setRunId(last.id);
   }, []);
 
   // Poll the persisted run while its job is active; refresh everything once it settles.
@@ -99,6 +117,7 @@ function Workspace({ identity, healthy, onSignOut, onExpired }: {
         const next = await api.run(sessionId, runId);
         if (stop) return;
         setView(next);
+        setRunViews(previous => ({ ...previous, [runId]: next }));
         if (next.job?.state === 'queued' || next.job?.state === 'running') { timer = window.setTimeout(tick, 1500); return; }
         setMessages(await api.messages(sessionId));
         await refreshPlatform();
@@ -121,7 +140,7 @@ function Workspace({ identity, healthy, onSignOut, onExpired }: {
 
   async function send(text: string) {
     let sid = sessionId;
-    if (!sid) { const s = await api.newSession(); sid = s.id; setSessionId(sid); }
+    if (!sid) { const s = await api.newSession(); sid = s.id; activeSession.current = sid; setSessionId(sid); }
     const { run_id } = await api.startRun(sid, text, pauseAfterPlan ? 'plan_then_pause' : 'run');
     setMessages(await api.messages(sid));
     setSessions(await api.sessions());
@@ -166,42 +185,98 @@ function Workspace({ identity, healthy, onSignOut, onExpired }: {
   const pendingCount = actions.filter(a => a.status === 'proposed').length;
   const openTab = (t: InspectorTab) => { setTab(t); if (t === 'why' && changeKey) setWhySeen(changeKey); };
 
+  useEffect(() => {
+    if (!capabilities.plan_review || !sessionId) return;
+    let cancelled = false;
+    Promise.all(Object.keys(runViews).map(async id => [id, await workflowApi.review(sessionId, id)] as const))
+      .then(rows => { if (!cancelled) setPlanReviews(Object.fromEntries(rows)); }).catch(fail);
+    return () => { cancelled = true; };
+  }, [capabilities.plan_review, sessionId, runViews, fail]);
+
+  useEffect(() => {
+    if (!sheetOpen) return;
+    const close = (event: KeyboardEvent) => { if (event.key === 'Escape') setSheetOpen(false); };
+    window.addEventListener('keydown', close);
+    return () => window.removeEventListener('keydown', close);
+  }, [sheetOpen]);
+
+  async function decidePlan(id: string, decision: PlanDecision, feedback: string, operationId: string) {
+    const handoff = runViews[id]?.handoffs.at(-1);
+    if (!sessionId || !handoff) throw new Error('Load the saved plan before reviewing it.');
+    setBusy(true);
+    try {
+      const receipt = await workflowApi.decide(sessionId, id, handoff.id, decision, feedback, operationId);
+      setPlanReviews(previous => ({ ...previous, [id]: receipt }));
+      if (receipt.next_run_id) { setRunId(receipt.next_run_id); setView(await api.run(sessionId, receipt.next_run_id)); }
+    } catch (error) {
+      setRunViews(previous => ({ ...previous })); // re-read any durable review after an ambiguous failure
+      throw error;
+    } finally { setBusy(false); }
+  }
+
+  function planFor(message: ChatMessage) {
+    if (message.role !== 'assistant') return null;
+    const entry = Object.entries(runViews).find(([id]) => message.id.startsWith(id + '-'));
+    if (!entry || !entry[1].handoffs.length) return null;
+    if (messages.some(item => item.role === 'assistant' && item.id.startsWith(entry[0] + '-') && messages.indexOf(item) > messages.indexOf(message))) return null;
+    return entry;
+  }
+
   return <>
     <AuroraBackground />
-    <div className="app">
-      <TopBar identity={identity} healthy={healthy} project={currentProject()} onSignOut={onSignOut} />
-      <RelayTrack view={view} busy={busy} onPause={() => control('pause')} onResume={() => control('resume')}
-        onRetry={view?.run ? () => { void send(view.run!.request).catch(e => fail(e)); } : undefined} />
-      <div className="workspace">
+    <div className="chat-app" data-sidebar={sidebarOpen}>
+      <div className="chat-sidebar">
+        <div className="sidebar-heading"><strong>RelayMind</strong><button className="btn btn--small btn--ghost" aria-label="Close conversation sidebar" onClick={() => setSidebarOpen(false)}>←</button></div>
         <SessionRail sessions={sessions} activeId={sessionId} busy={busy || jobActive}
-          onSelect={id => { openSession(id).catch(e => fail(e)); }} onNew={newSession} />
-        <main className="column">
-          <section className="glass panel" aria-labelledby="chat-title">
-            <div className="panel__head"><h1 id="chat-title" className="h2">Your workspace</h1>
-              <span className="caption">Grounded in your decisions and history</span></div>
-            <ChatStream messages={messages} onEvidence={showEvidence} />
-            <Composer busy={jobActive} showSuggestions={!messages.length} pauseAfterPlan={pauseAfterPlan} project={currentProject()}
-              onPauseChange={setPauseAfterPlan} onSend={send} />
-          </section>
-          <PlanCard run={view?.run ?? null} handoffs={view?.handoffs ?? []} currentDecisionIds={currentIds}
-            currentHolds={Object.fromEntries(impacts.map(i => [i.hold.hold_id, i.hold.decision_id]))} onEvidence={showEvidence} />
-        </main>
-        <Inspector tab={tab} onTab={openTab} open={sheetOpen} whyBadge={whyBadge} actionCount={pendingCount}>
-          {tab === 'evidence' && <EvidenceTab decisions={decisions} histories={histories} evidence={evidence}
-            loading={evidenceState.loading} error={evidenceState.error} onOpen={showEvidence} />}
-          {tab === 'why' && <WhyTab comparison={comparison} onOpen={showEvidence} />}
-          {tab === 'actions' && <ActionsTab affected={affected} decisions={decisions} actions={actions} busy={busy} runId={runId}
-            impacts={impacts}
-            onOpen={showEvidence}
-            onPropose={body => act(() => api.propose(body), 'Proposed')}
-            onApprove={id => act(() => api.approve(id), 'Approve')}
-            onReject={id => act(() => api.reject(id), 'Reject')} />}
-        </Inspector>
+          onSelect={id => { openSession(id).catch(fail); }} onNew={newSession} />
+        <p className="sidebar-footnote">Synthetic demo workspace<br />Your conversations stay scoped to your account.</p>
       </div>
-      <footer className="caption" style={{ textAlign: 'center' }}>FalkorDB Graph Hacks · Agent Memory and Coordination · synthetic demo data</footer>
+      <div className="chat-main">
+        <div className="chat-header">
+          <button className="btn btn--small btn--ghost" aria-label="Toggle conversation sidebar" aria-expanded={sidebarOpen} onClick={() => setSidebarOpen(value => !value)}>☰</button>
+          <TopBar identity={identity} healthy={healthy} project={currentProject()} onSignOut={onSignOut} />
+          <button className="btn btn--small" aria-expanded={sheetOpen} onClick={() => setSheetOpen(value => !value)}>Sources{pendingCount ? ` · ${pendingCount} actions` : ''}</button>
+        </div>
+        <main className="chat-conversation" aria-label="Conversation workspace">
+          <div className="chat-reading-column">
+            <ChatStream messages={messages} onEvidence={showEvidence} hasPlan={message => !!planFor(message)} renderAfter={message => {
+              const entry = planFor(message); if (!entry) return null;
+              const [id, saved] = entry;
+              return <div className="chat-plan">
+                <PlanCard run={saved.run} handoffs={saved.handoffs} currentDecisionIds={currentIds}
+                  currentHolds={Object.fromEntries(impacts.map(item => [item.hold.hold_id, item.hold.decision_id]))} onEvidence={showEvidence} />
+                <InlinePlanControls view={saved} supported={capabilities.plan_review} review={planReviews[id] ?? null} busy={busy || jobActive}
+                  onDecision={(decision, feedback, operationId) => decidePlan(id, decision, feedback, operationId)} />
+                <InlineActions view={saved} actions={actions} impacts={impacts} affected={affected} busy={busy || jobActive} onEvidence={showEvidence}
+                  onPropose={body => act(() => api.propose(body), 'Proposed')} onApprove={actionId => act(() => api.approve(actionId), 'Approve')}
+                  onReject={actionId => act(() => api.reject(actionId), 'Reject')} />
+              </div>;
+            }} />
+            {jobActive && <p className="chat-working" role="status"><span className="spinner" aria-hidden /> Checking evidence and preparing your response…</p>}
+            {view && <details className="chat-activity"><summary>Activity · {view.run?.status.replaceAll('_', ' ') ?? 'queued'}</summary>
+              <RelayTrack view={view} busy={busy} onPause={() => control('pause')} onResume={() => control('resume')}
+                onRetry={view.run ? () => { void send(view.run!.request).catch(fail); } : undefined} />
+              {view.run?.status === 'paused' && <button className="btn" disabled={busy} onClick={() => control('resume')}>Continue to review</button>}
+            </details>}
+            {view?.run?.status === 'paused' && <div className="chat-checkpoint"><p>Your plan is saved. Continue to have it independently reviewed.</p><button className="btn" disabled={busy} onClick={() => control('resume')}>Continue to review</button></div>}
+          </div>
+        </main>
+        <div className="chat-composer-dock"><div className="chat-reading-column">
+          <Composer busy={busy || jobActive} showSuggestions={!messages.length} pauseAfterPlan={pauseAfterPlan} project={currentProject()}
+            onPauseChange={setPauseAfterPlan} onSend={send} />
+          <p className="composer-note">Evidence-backed proposals. You control business changes.</p>
+        </div></div>
+      </div>
     </div>
-    <button type="button" className="btn btn--primary sheet-toggle" aria-expanded={sheetOpen} onClick={() => setSheetOpen(o => !o)}>
-      {sheetOpen ? 'Close inspector' : `Inspector${pendingCount ? ` · ${pendingCount}` : ''}`}</button>
+    {sheetOpen && <div className="chat-drawer" role="region" aria-label="Sources and history">
+      <div className="drawer-heading"><strong>Sources & history</strong><button className="btn btn--small" onClick={() => setSheetOpen(false)} aria-label="Close sources drawer">Close ×</button></div>
+      <Inspector tab={tab} onTab={openTab} open={sheetOpen} whyBadge={whyBadge} actionCount={pendingCount}>
+        {tab === 'evidence' && <EvidenceTab decisions={decisions} histories={histories} evidence={evidence} loading={evidenceState.loading} error={evidenceState.error} onOpen={showEvidence} />}
+        {tab === 'why' && <WhyTab comparison={comparison} onOpen={showEvidence} />}
+        {tab === 'actions' && <ActionsTab affected={affected} decisions={decisions} actions={actions} busy={busy} runId={runId} impacts={impacts} onOpen={showEvidence}
+          onPropose={body => act(() => api.propose(body), 'Proposed')} onApprove={id => act(() => api.approve(id), 'Approve')} onReject={id => act(() => api.reject(id), 'Reject')} />}
+      </Inspector>
+    </div>}
     <Toasts items={toasts} onDone={dismiss} />
   </>;
 }

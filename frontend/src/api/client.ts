@@ -13,8 +13,9 @@ export function currentProject() { return project; }
 const base = () => `/api/projects/${encodeURIComponent(project)}`;
 
 export class UnauthorizedError extends Error {}
+export class ApiError extends Error { constructor(message: string, public status: number) { super(message); } }
 
-async function request<T>(url: string, init?: RequestInit): Promise<T> {
+export async function request<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, {
     ...init, headers: init?.body ? { 'Content-Type': 'application/json' } : undefined,
   });
@@ -22,7 +23,7 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
   const detail = data && typeof data === 'object' && 'detail' in data ? (data as { detail: unknown }).detail : null;
   if (response.status === 401) throw new UnauthorizedError(typeof detail === 'string' ? detail : 'Sign in required');
   if (!response.ok) {
-    throw new Error(typeof detail === 'string' ? detail : `Request failed (${response.status})`);
+    throw new ApiError(typeof detail === 'string' ? detail : `Request failed (${response.status})`, response.status);
   }
   return data as T;
 }
