@@ -1,40 +1,40 @@
 /* Design tokens — docs/ui-design.md section 4. One meaning per colour. */
 :root {
-  --bg-0: #070b14;
-  --bg-1: #0b1222;
+  --bg-0: #141619;
+  --bg-1: #1b1e22;
   --aurora-a: #1fb6a6;
   --aurora-b: #5b6cff;
   --aurora-c: #b46cff;
 
-  --glass-fill: rgba(255, 255, 255, 0.06);
+  --glass-fill: rgba(255, 255, 255, 0.055);
   --glass-fill-strong: rgba(255, 255, 255, 0.10);
   --glass-stroke: rgba(255, 255, 255, 0.14);
-  --glass-highlight: rgba(255, 255, 255, 0.35);
-  --glass-shadow: 0 10px 40px rgba(0, 0, 0, 0.45);
+  --glass-highlight: rgba(255, 255, 255, 0.18);
+  --glass-shadow: 0 12px 32px rgba(0, 0, 0, 0.20);
   --glass-blur: 22px;
-  --glass-saturate: 160%;
-  --scrim: rgba(10, 16, 30, 0.66);
-  --scrim-strong: rgba(10, 16, 30, 0.82);
+  --glass-saturate: 115%;
+  --scrim: rgba(22, 24, 28, 0.82);
+  --scrim-strong: rgba(22, 24, 28, 0.94);
 
-  --text-1: #eef3fb;
-  --text-2: #b9c4d6;
-  --text-3: #8f9bb0;
+  --text-1: #f1f2f4;
+  --text-2: #bec2c9;
+  --text-3: #a0a6b0;
 
-  --accent: #2ee6c5;
-  --accent-ink: #04261f;
-  --planner: #6ea8ff;
-  --reviewer: #c08bff;
-  --memory: #2ee6c5;
+  --accent: #a0d2c7;
+  --accent-ink: #142b25;
+  --planner: #a5b8d4;
+  --reviewer: #bdb0d0;
+  --memory: #a0d2c7;
   --ok: #47d18c;
   --warn: #ffb547;
   --danger: #ff6b7a;
   --superseded: #6b7689;
 
-  --chip-decision: #2ee6c5;
-  --chip-source: #6ea8ff;
+  --chip-decision: #a0d2c7;
+  --chip-source: #a5b8d4;
   --chip-task: #ffd166;
-  --chip-episode: #c08bff;
-  --chip-other: #b9c4d6;
+  --chip-episode: #bdb0d0;
+  --chip-other: #bec2c9;
 
   --font-ui: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Code", Consolas, monospace;
