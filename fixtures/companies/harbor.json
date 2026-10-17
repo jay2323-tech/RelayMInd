@@ -1,0 +1,192 @@
+{
+  "schema_version": 1,
+  "synthetic": true,
+  "company_id": "harbor",
+  "company_name": "Harbor Logistics",
+  "industry": "Fictional logistics software",
+  "teams": [
+    {
+      "id": "leadership",
+      "name": "Leadership"
+    },
+    {
+      "id": "operations",
+      "name": "Operations"
+    },
+    {
+      "id": "platform",
+      "name": "Platform"
+    },
+    {
+      "id": "people",
+      "name": "People and Operations"
+    }
+  ],
+  "employees": [
+    {
+      "employee_id": "harbor-leadership-01",
+      "name": "Elena Moss",
+      "team_id": "leadership",
+      "role": "Chief executive",
+      "status": "active",
+      "skills": [
+        "Strategy"
+      ],
+      "manager_id": null
+    },
+    {
+      "employee_id": "harbor-operations-01",
+      "name": "Tomas Vale",
+      "team_id": "operations",
+      "role": "Operations lead",
+      "status": "active",
+      "skills": [
+        "Dispatch"
+      ],
+      "manager_id": "harbor-leadership-01"
+    },
+    {
+      "employee_id": "harbor-operations-02",
+      "name": "Amir Noor",
+      "team_id": "operations",
+      "role": "Dispatch coordinator",
+      "status": "active",
+      "skills": [
+        "Scheduling"
+      ],
+      "manager_id": "harbor-operations-01"
+    },
+    {
+      "employee_id": "harbor-operations-03",
+      "name": "Mira Lane",
+      "team_id": "operations",
+      "role": "Route analyst",
+      "status": "active",
+      "skills": [
+        "Route planning"
+      ],
+      "manager_id": "harbor-operations-01"
+    },
+    {
+      "employee_id": "harbor-operations-04",
+      "name": "Luca West",
+      "team_id": "operations",
+      "role": "Fleet coordinator",
+      "status": "active",
+      "skills": [
+        "Fleet planning"
+      ],
+      "manager_id": "harbor-operations-01"
+    },
+    {
+      "employee_id": "harbor-operations-05",
+      "name": "Sana Reed",
+      "team_id": "operations",
+      "role": "Support specialist",
+      "status": "active",
+      "skills": [
+        "Customer support"
+      ],
+      "manager_id": "harbor-operations-01"
+    },
+    {
+      "employee_id": "harbor-operations-06",
+      "name": "Ivan Bell",
+      "team_id": "operations",
+      "role": "Quality coordinator",
+      "status": "active",
+      "skills": [
+        "Quality assurance"
+      ],
+      "manager_id": "harbor-operations-01"
+    },
+    {
+      "employee_id": "harbor-platform-01",
+      "name": "Priya Stone",
+      "team_id": "platform",
+      "role": "Platform lead",
+      "status": "active",
+      "skills": [
+        "Architecture"
+      ],
+      "manager_id": "harbor-leadership-01"
+    },
+    {
+      "employee_id": "harbor-platform-02",
+      "name": "Kai Lin",
+      "team_id": "platform",
+      "role": "Backend engineer",
+      "status": "active",
+      "skills": [
+        "Event processing"
+      ],
+      "manager_id": "harbor-platform-01"
+    },
+    {
+      "employee_id": "harbor-platform-03",
+      "name": "Ada Finch",
+      "team_id": "platform",
+      "role": "Data engineer",
+      "status": "active",
+      "skills": [
+        "Data pipelines"
+      ],
+      "manager_id": "harbor-platform-01"
+    },
+    {
+      "employee_id": "harbor-platform-04",
+      "name": "Omar Brook",
+      "team_id": "platform",
+      "role": "Site reliability engineer",
+      "status": "active",
+      "skills": [
+        "Observability"
+      ],
+      "manager_id": "harbor-platform-01"
+    },
+    {
+      "employee_id": "harbor-platform-05",
+      "name": "Tara Snow",
+      "team_id": "platform",
+      "role": "QA engineer",
+      "status": "active",
+      "skills": [
+        "Testing"
+      ],
+      "manager_id": "harbor-platform-01"
+    },
+    {
+      "employee_id": "harbor-people-01",
+      "name": "Alex Kim",
+      "team_id": "people",
+      "role": "People lead",
+      "status": "active",
+      "skills": [
+        "HR operations"
+      ],
+      "manager_id": "harbor-leadership-01"
+    },
+    {
+      "employee_id": "harbor-people-02",
+      "name": "Nora Dale",
+      "team_id": "people",
+      "role": "Recruiter",
+      "status": "active",
+      "skills": [
+        "Hiring"
+      ],
+      "manager_id": "harbor-people-01"
+    },
+    {
+      "employee_id": "harbor-people-03",
+      "name": "Theo Hart",
+      "team_id": "people",
+      "role": "Operations specialist",
+      "status": "active",
+      "skills": [
+        "Onboarding"
+      ],
+      "manager_id": "harbor-people-01"
+    }
+  ]
+}

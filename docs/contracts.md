@@ -1,5 +1,17 @@
 # Shared contracts
 
+## Additive organization directory milestone (17 October)
+
+See [company-directory-and-import.md](company-directory-and-import.md).
+`contracts/organization.py` defines strict synthetic CompanyDirectory, team and
+employee rows; `services/employee_import.py` validates XLSX and provides explicit
+snapshot save/load. These are operator/library functions, not HTTP endpoints or
+Planner tools. Employee IDs are company-scoped; graph row IDs are snapshot-scoped.
+Existing Person/task-owner contracts and fixtures are unchanged. The three
+organization fixtures under `fixtures/companies/` are directory-only; the existing
+Northstar launch fixture remains independently runnable. demo-c/developer-c is
+added to the fixed demo access map; it is not production authentication.
+
 Implemented initial schemas live in backend/src/relaymind/contracts/models.py.
 HealthResponse and AgentEvent have matching frontend types. Generate frontend types
 from OpenAPI when more HTTP schemas stabilize; do not maintain divergent copies.

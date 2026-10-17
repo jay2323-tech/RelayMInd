@@ -10,6 +10,7 @@ class AccessDenied(PermissionError):
 _DEMO_ACCESS = {
     ("demo-a", "developer-a"): ("relaymind_demo_a", frozenset({"launch-01"})),
     ("demo-b", "developer-b"): ("relaymind_demo_b", frozenset({"launch-01"})),
+    ("demo-c", "developer-c"): ("relaymind_demo_c", frozenset({"launch-01"})),
 }
 
 
