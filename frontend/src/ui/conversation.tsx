@@ -34,7 +34,7 @@ export function ChatStream({ messages, onEvidence }: { messages: ChatMessage[]; 
   const end = useRef<HTMLDivElement>(null);
   useEffect(() => { end.current?.scrollIntoView({ block: 'end' }); }, [messages.length]);
   if (!messages.length) return <div className="empty">
-    Ask about the launch. RelayMind remembers approved decisions and earlier conversations across sessions.
+    Ask about your project. RelayMind remembers approved decisions and earlier conversations across sessions.
   </div>;
   return <div className="stream" role="log" aria-live="polite" aria-label="Conversation">
     {messages.map(m => <article key={m.id} className={`bubble bubble--${m.role}`}>
@@ -46,14 +46,26 @@ export function ChatStream({ messages, onEvidence }: { messages: ChatMessage[]; 
 }
 
 // ---------- composer ----------
-const SUGGESTIONS = [
-  'Continue launch preparation. What changed, and what should we do next?',
-  'Which tasks are affected by the latest decision?',
-  'Summarise the current launch scope with sources.',
-];
+const SUGGESTIONS: Record<string, string[]> = {
+  'aw-qh-17': [
+    'Investigate hold QH-17, identify affected orders, evaluate replacement options and prepare an owned recovery plan. Do not approve shipments or replacements.',
+    'Which orders are exposed under the current hold, and which are unknown?',
+    'What changed in hold QH-17 and what must be replanned?',
+  ],
+  'hb-route-07': [
+    'Port North changed our plans. What changed for HB-O201 and what should dispatch and account management do next?',
+    'Which tasks still assume Route A, and what should happen to them?',
+    'Can we confirm a delivery date to Coldline Foods yet?',
+  ],
+  default: [
+    'Continue launch preparation. What changed, and what should we do next?',
+    'Which tasks are affected by the latest decision?',
+    'Summarise the current launch scope with sources.',
+  ],
+};
 
-export function Composer({ busy, showSuggestions, pauseAfterPlan, onPauseChange, onSend }: {
-  busy: boolean; showSuggestions: boolean; pauseAfterPlan: boolean;
+export function Composer({ busy, showSuggestions, pauseAfterPlan, onPauseChange, onSend, project = '' }: {
+  busy: boolean; showSuggestions: boolean; pauseAfterPlan: boolean; project?: string;
   onPauseChange: (v: boolean) => void; onSend: (text: string) => Promise<void>;
 }) {
   const [draft, setDraft] = useState('');
@@ -73,7 +85,7 @@ export function Composer({ busy, showSuggestions, pauseAfterPlan, onPauseChange,
   };
   const working = busy || sending;
   return <form className="composer glass glass--l2 glass--liquid" onSubmit={submit}>
-    {showSuggestions && <div className="suggestions">{SUGGESTIONS.map(s =>
+    {showSuggestions && <div className="suggestions">{(SUGGESTIONS[project] ?? SUGGESTIONS.default).map(s =>
       <button key={s} type="button" className="suggestion" disabled={working} onClick={() => void send(s)}>{s}</button>)}</div>}
     <label htmlFor="composer" className="sr-only">Message</label>
     <textarea id="composer" value={draft} maxLength={16000} disabled={working} placeholder="Ask RelayMind… (Enter to send, Shift+Enter for a new line)"
@@ -90,8 +102,10 @@ export function Composer({ busy, showSuggestions, pauseAfterPlan, onPauseChange,
 }
 
 // ---------- plan + review ----------
-export function PlanCard({ run, handoffs, currentDecisionIds, onEvidence }: {
-  run: RunRecord | null; handoffs: Handoff[]; currentDecisionIds: Set<string>; onEvidence: (id: string) => void;
+export function PlanCard({ run, handoffs, currentDecisionIds, currentHolds = {}, onEvidence }: {
+  run: RunRecord | null; handoffs: Handoff[]; currentDecisionIds: Set<string>;
+  currentHolds?: Record<string, string>;   // hold id -> current hold decision id (from the impact query)
+  onEvidence: (id: string) => void;
 }) {
   if (!run || !handoffs.length) return null;
   const latest = handoffs[handoffs.length - 1];
@@ -105,6 +119,7 @@ export function PlanCard({ run, handoffs, currentDecisionIds, onEvidence }: {
       </div>
       {handoffs.length > 1 && <span className="badge badge--warn">revised after review</span>}
     </div>
+    <Freshness handoffs={handoffs} currentHolds={currentHolds} onEvidence={onEvidence} />
     <p className="plan__summary">{latest.plan.summary}</p>
     <div className="row caption" style={{ marginBottom: 12 }}>Based on {latest.plan.decision_ids.map(chip)}</div>
     <ol className="steps">{latest.plan.steps.map((step, i) => <li key={i} className="step">
@@ -118,6 +133,26 @@ export function PlanCard({ run, handoffs, currentDecisionIds, onEvidence }: {
       <ul>{latest.plan.uncertainties.map((u, i) => <li key={i}>{u}</li>)}</ul></div>}
     <ReviewSeal run={run} onEvidence={onEvidence} />
   </section>;
+}
+
+/** Which manufacturing evidence version each handoff was planned against, versus the live graph. */
+function Freshness({ handoffs, currentHolds, onEvidence }: {
+  handoffs: Handoff[]; currentHolds: Record<string, string>; onEvidence: (id: string) => void;
+}) {
+  const rows = handoffs.flatMap(h => (h.manufacturing_versions ?? []).map(v => ({ rev: h.revision, v })));
+  if (!rows.length) return null;
+  return <div className="row" style={{ marginBottom: 12 }}>
+    {rows.map(({ rev, v }) => {
+      const now = currentHolds[v.evidence_id];
+      const stale = now !== undefined && now !== v.version_id;
+      return <span key={`${rev}-${v.evidence_id}`} className={`badge ${stale ? 'badge--warn' : 'badge--ok'}`}
+        title={v.content_sha256 ? `snapshot sha256 ${v.content_sha256.slice(0, 12)}…` : undefined}>
+        r{rev} planned against {v.evidence_id} <button type="button" className="chip chip--decision" style={{ height: 18 }}
+          onClick={() => onEvidence(v.version_id)}>{v.version_id}</button>
+        {stale ? <> · now {now}</> : now !== undefined ? ' · current' : ''}
+      </span>;
+    })}
+  </div>;
 }
 
 export function ReviewSeal({ run, onEvidence }: { run: RunRecord; onEvidence: (id: string) => void }) {

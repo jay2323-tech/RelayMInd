@@ -1,5 +1,39 @@
 # Shared contracts
 
+## Agent job scope (P2-04 engine boundary)
+
+`contracts/agent_jobs.py` defines frozen `AgentJobScope` with tenant, user, company,
+project and session IDs. `CoordinationEngine.for_job` accepts a server-verified
+scope, persists tenant/company IDs in new run and handoff records and checks all
+five IDs before resuming or reviewing a scoped artifact. Existing unscoped demo
+records remain readable only through the legacy demo path. The HTTP background
+queue, account membership and polling authorization still need Claude's platform
+integration; this contract alone is not authentication. See
+`agent-job-scope.md` for the exact handoff.
+
+## AdventureWorks retrieval milestone (17 October)
+
+`contracts/retrieval.py` adds `SearchArguments`, `SearchHit`, `SearchResult` and
+`EvidenceVersion`. `memory/retrieval.py` searches Source
+nodes in the server-authorized project. Planner and Reviewer both expose this
+read-only `search_sources` tool. It accepts query/limit only, never identity or graph.
+Only a successful zero-row query returns `not_found`; authorization and DB failures
+propagate. Results include source hashes, timestamp, method, scope and `has_more`.
+This is bounded lexical source discovery, not comprehensive semantic retrieval.
+`HandoffRecord.evidence_versions` now records every cited evidence ID, its source ID
+and a SHA-256 of the authorized evidence text shown to the agents. On independent
+review, a changed text/source ID causes `needs_revision` before model acceptance;
+the engine checks again after review. Older handoffs without a manifest still load
+with their original behavior. A Planner citation to a source it discovered through
+`search_sources` requires a successful `fetch_evidence` call first. Engine source
+fetches return the complete authorized `SourceRecord.text` (bounded at 16,000
+characters by the existing contract), without the platform display truncation.
+The manifest's `state` is `unknown`: content equality alone cannot prove a
+decision is current.
+The existing approved-decision snapshot still supplies that guard. Typed
+manufacturing freshness and employee/incident search await platform contracts.
+See `adventureworks-checkpoint.md` for integration requirements.
+
 ## Additive organization directory milestone (17 October)
 
 See [company-directory-and-import.md](company-directory-and-import.md).
@@ -104,3 +138,98 @@ fixed local demo identities, graph/session access helpers, proposed Python
 interfaces, record fields, pagination, retry semantics, and initial concurrency
 limits. This is CLI development context, not HTTP authentication. A owns the
 conversation implementation and its separate contract model file.
+
+## Platform: authenticated job scope + AdventureWorks manufacturing (Jk, 2026-10-17)
+
+### Agent consumption and impact freshness (Kg)
+
+Planner and Reviewer now receive `required_affected_tasks` plus
+`required_exposed_orders` from the current graph. The historical IMPLEMENTS link
+to a superseded decision explains why a task needs triage; it is not a reason to
+reject its presence. The Reviewer judges the proposed new action against the
+current decision, and may still reject continued stale instructions.
+
+Each currently exposed order must appear as its exact stable order ID in at least
+one plan step's evidence_ids. This is a deterministic gate before model review and
+is rechecked afterward; a missing ID yields needs_revision with the missing IDs.
+Order IDs are not task_ids. Requirements come from current affected_orders results,
+deduplicated across paths/holds and bounded to 50 orders; no scenario IDs are baked
+into engine code. Unknown-traceability orders remain unknown and are not relabeled
+safe or included as confirmed exposed orders. Presence/citation does not establish
+semantic correctness: independent review, evidence freshness and action approval
+are still required. Older incomplete plans may now require revision.
+
+The engine exposes `current_hold(hold_id)`, `affected_orders(hold_id)` and
+`get_order(order_id)` as read-only tools calling the manufacturing functions below
+with its captured trusted context. Models never supply company, project or graph.
+
+New HandoffRecord.manufacturing_versions stores EvidenceVersion items for each
+current approved `hold-*` topic. evidence_id is the stable hold ID; source_id and
+version_id identify its approved decision; content_sha256 fingerprints the entire
+canonical ImpactReport, including affected/unknown orders, current order versions
+and sourced trace paths. These are query-result snapshots, not raw document hashes.
+The engine compares impact before and after planning, before review and after the
+Reviewer returns. A changed snapshot requires revision even for an uncited order
+or a model acceptance. Missing records/integrity errors fail closed. Source and
+approved-decision checks still run independently. This is optimistic checking,
+not a database transaction spanning a model call, and does not authorize actions.
+
+Legacy handoffs default manufacturing_versions to an empty list and retain their
+old source/decision behavior. Replan older manufacturing handoffs to obtain the
+typed impact guard. The snapshot is not a substitute for approval-time checks.
+
+Gemini requests now carry responseJsonSchema for the calls/final envelope and the
+typed final Plan/Review payload. Runtime validation and one bounded repair remain
+mandatory. Decoder diagnostics use fixed stage labels, never raw response bodies.
+Claude's f21bf22 reports no decode errors in two real Gemini runs; both remained
+needs_revision. No model credentials are available on this Mac. The current reviewer
+semantics/order-coverage change still needs a fresh real-model check on Claude's PC.
+Provider reference: https://ai.google.dev/gemini-api/docs/generate-content/structured-output
+
+**Authentication / scope (Claude, P2-01/P2-02/P2-04 HTTP side).** `platform/identity.py` owns the
+synthetic account registry (username → user, tenant, company, projects); local demo login with
+server-side sessions. Every `/api/projects/{project_id}/...` route requires an authenticated project
+member. Runs: `api.runs.job_scope(principal, project, session)` verifies session ownership and builds
+`AgentJobScope` **before** queueing; the worker uses `CoordinationEngine.for_job(client, scope, ...)`.
+Polling/pause/resume/changes rebuild the scope from the requester and reject persisted artifacts whose
+tenant/company/owner/project/session differ. Review procedure per project is server-owned
+(`api.runs.PROJECT_PROCEDURES`: `aw-qh-17` → `quality-hold-review`, default `launch-review`).
+
+| Account | Tenant / graph | Company | Project |
+|---|---|---|---|
+| northstar.lead / northstar.peer | demo-a / relaymind_demo_a | northstar | launch-01 |
+| harbor.lead | demo-b / relaymind_demo_b | harbor | launch-01 |
+| aw.quality | adventureworks / relaymind_adventureworks | adventureworks | aw-qh-17 |
+
+**Manufacturing contract (Claude, for Codex retrieval/freshness work).** Contracts in
+`contracts/manufacturing.py`, storage/queries in `memory/manufacturing.py`, staged loader
+`platform/aw_incident.py`, seed `scripts/seed_adventureworks.py --stage before-change|after-change`,
+reset `scripts/reset_adventureworks.py --yes-reset-aw-qh-17`.
+
+| Record | Stable ID | Authoritative current version |
+|---|---|---|
+| Hold | `QH-17` | current approved Decision on topic `hold-qh-17` (no incoming SUPERSEDES): `aw-dec-hold-v1` before, `aw-dec-hold-v2` after (SUPERSEDES v1). `(:Decision)-[:HOLDS]->(:Batch)` gives each version's batches. |
+| Hold notice sources | `aw-src-hold-v1`, `aw-src-hold-v2` | Source nodes; `aw-src-hold-v2` is absent before the change |
+| Batch / Assembly | `AW-B101..103` / `AW-A101..104` | stable records |
+| Order | `AW-O101..105` | `(:Order)-[:HAS_VERSION]->(:OrderVersion {id: 'AW-O10x:vN', status, model, units, traceability})`; current = no incoming PREVIOUS |
+| Trace edges | `(:Assembly)-[:USES_BATCH|ALLOCATED_TO {source_id}]->` | `source_id = aw-src-trace` |
+| Tasks | `aw-task-quarantine-b101`, `aw-task-ship-o103` | TaskVersion chain; both IMPLEMENT `aw-dec-hold-v1`, so after the change they are required affected tasks |
+
+Queries: `mf.current_hold(ctx, project, 'QH-17')`, `mf.affected_orders(...)` →
+`ImpactReport{hold, affected[{order, batch_id, assembly_id, hold_decision_id/version, exposure:
+open_order_hold|shipped_exposure_review, source_ids}], unknown_traceability[]}`; HTTP
+`GET /holds/{hold_id}`, `/holds/{hold_id}/impact`, `/orders/{order_id}`. Bridge evidence serves Order,
+Batch and Assembly IDs, and current hold decisions list exposed orders + unknown traceability.
+Verified: before = AW-O101, AW-O102 (AW-01); after = AW-O101, AW-O102, AW-O103 (AW-02); AW-O105 unknown (AW-07).
+
+### Recoverable redundant task citations (Kg)
+
+After each Planner response (including correction rounds), engine code appends any
+structured task_ids missing from that step's evidence_ids, preserving existing
+citation order and avoiding new duplicates. This repairs redundant representation,
+not substantive missing tasks or unsupported claims. A planner event records the
+number added. The normalized plan then undergoes the existing authorized evidence
+lookups, decision validation and freshness snapshots before persistence. Unknown or
+inaccessible IDs still block; omitted required tasks/orders still need revision.
+Stored handoffs are never silently rewritten during review. No extra model call is
+needed for this repair, and it does not force Reviewer acceptance.

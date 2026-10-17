@@ -4,9 +4,9 @@ import type { Identity } from '../types';
 // ---------- evidence chips ----------
 export type ChipKind = 'decision' | 'source' | 'task' | 'episode' | 'other';
 export function chipKind(id: string): ChipKind {
-  if (id.startsWith('decision-')) return 'decision';
-  if (id.startsWith('source-')) return 'source';
-  if (id.startsWith('task-')) return 'task';
+  if (id.startsWith('decision-') || id.startsWith('aw-dec-') || id.startsWith('hb-dec-')) return 'decision';
+  if (id.startsWith('source-') || id.startsWith('aw-src-') || id.startsWith('hb-src-')) return 'source';
+  if (id.startsWith('task-') || id.startsWith('aw-task-') || id.startsWith('hb-task-')) return 'task';
   if (id.includes('episode')) return 'episode';
   return 'other';
 }
@@ -22,7 +22,7 @@ export function EvidenceChip({ id, onOpen, superseded = false, title }: {
     onClick={() => onOpen(id)}><span className="chip__dot" aria-hidden />{id}</button>;
 }
 
-const ID_PATTERN = /\b((?:decision|source|task)-[\w-]+|northstar-episode-\d+)\b/g;
+const ID_PATTERN = /\b((?:decision|source|task)-[\w-]+|northstar-episode-\d+|aw-(?:dec|src|task)-[\w-]+|AW-[OBA]\d+|hb-(?:dec|src|task)-[\w-]+|harbor-episode-\d+)\b/g;
 /** Render plain text with every known record ID turned into an evidence chip. */
 export function Linkified({ text, onOpen }: { text: string; onOpen: (id: string) => void }) {
   const parts: ReactNode[] = [];
@@ -60,7 +60,9 @@ export function AuroraBackground() {
 }
 
 // ---------- top bar ----------
-export function TopBar({ identity, healthy, project }: { identity: Identity | null; healthy: boolean | null; project: string }) {
+export function TopBar({ identity, healthy, project, onSignOut }: {
+  identity: Identity | null; healthy: boolean | null; project: string; onSignOut?: () => void;
+}) {
   return <header className="topbar glass">
     <a className="brand" href="/"><span className="brand__mark" aria-hidden /><span>Relay<b>Mind</b></span></a>
     <span className="badge">{project}</span>
@@ -69,8 +71,9 @@ export function TopBar({ identity, healthy, project }: { identity: Identity | nu
       <span className={`dot ${healthy ? 'dot--ok' : healthy === false ? 'dot--danger' : ''}`} aria-hidden />
       {healthy ? 'Connected' : healthy === false ? 'Backend unavailable' : 'Connecting…'}
     </span>
-    {identity && <span className="badge" title="Set by the server operator; not production authentication">
-      {identity.user_id} · {identity.tenant_id} · local demo identity</span>}
+    {identity && <span className="badge" title={`${identity.username} · tenant ${identity.tenant_id} · local demo authentication`}>
+      {identity.display_name} · {identity.company_id}</span>}
+    {onSignOut && <button type="button" className="btn btn--small btn--ghost" onClick={onSignOut}>Sign out</button>}
   </header>;
 }
 
