@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 
 import type { ChatMessage } from '../components/chat/ChatPanel';
 import type { SessionSummary } from '../components/chat/ConversationHistory';
 import type { Handoff, RunRecord } from '../types';
-import { EvidenceChip, Linkified } from './common';
+import { EvidenceChip, ReadableReply } from './common';
 
 // ---------- sessions rail ----------
 export function SessionRail({ sessions, activeId, busy, onSelect, onNew }: {
@@ -39,7 +39,7 @@ export function ChatStream({ messages, onEvidence }: { messages: ChatMessage[]; 
   return <div className="stream" role="log" aria-live="polite" aria-label="Conversation">
     {messages.map(m => <article key={m.id} className={`bubble bubble--${m.role}`}>
       <span className="bubble__who">{m.role === 'user' ? 'You' : 'RelayMind'}</span>
-      {m.role === 'assistant' ? <Linkified text={m.content} onOpen={onEvidence} /> : m.content}
+      {m.role === 'assistant' ? <ReadableReply text={m.content} onOpen={onEvidence} /> : m.content}
     </article>)}
     <div ref={end} />
   </div>;
@@ -64,6 +64,12 @@ const SUGGESTIONS: Record<string, string[]> = {
   ],
 };
 
+const SUGGESTION_LABELS: Record<string, string[]> = {
+  'aw-qh-17': ['Investigate quality hold', 'Find affected orders', 'Review what changed'],
+  'hb-route-07': ['Review route change', 'Find affected tasks', 'Check delivery confidence'],
+  default: ['Continue launch planning', 'Find affected tasks', 'Summarise launch scope'],
+};
+
 export function Composer({ busy, showSuggestions, pauseAfterPlan, onPauseChange, onSend, project = '' }: {
   busy: boolean; showSuggestions: boolean; pauseAfterPlan: boolean; project?: string;
   onPauseChange: (v: boolean) => void; onSend: (text: string) => Promise<void>;
@@ -85,18 +91,19 @@ export function Composer({ busy, showSuggestions, pauseAfterPlan, onPauseChange,
   };
   const working = busy || sending;
   return <form className="composer glass glass--l2 glass--liquid" onSubmit={submit}>
-    {showSuggestions && <div className="suggestions">{(SUGGESTIONS[project] ?? SUGGESTIONS.default).map(s =>
-      <button key={s} type="button" className="suggestion" disabled={working} onClick={() => void send(s)}>{s}</button>)}</div>}
+    {showSuggestions && <div className="suggestions">{(SUGGESTIONS[project] ?? SUGGESTIONS.default).map((s, i) =>
+      <button key={s} type="button" className="suggestion" disabled={working} title={s} onClick={() => { setDraft(s); document.getElementById('composer')?.focus(); }}>
+        <span>{(SUGGESTION_LABELS[project] ?? SUGGESTION_LABELS.default)[i]}</span><span aria-hidden>↗</span></button>)}</div>}
     <label htmlFor="composer" className="sr-only">Message</label>
-    <textarea id="composer" value={draft} maxLength={16000} disabled={working} placeholder="Ask RelayMind… (Enter to send, Shift+Enter for a new line)"
+    <textarea id="composer" value={draft} maxLength={16000} disabled={working} placeholder="What would you like to work through?"
       onChange={e => setDraft(e.target.value)} onKeyDown={key} />
     {error && <p className="alert alert--danger" role="alert">{error}</p>}
     <div className="composer__row">
       <label className="switch"><input type="checkbox" checked={pauseAfterPlan} disabled={working}
-        onChange={e => onPauseChange(e.target.checked)} /> Pause after the Planner saves its handoff</label>
+        onChange={e => onPauseChange(e.target.checked)} /> Review before continuing</label>
       <span className="topbar__spacer" />
       <button type="submit" className="btn btn--primary" disabled={working || !draft.trim()}>
-        {working ? <><span className="spinner" aria-hidden /> Working</> : 'Send'}</button>
+        {working ? <><span className="spinner" aria-hidden /> Working</> : 'Send request'}</button>
     </div>
   </form>;
 }
@@ -114,22 +121,25 @@ export function PlanCard({ run, handoffs, currentDecisionIds, currentHolds = {},
   return <section className="glass panel" aria-labelledby="plan-title">
     <div className="panel__head">
       <div style={{ flex: 1 }}>
-        <span className="eyebrow">Persisted handoff · {latest.id.slice(-12)}</span>
-        <h2 id="plan-title" className="h2">Plan · revision {latest.revision}</h2>
+        <span className="eyebrow">Evidence-backed recommendations</span>
+        <h2 id="plan-title" className="h2">Proposed plan</h2><details className="caption"><summary>Plan details · revision {latest.revision}</summary><p>Saved handoff: {latest.id}</p></details>
       </div>
       {handoffs.length > 1 && <span className="badge badge--warn">revised after review</span>}
     </div>
     <Freshness handoffs={handoffs} currentHolds={currentHolds} onEvidence={onEvidence} />
-    <p className="plan__summary">{latest.plan.summary}</p>
+    <div className="plan-overview"><p className="plan__summary">{latest.plan.summary}</p>
+      <div className="plan-facts"><span>{latest.plan.steps.length} proposed steps</span>
+        <span>{new Set(latest.plan.steps.flatMap(step => step.evidence_ids)).size} cited records</span>
+        <span>{latest.plan.uncertainties.length} open questions</span></div></div>
     <div className="row caption" style={{ marginBottom: 12 }}>Based on {latest.plan.decision_ids.map(chip)}</div>
-    <ol className="steps">{latest.plan.steps.map((step, i) => <li key={i} className="step">
+    <div className="section-title">Recommended next steps</div><ol className="steps">{latest.plan.steps.map((step, i) => <li key={i} className="step">
       <div>
         <div>{step.task}</div>
         {!!step.task_ids?.length && <div className="step__meta"><span className="caption">Addresses</span>{step.task_ids.map(chip)}</div>}
-        <div className="step__meta"><span className="caption">Evidence</span>{step.evidence_ids.map(chip)}</div>
+        <details className="step-evidence"><summary>View evidence · {step.evidence_ids.length}</summary><div className="step__meta">{step.evidence_ids.map(chip)}</div></details>
       </div>
     </li>)}</ol>
-    {latest.plan.uncertainties.length > 0 && <div className="uncertain"><strong>Open questions the Planner did not invent answers for</strong>
+    {latest.plan.uncertainties.length > 0 && <div className="uncertain"><strong>Open questions</strong>
       <ul>{latest.plan.uncertainties.map((u, i) => <li key={i}>{u}</li>)}</ul></div>}
     <ReviewSeal run={run} onEvidence={onEvidence} />
   </section>;
@@ -167,8 +177,8 @@ export function ReviewSeal({ run, onEvidence }: { run: RunRecord; onEvidence: (i
   return <div className={`seal seal--${review.status}`}>
     <div className="seal__icon" aria-hidden>{icon}</div>
     <div>
-      <strong>{title}</strong>
-      <p className="caption">Independent review · procedure {procedure_id} v{procedure_version} · checked {decision_ids.join(', ')}</p>
+      <strong>{title}</strong>{review.status === 'accepted' && <p className="review-boundary">Plan reviewed. Business changes still require your approval in Actions.</p>}
+      <details className="caption"><summary>Review details</summary><p>Procedure {procedure_id} v{procedure_version} · checked {decision_ids.join(', ')}</p></details>
       {review.issues.length > 0 && <ul className="issues">{review.issues.map((issue, i) => <li key={i}>
         {issue.reason} {issue.evidence_ids.map(id => <EvidenceChip key={id} id={id} onOpen={onEvidence} />)}</li>)}</ul>}
     </div>
