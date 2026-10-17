@@ -18,7 +18,8 @@ from relaymind.graph.connection import create_client
 UNIQUE = [("Decision", "id"), ("Source", "id"), ("Task", "id"),
           ("TaskVersion", "id"), ("TaskVersion", "version_key"), ("ProposedAction", "id"),
           ("Order", "id"), ("OrderVersion", "id"), ("OrderVersion", "version_key"),
-          ("Batch", "id"), ("Assembly", "id"), ("Hold", "id")]
+          ("Batch", "id"), ("Assembly", "id"), ("Hold", "id"),
+          ("PlanReview", "id"), ("PlanReview", "operation_id")]
 INDEXED = [("Decision", "topic"), ("Project", "id"), ("Person", "id")]
 
 
