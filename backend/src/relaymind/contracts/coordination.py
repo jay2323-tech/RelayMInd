@@ -1,6 +1,7 @@
 from typing import Literal
 from pydantic import Field, field_validator, model_validator
 from relaymind.contracts.models import StrictModel, Plan, Review, AgentEvent
+from relaymind.contracts.retrieval import EvidenceVersion
 
 
 class ProcedureRecord(StrictModel):
@@ -54,6 +55,7 @@ class HandoffRecord(StrictModel):
     revision: int = Field(ge=1, le=2)
     plan: Plan
     decisions: list[DecisionReference]
+    evidence_versions: list[EvidenceVersion] = Field(default_factory=list)
     procedure_id: str
     procedure_version: int = Field(ge=1)
     created_at: int = Field(ge=1)
