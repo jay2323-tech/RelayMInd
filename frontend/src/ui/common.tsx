@@ -60,7 +60,9 @@ export function AuroraBackground() {
 }
 
 // ---------- top bar ----------
-export function TopBar({ identity, healthy, project }: { identity: Identity | null; healthy: boolean | null; project: string }) {
+export function TopBar({ identity, healthy, project, onSignOut }: {
+  identity: Identity | null; healthy: boolean | null; project: string; onSignOut?: () => void;
+}) {
   return <header className="topbar glass">
     <a className="brand" href="/"><span className="brand__mark" aria-hidden /><span>Relay<b>Mind</b></span></a>
     <span className="badge">{project}</span>
@@ -69,8 +71,9 @@ export function TopBar({ identity, healthy, project }: { identity: Identity | nu
       <span className={`dot ${healthy ? 'dot--ok' : healthy === false ? 'dot--danger' : ''}`} aria-hidden />
       {healthy ? 'Connected' : healthy === false ? 'Backend unavailable' : 'Connecting…'}
     </span>
-    {identity && <span className="badge" title="Set by the server operator; not production authentication">
-      {identity.user_id} · {identity.tenant_id} · local demo identity</span>}
+    {identity && <span className="badge" title={`${identity.username} · tenant ${identity.tenant_id} · local demo authentication`}>
+      {identity.display_name} · {identity.company_id}</span>}
+    {onSignOut && <button type="button" className="btn btn--small btn--ghost" onClick={onSignOut}>Sign out</button>}
   </header>;
 }
 
