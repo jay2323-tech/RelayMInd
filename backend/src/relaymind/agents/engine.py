@@ -331,6 +331,35 @@ class CoordinationEngine:
             run.events.append(AgentEvent(seq=1,agent='system',summary='Answered informational message'))
             self.store.put('run',run.id,run.model_dump())
             return run
+        if self.job_scope is not None:
+            # B3: guided work setup turns (explicit fields only; no model).
+            from relaymind.workflow.work_setup import chat_turn
+            try:
+                setup=chat_turn(self.client,self.job_scope,request,run.id)
+                setup_error=None
+            except Exception as exc:   # recorded, never a silent lost run
+                setup,setup_error=('I could not update the work setup, so nothing was saved. '
+                                   f'(Error: {type(exc).__name__})'),type(exc).__name__
+            if setup is not None:
+                run.request_kind='work_setup'
+                run.answer=setup
+                run.status='blocked' if setup_error else 'completed'
+                run.error=f'work_setup: {setup_error}' if setup_error else None
+                run.events.append(AgentEvent(seq=1,agent='system',summary='Updated guided work setup'))
+                self.store.put('run',run.id,run.model_dump())
+                return run
+            # B2: clear factual questions are answered from graph records (no model, no plan).
+            from relaymind.workflow.routing import classify,factual_answer
+            route=classify(request)
+            if route.kind=='factual':
+                answer,error=factual_answer(self.client,self.job_scope,route.intent)
+                run.request_kind='factual'
+                run.answer=answer
+                run.status='blocked' if error else 'completed'
+                run.error=f'factual: {error}' if error else None
+                run.events.append(AgentEvent(seq=1,agent='system',summary=f'Answered from records ({route.intent})'))
+                self.store.put('run',run.id,run.model_dump())
+                return run
         self.store.put('run',run.id,run.model_dump())
         return self._plan(run,procedure_id,procedure_version)
 
