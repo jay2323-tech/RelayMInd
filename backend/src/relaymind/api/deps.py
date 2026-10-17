@@ -49,13 +49,14 @@ def api_errors():
     """Map domain errors to HTTP without leaking whether private records exist."""
     from relaymind.memory.artifacts import ArtifactConflict
     from relaymind.memory.decisions import DecisionMemoryError
+    from relaymind.memory.manufacturing import ManufacturingError
     from relaymind.memory.tasks import TaskMemoryError
     from relaymind.services.actions import ActionError
     try:
         yield
     except AccessDenied:
         raise HTTPException(404, "Not found or access denied") from None
-    except (ActionError, ArtifactConflict, DecisionMemoryError, TaskMemoryError) as exc:
+    except (ActionError, ArtifactConflict, DecisionMemoryError, ManufacturingError, TaskMemoryError) as exc:
         raise HTTPException(409, f"{type(exc).__name__}: {exc}") from None
     except (ValueError, LookupError) as exc:
         raise HTTPException(422, f"{type(exc).__name__}: {exc}") from None

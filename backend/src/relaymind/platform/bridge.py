@@ -20,8 +20,9 @@ from typing import Any
 
 from relaymind.contracts.coordination import DecisionReference, EvidenceRecord
 from relaymind.contracts.models import TrustedContext
-from relaymind.graph.access import AccessDenied
+from relaymind.graph.access import AccessDenied, authorized_graph
 from relaymind.memory import decisions as dm
+from relaymind.memory import manufacturing as mf
 from relaymind.memory import tasks as tm
 
 _MAX = 16000
@@ -56,6 +57,9 @@ class GraphPlatformBridge:
         if decision is not None:
             return EvidenceRecord(id=decision.id, text=self._decision_text(context, project_id, decision)[:_MAX],
                                   source_id=decision.source_ids[0])
+        record = self._manufacturing_evidence(context, project_id, evidence_id)
+        if record is not None:
+            return record
         try:
             task = tm.get_task(self.client, context, project_id, evidence_id)
         except AccessDenied:
@@ -92,7 +96,63 @@ class GraphPlatformBridge:
             if affected:
                 lines.append(f"Tasks still implementing superseded {old.id}: "
                              + "; ".join(_task_line(t) for t in affected))
+        if d.topic.startswith(mf.HOLD_TOPIC_PREFIX):
+            lines += self._hold_lines(context, project_id, d)
         return "\n".join(lines)
+
+    # ---------------------------------------------------- manufacturing
+    def _hold_lines(self, context, project_id, d) -> list[str]:
+        graph = authorized_graph(self.client, context, project_id)
+        batches = sorted(r[0] for r in graph.ro_query(
+            "MATCH (d:Decision {id: $d, project_id: $p})-[:HOLDS]->(b:Batch) RETURN b.id",
+            params={"d": d.id, "p": project_id}).result_set)
+        lines = [f"Batches held by this hold version: {', '.join(batches) or 'none recorded'}"]
+        if not d.is_current:
+            return lines + ["This hold version is superseded; recompute impact from the current hold version."]
+        try:
+            report = mf.affected_orders(self.client, context, project_id, d.topic[len(mf.HOLD_TOPIC_PREFIX):].upper())
+        except mf.ManufacturingError as exc:
+            return lines + [f"Impact unavailable: {exc}"]
+        lines.append("Orders exposed under the CURRENT hold (graph query " + report.query + "): " + "; ".join(
+            f"{a.order.order_id} ({a.order.status}, {a.exposure}, via {a.assembly_id}/{a.batch_id})"
+            for a in report.affected))
+        if report.unknown_traceability:
+            lines.append("Unknown traceability (not proven safe): "
+                         + ", ".join(o.order_id for o in report.unknown_traceability))
+        return lines
+
+    def _manufacturing_evidence(self, context, project_id, evidence_id):
+        """Order, Batch and Assembly records of the authorized project, with sourced trace edges."""
+        graph = authorized_graph(self.client, context, project_id)
+        try:
+            order = mf.get_order(self.client, context, project_id, evidence_id)
+        except AccessDenied:
+            order = None
+        if order is not None:
+            via = graph.ro_query(
+                "MATCH (o:Order {id: $id, project_id: $p})<-[al:ALLOCATED_TO]-(a:Assembly)-[:USES_BATCH]->(b:Batch) "
+                "RETURN a.id, b.id, al.source_id", params={"id": evidence_id, "p": project_id}).result_set
+            lines = [f"[Order {order.order_id}] version {order.version}, status {order.status}, "
+                     f"model {order.model or 'unknown'}, units {order.units if order.units is not None else 'unknown'}, "
+                     f"traceability {order.traceability}"]
+            lines += [f"Installed: assembly {a} uses batch {b} (source {src})" for a, b, src in via] or [
+                "No installation trace recorded: exposure is UNKNOWN, not safe."]
+            return EvidenceRecord(id=order.order_id, text="\n".join(lines)[:_MAX], source_id=order.source_id)
+        for label in ("Batch", "Assembly"):
+            if not graph.ro_query(f"MATCH (x:{label} {{id: $id, project_id: $p}}) RETURN x.id",
+                                  params={"id": evidence_id, "p": project_id}).result_set:
+                continue
+            edges = graph.ro_query(
+                f"MATCH (x:{label} {{id: $id, project_id: $p}})-[r:USES_BATCH|ALLOCATED_TO]->(y) "
+                "RETURN 'out' AS dir, type(r) AS rel, y.id AS other, r.source_id AS src "
+                f"UNION MATCH (x:{label} {{id: $id, project_id: $p}})<-[r:USES_BATCH|ALLOCATED_TO|HOLDS]-(y) "
+                "RETURN 'in' AS dir, type(r) AS rel, y.id AS other, r.source_id AS src",
+                params={"id": evidence_id, "p": project_id}).result_set
+            text = f"[{label} {evidence_id}]\n" + "\n".join(
+                (f"{evidence_id} -{t}-> {y}" if d == "out" else f"{y} -{t}-> {evidence_id}") + (f" (source {src})" if src else "")
+                for d, t, y, src in edges)
+            return EvidenceRecord(id=evidence_id, text=text[:_MAX], source_id=next((e[3] for e in edges if e[3]), evidence_id))
+        return None
 
     def required_tasks(self, context: TrustedContext, project_id: str) -> list[dict]:
         """Active affected tasks that every project-level plan must address.

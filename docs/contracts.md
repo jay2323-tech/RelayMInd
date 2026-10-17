@@ -138,3 +138,41 @@ fixed local demo identities, graph/session access helpers, proposed Python
 interfaces, record fields, pagination, retry semantics, and initial concurrency
 limits. This is CLI development context, not HTTP authentication. A owns the
 conversation implementation and its separate contract model file.
+
+## Platform: authenticated job scope + AdventureWorks manufacturing (Jk, 2026-10-17)
+
+**Authentication / scope (Claude, P2-01/P2-02/P2-04 HTTP side).** `platform/identity.py` owns the
+synthetic account registry (username → user, tenant, company, projects); local demo login with
+server-side sessions. Every `/api/projects/{project_id}/...` route requires an authenticated project
+member. Runs: `api.runs.job_scope(principal, project, session)` verifies session ownership and builds
+`AgentJobScope` **before** queueing; the worker uses `CoordinationEngine.for_job(client, scope, ...)`.
+Polling/pause/resume/changes rebuild the scope from the requester and reject persisted artifacts whose
+tenant/company/owner/project/session differ. Review procedure per project is server-owned
+(`api.runs.PROJECT_PROCEDURES`: `aw-qh-17` → `quality-hold-review`, default `launch-review`).
+
+| Account | Tenant / graph | Company | Project |
+|---|---|---|---|
+| northstar.lead / northstar.peer | demo-a / relaymind_demo_a | northstar | launch-01 |
+| harbor.lead | demo-b / relaymind_demo_b | harbor | launch-01 |
+| aw.quality | adventureworks / relaymind_adventureworks | adventureworks | aw-qh-17 |
+
+**Manufacturing contract (Claude, for Codex retrieval/freshness work).** Contracts in
+`contracts/manufacturing.py`, storage/queries in `memory/manufacturing.py`, staged loader
+`platform/aw_incident.py`, seed `scripts/seed_adventureworks.py --stage before-change|after-change`,
+reset `scripts/reset_adventureworks.py --yes-reset-aw-qh-17`.
+
+| Record | Stable ID | Authoritative current version |
+|---|---|---|
+| Hold | `QH-17` | current approved Decision on topic `hold-qh-17` (no incoming SUPERSEDES): `aw-dec-hold-v1` before, `aw-dec-hold-v2` after (SUPERSEDES v1). `(:Decision)-[:HOLDS]->(:Batch)` gives each version's batches. |
+| Hold notice sources | `aw-src-hold-v1`, `aw-src-hold-v2` | Source nodes; `aw-src-hold-v2` is absent before the change |
+| Batch / Assembly | `AW-B101..103` / `AW-A101..104` | stable records |
+| Order | `AW-O101..105` | `(:Order)-[:HAS_VERSION]->(:OrderVersion {id: 'AW-O10x:vN', status, model, units, traceability})`; current = no incoming PREVIOUS |
+| Trace edges | `(:Assembly)-[:USES_BATCH|ALLOCATED_TO {source_id}]->` | `source_id = aw-src-trace` |
+| Tasks | `aw-task-quarantine-b101`, `aw-task-ship-o103` | TaskVersion chain; both IMPLEMENT `aw-dec-hold-v1`, so after the change they are required affected tasks |
+
+Queries: `mf.current_hold(ctx, project, 'QH-17')`, `mf.affected_orders(...)` →
+`ImpactReport{hold, affected[{order, batch_id, assembly_id, hold_decision_id/version, exposure:
+open_order_hold|shipped_exposure_review, source_ids}], unknown_traceability[]}`; HTTP
+`GET /holds/{hold_id}`, `/holds/{hold_id}/impact`, `/orders/{order_id}`. Bridge evidence serves Order,
+Batch and Assembly IDs, and current hold decisions list exposed orders + unknown traceability.
+Verified: before = AW-O101, AW-O102 (AW-01); after = AW-O101, AW-O102, AW-O103 (AW-02); AW-O105 unknown (AW-07).
