@@ -1,5 +1,24 @@
 # AdventureWorks checkpoint
 
+## Required task semantics and exposed-order coverage
+
+The f21bf22 real-model report confirms healthy JSON output but describes a Reviewer
+rejecting inherited task IDs merely because they implement the old hold. Both agent
+prompts now explain that these are required work items to revise under the current
+decision. This does not excuse a proposal that continues an outdated instruction.
+
+Planner and Reviewer receive graph-derived required exposed orders with exposure,
+version and provenance. Before model review, and again afterward, the engine checks
+that every exposed order is cited by stable order ID in step evidence_ids. Missing
+orders give deterministic needs_revision listing their IDs; source-only citations
+and task coverage alone do not satisfy this rule. Unknown traceability stays unknown.
+The semantic correctness of proposed actions remains the independent Reviewer's job.
+
+These changes still need a real Gemini rerun after integration. A valid, complete
+proposal may pass; a reasoned needs_revision/blocked is still an acceptable outcome
+when the proposal or necessary information is inadequate. Do not force acceptance
+to obtain a completed-run screenshot.
+
 ## Agent integration after Claude's 7671d1f
 
 Kg incorporates the authenticated job scope and manufacturing contract from Jk.
