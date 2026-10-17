@@ -1,0 +1,159 @@
+{
+  "schema_version": 1,
+  "synthetic": true,
+  "company_id": "cedar",
+  "company_name": "Cedar Learning",
+  "industry": "Fictional education software",
+  "teams": [
+    {
+      "id": "leadership",
+      "name": "Leadership"
+    },
+    {
+      "id": "curriculum",
+      "name": "Curriculum"
+    },
+    {
+      "id": "platform",
+      "name": "Platform"
+    },
+    {
+      "id": "people",
+      "name": "People and Operations"
+    }
+  ],
+  "employees": [
+    {
+      "employee_id": "cedar-leadership-01",
+      "name": "Amara Hill",
+      "team_id": "leadership",
+      "role": "Chief executive",
+      "status": "active",
+      "skills": [
+        "Strategy"
+      ],
+      "manager_id": null
+    },
+    {
+      "employee_id": "cedar-curriculum-01",
+      "name": "Ben River",
+      "team_id": "curriculum",
+      "role": "Curriculum lead",
+      "status": "active",
+      "skills": [
+        "Course design"
+      ],
+      "manager_id": "cedar-leadership-01"
+    },
+    {
+      "employee_id": "cedar-curriculum-02",
+      "name": "Lina Frost",
+      "team_id": "curriculum",
+      "role": "Learning designer",
+      "status": "active",
+      "skills": [
+        "Accessibility"
+      ],
+      "manager_id": "cedar-curriculum-01"
+    },
+    {
+      "employee_id": "cedar-curriculum-03",
+      "name": "Hugo Lake",
+      "team_id": "curriculum",
+      "role": "Content editor",
+      "status": "active",
+      "skills": [
+        "Editorial review"
+      ],
+      "manager_id": "cedar-curriculum-01"
+    },
+    {
+      "employee_id": "cedar-curriculum-04",
+      "name": "Asha Dawn",
+      "team_id": "curriculum",
+      "role": "Assessment specialist",
+      "status": "active",
+      "skills": [
+        "Assessment design"
+      ],
+      "manager_id": "cedar-curriculum-01"
+    },
+    {
+      "employee_id": "cedar-platform-01",
+      "name": "Jules Fox",
+      "team_id": "platform",
+      "role": "Platform lead",
+      "status": "active",
+      "skills": [
+        "Architecture"
+      ],
+      "manager_id": "cedar-leadership-01"
+    },
+    {
+      "employee_id": "cedar-platform-02",
+      "name": "Mei Ash",
+      "team_id": "platform",
+      "role": "Backend engineer",
+      "status": "active",
+      "skills": [
+        "Identity"
+      ],
+      "manager_id": "cedar-platform-01"
+    },
+    {
+      "employee_id": "cedar-platform-03",
+      "name": "Sam Birch",
+      "team_id": "platform",
+      "role": "Frontend engineer",
+      "status": "active",
+      "skills": [
+        "React"
+      ],
+      "manager_id": "cedar-platform-01"
+    },
+    {
+      "employee_id": "cedar-platform-04",
+      "name": "Faye Elm",
+      "team_id": "platform",
+      "role": "QA engineer",
+      "status": "active",
+      "skills": [
+        "Accessibility testing"
+      ],
+      "manager_id": "cedar-platform-01"
+    },
+    {
+      "employee_id": "cedar-people-01",
+      "name": "Alex Kim",
+      "team_id": "people",
+      "role": "People lead",
+      "status": "active",
+      "skills": [
+        "HR operations"
+      ],
+      "manager_id": "cedar-leadership-01"
+    },
+    {
+      "employee_id": "cedar-people-02",
+      "name": "Rosa Pine",
+      "team_id": "people",
+      "role": "Recruiter",
+      "status": "active",
+      "skills": [
+        "Hiring"
+      ],
+      "manager_id": "cedar-people-01"
+    },
+    {
+      "employee_id": "cedar-people-03",
+      "name": "Eli Fern",
+      "team_id": "people",
+      "role": "Operations specialist",
+      "status": "active",
+      "skills": [
+        "Onboarding"
+      ],
+      "manager_id": "cedar-people-01"
+    }
+  ]
+}
