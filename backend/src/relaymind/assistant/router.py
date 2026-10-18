@@ -187,6 +187,12 @@ def assist(engine, run, request: str):
     if decision.route == "work_setup":
         from relaymind.workflow.work_setup import chat_turn
         title = " ".join((decision.work_title or "").split())[:200]
+        words = [w for w in re.findall(r"[a-z0-9']{3,}", title.lower())]
+        if not words or sum(w in request.lower() for w in words) < max(1, len(words) // 2):
+            # the model took the title from earlier conversation, not from this message: never act on that
+            return finish("clarify", "Do you want to set up new work? Tell me what it is in this message, for "
+                          "example \"set up new work: call Coldline about the delay\".",
+                          "Assistant: work setup title was not in the message; asked instead")
         result = chat_turn(engine.client, engine.job_scope, f"Set up new work: {title}" if title else
                            "Set up new work", run.id)
         if result is not None:

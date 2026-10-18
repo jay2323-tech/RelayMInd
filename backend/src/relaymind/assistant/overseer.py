@@ -280,8 +280,11 @@ def oversee(text: str, claims: Claims, facts) -> OverseerVerdict:
         text = mask_quotes(text, claims.quoted_spans)
         checks += 1
         unbacked = set()
+        id_spans = [t.span() for t in _RECORD_ID.finditer(text) if any(ch.isdigit() for ch in t.group())]
         for m in _STATE_RE.finditer(text):
             word = m.group(1).lower()
+            if any(a <= m.start() < b for a, b in id_spans):
+                continue                                  # part of a record ID, not a claim
             if _negated(text, m.start()):
                 continue
             pairs = WORD_BACKING[word]

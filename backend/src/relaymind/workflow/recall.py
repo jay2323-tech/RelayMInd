@@ -133,6 +133,18 @@ def _titles(graph, scope: AgentJobScope, session_ids: set[str], hidden: set[str]
     return {sid: " ".join((first or "an earlier chat").split())[:60] for sid, first in rows}
 
 
+def _memory_texts(client: Any, scope: AgentJobScope, message_ids: set[str]) -> dict[str, str]:
+    """Saved-memory text (the user's exact words) for messages that are memory sources."""
+    if not message_ids:
+        return {}
+    graph = authorized_graph(client, scope.trusted_context(), scope.project_id)
+    rows = graph.ro_query(
+        "MATCH (x:Memory) WHERE x.owner_id = $owner AND x.project_id = $project AND x.source_message_id IN $ids "
+        "AND NOT (x)<-[:RETRACTS]-(:MemoryRetraction) RETURN x.source_message_id, x.text",
+        params={"owner": scope.user_id, "project": scope.project_id, "ids": sorted(message_ids)}).result_set
+    return {r[0]: r[1] for r in rows}
+
+
 def _date(ms: int) -> str:
     return datetime.fromtimestamp(ms / 1000, timezone.utc).strftime("%d %b %Y") if ms else "an earlier date"
 
@@ -151,11 +163,14 @@ def recall_answer(client: Any, scope: AgentJobScope, text: str, exclude: set[str
         return (f"I found no matching earlier messages for these terms: {', '.join(terms[:4])} (searched {whose} "
                 "in this project). That doesn't prove it was never discussed: try other words."), Claims()
     heading = "**From my earlier replies**" if role == "assistant" else "**From your earlier chats**"
+    memory_texts = _memory_texts(client, scope, {m["id"] for m in found})
     label = "RelayMind replied" if role == "assistant" else "you said"
     lines, spans, cited, refs = [heading], [], [], []
     for m in found:
-        snippet = _snippet(m["content"], m["hits"])
-        line, s = quoted_line('- In "', Quote(m["chat"]), f'" on {_date(m["created_at"])} {label}: "',
+        memory_text = memory_texts.get(m["id"]) if role == "user" else None
+        snippet = memory_text if memory_text and memory_text in m["content"] else _snippet(m["content"], m["hits"])
+        said = "you asked me to remember" if memory_text else label
+        line, s = quoted_line('- In "', Quote(m["chat"]), f'" on {_date(m["created_at"])} {said}: "',
                               Quote(snippet), f'" ({m["id"]})')
         lines.append(line)
         spans += s

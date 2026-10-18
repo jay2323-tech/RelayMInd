@@ -204,3 +204,9 @@ def test_quotes_must_be_literally_in_their_source_message():
     assert oversee("q", ref("…phone calls before   10am, never email."), FakeFacts()).ok   # window + spacing
     assert failed(oversee("q", ref("Coldline prefers email"), FakeFacts()), "quotes")          # altered quote
     assert failed(oversee("q", ref("anything", mid="msg-9"), FakeFacts()), "quotes")           # not your message
+
+
+def test_regression_state_words_inside_record_ids_are_not_claims():
+    """Jayanth's live test: message ids like '<run>-completed-summary' tripped the state-word lint."""
+    assert oversee("RelayMind replied: «quoted» (0b6f1c2a-9d3e-completed-summary)", Claims(), FakeFacts()).ok
+    assert failed(oversee("The work was completed.", Claims(), FakeFacts()), "state_words")

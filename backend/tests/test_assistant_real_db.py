@@ -204,3 +204,13 @@ def test_regression_offer_is_session_isolated(world, monkeypatch):
     say(c, pid, sid_a, "the launch is getting messy")
     other = say(c, pid, sid_b, "yes")["run"]                                     # a DIFFERENT conversation
     assert other["request_kind"] != "planning" and other["handoff_ids"] == []
+
+
+def test_regression_work_setup_title_must_come_from_the_current_message(world, monkeypatch):
+    """Jayanth's live test: the model took 'Call Coldline tomorrow' from an earlier turn."""
+    pid, _ = world
+    install(monkeypatch, ScriptedModel([route(route="work_setup", work_title="Call Coldline tomorrow")]))
+    c = login("northstar.lead")
+    sid = c.post(f"/api/projects/{pid}/sessions").json()["id"]
+    run = say(c, pid, sid, "hmm, what about the badge readers")["run"]
+    assert run["request_kind"] == "clarify" and c.get(f"/api/projects/{pid}/work-items").json() == []

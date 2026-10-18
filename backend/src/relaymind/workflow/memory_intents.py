@@ -24,7 +24,7 @@ class MemoryIntent:
 
 
 KINDS = {"save", "save_ambiguous", "list", "forget", "forget_ambiguous", "forget_id", "correction", "bulk",
-         "scope", "temporary", "retain_ack", "nosave_ack", "combined", "none"}
+         "scope", "temporary", "retain_ack", "nosave_ack", "combined", "quoted", "bare_cancel", "none"}
 
 _MAP = str.maketrans({"’": "'", "‘": "'", "“": '"', "”": '"', "′": "'"})
 
@@ -140,10 +140,12 @@ def parse(original: str) -> MemoryIntent:
     if not original or not original.strip():
         return MemoryIntent("none")
     t = normalise(original)
+    if re.match(r"^\s*(?:cancel|never\s*mind|nevermind|ignore\s+that|forget\s+it|no\s+thanks?)[\s.!]*$", t):
+        return MemoryIntent("bare_cancel")      # only meaningful with a pending choice (handled before parsing)
 
     # guards: never writes
     if _QUOTED_TRIGGER.search(t) or _REPORTED.search(t):
-        return MemoryIntent("none", note="quoted or reported text is data, not an instruction")
+        return MemoryIntent("quoted", note="quoted or reported text is data, not an instruction")
     if _REMINDER.search(t):
         return MemoryIntent("none", note="reminder request, handled by work setup")
     if _QUESTION_ABOUT_MEMORY.search(t) or _OTHER_WORKFLOW.search(t):

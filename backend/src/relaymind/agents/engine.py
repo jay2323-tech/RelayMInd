@@ -214,6 +214,20 @@ class CoordinationEngine:
             params={'owner':self.context.user_id,'project':self.project_id,'id':evidence_id}).result_set
         if len(rows)==1:
             return EvidenceRecord(id=rows[0][0],text=rows[0][1],source_id=rows[0][0])
+        if not evidence_id.endswith('-request'):
+            # Short form: "<run id>" for the user's request message of that run (same owner checks, and a
+            # retracted request stays refused).
+            alias=evidence_id+'-request'
+            if self.job_scope is not None:
+                from relaymind.workflow.memories import suppressed_message_ids
+                if alias in suppressed_message_ids(self.client,self.job_scope):
+                    raise EvidenceUnavailable(evidence_id)
+            rows=self.store.graph.ro_query(
+                "MATCH (s:Session {owner_id:$owner})-[:ABOUT]->(p:Project {id:$project}) "
+                "MATCH (s)-[:HAS_MESSAGE]->(m:Message {id:$id, role:'user'}) RETURN m.content",
+                params={'owner':self.context.user_id,'project':self.project_id,'id':alias}).result_set
+            if len(rows)==1:
+                return EvidenceRecord(id=evidence_id,text=rows[0][0],source_id=alias)
         rows=self.store.graph.ro_query(
             "MATCH (e:Episode {id:$id})-[:ABOUT]->(p:Project {id:$project}) "
             "MATCH (e)-[:SUPPORTED_BY]->(m:Message)<-[:HAS_MESSAGE]-(s:Session {owner_id:$owner})-[:ABOUT]->(p) "

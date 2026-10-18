@@ -284,6 +284,15 @@ def chat_turn(engine, run, request: str):
     if k == "temporary":
         return Turn("memory", "Conversation-only memory isn't supported, so I didn't save anything. Messages in "
                     "this chat are already used as recent context while you're here.")
+    if k == "quoted":
+        return Turn("memory", "That looks like quoted or reported text, so I treated it as information, not as an "
+                    "instruction to me. Nothing was saved, retracted or changed.")
+    if k == "bare_cancel":
+        from relaymind.assistant.router import _pending_plan
+        if _pending_plan(engine):
+            return None                      # it declines a pending plan offer: the Assistant handles that
+        return Turn("memory", "There's nothing waiting for an answer right now, so there's nothing to cancel. "
+                    "Nothing was changed.")
     if k == "retain_ack":
         return Turn("memory", "Okay. Nothing changes: your saved memories stay as they are.")
     if k == "nosave_ack":
