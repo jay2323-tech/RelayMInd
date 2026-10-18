@@ -21,8 +21,17 @@ def test_factual_narration_preserves_gate_outcome_and_ids(aw):
         narrated = direct_reply('factual', text)
         verdict = oversee(narrated, claims, GraphFacts(client, scope('narrator-session')))
         baseline = oversee(text, claims, GraphFacts(client, scope('narrator-session')))
-        assert verdict.ok == baseline.ok, (intent, verdict)
-        assert {failure.check for failure in verdict.failures} == {failure.check for failure in baseline.failures}
+        if intent == 'affected_tasks' and claims.affected_task_ids == []:
+            # The old empty-result sentence triggered a false status-word alarm.
+            # Wording may fix that alarm only while the actual graph/claims are empty.
+            assert GraphFacts(client, scope('narrator-session')).affected_task_ids() == set()
+            assert claims.cited_ids == []
+            assert {failure.check for failure in baseline.failures} == {'state_words'}
+            assert verdict.ok, verdict
+            assert 'does not establish whether tasks still use a particular route' in narrated
+        else:
+            assert verdict.ok == baseline.ok, (intent, verdict)
+            assert {failure.check for failure in verdict.failures} == {failure.check for failure in baseline.failures}
         # A producer's pre-existing claim failure must not be hidden by formatting.
         assert all(record_id in narrated for record_id in claims.cited_ids)
     engine = CoordinationEngine.for_job(client, scope('narrator-session'), NoModel(), GraphPlatformBridge(client))
