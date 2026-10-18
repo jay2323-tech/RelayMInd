@@ -1,6 +1,6 @@
 from typing import Literal
 from pydantic import Field, field_validator, model_validator
-from relaymind.contracts.assistant import OverseerVerdict
+from relaymind.contracts.assistant import MemoryRef, OverseerVerdict
 from relaymind.contracts.models import StrictModel, Plan, Review, AgentEvent
 from relaymind.contracts.retrieval import EvidenceVersion
 
@@ -92,6 +92,7 @@ class RunRecord(StrictModel):
     result: ReviewRecord | None = None
     error: str | None = None
     overseer: OverseerVerdict | None = Field(default=None, description="Checked against project records")
+    memory_refs: list[MemoryRef] = Field(default_factory=list, description="Earlier-chat sources quoted/used")
 
 
 class NoArguments(StrictModel):

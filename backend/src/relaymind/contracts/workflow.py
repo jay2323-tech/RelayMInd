@@ -25,6 +25,7 @@ class WorkflowCapabilities(StrictModel):
     reminders: bool = Field(description="Feature supported; delivery health is reminder_delivery")
     reminder_delivery: ReminderDeliveryHealth | None = None
     watcher: bool = Field(default=False, description="Alerts API supported (independent of worker health)")
+    memory: bool = Field(default=False, description="Multi-chat recall (docs/memory-api.md) supported")
 
 
 class PlanReviewBody(StrictModel):

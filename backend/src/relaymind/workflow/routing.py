@@ -20,7 +20,8 @@ from typing import Any, Callable, Literal
 from relaymind.contracts.agent_jobs import AgentJobScope
 from relaymind.contracts.assistant import Claims, Quote, RecordState, quoted_line
 
-Intent = Literal["approvals", "current_decisions", "changes", "exposed_orders", "affected_tasks", "run_status"]
+Intent = Literal["approvals", "current_decisions", "changes", "exposed_orders", "affected_tasks", "run_status",
+                 "recall"]
 
 _PLANNING = re.compile(
     r"\b(what should|should (we|i)|next steps?|^plan|(make|create|build|write) (a |the |an )?plan|plan (the|a|an|for|out|our)|"
@@ -57,6 +58,11 @@ def classify(text: str) -> Route:
     t = " ".join(re.sub(r"[^a-z0-9'\s-]", " ", text.lower()).split())
     if not t or len(t) > 300:
         return Route("planning")          # long/pasted or symbol-only input: let the Assistant decide
+    from relaymind.workflow.recall import ASSISTANT_DIRECTED, is_recall
+    if ASSISTANT_DIRECTED.search(text) or (is_recall(text) and not _PLANNING.search(t)):
+        # M1: "do you remember ...?" / "what did you suggest ...?" searches the user's own chats.
+        # (Asking what RelayMind suggested earlier is recall, even though it contains "suggest".)
+        return Route("factual", "recall")
     if _PLANNING.search(t):
         return Route("planning", explicit=True)
     for intent, pattern in _INTENTS:
@@ -248,10 +254,15 @@ _ANSWERS: dict[Intent, Callable[[Any, AgentJobScope], tuple[str, Claims]]] = {
 }
 
 
-def factual_answer(client: Any, scope: AgentJobScope, intent: Intent) -> tuple[str, str | None, Claims | None]:
+def factual_answer(client: Any, scope: AgentJobScope, intent: Intent, request: str = "",
+                   exclude: set[str] | None = None) -> tuple[str, str | None, Claims | None]:
     """(answer, error_code, claims). Errors are explicit and never replaced by a guess; the claims
     are what the Overseer verifies against the graph before the answer is shown."""
     try:
+        if intent == "recall":
+            from relaymind.workflow.recall import recall_answer
+            text, claims = recall_answer(client, scope, request, exclude or set())
+            return text, None, claims
         text, claims = _ANSWERS[intent](client, scope)
     except Exception as exc:   # access-safe: no record content, only the error class
         return ("I couldn't read the records needed to answer this, so I haven't answered it. "

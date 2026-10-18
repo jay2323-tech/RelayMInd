@@ -372,7 +372,7 @@ class CoordinationEngine:
                     run.user_message,run.request=request,value[:16000]
             if route.kind=='factual':
                 from relaymind.assistant.overseer import GraphFacts,oversee
-                answer,error,claims=factual_answer(self.client,self.job_scope,route.intent)
+                answer,error,claims=factual_answer(self.client,self.job_scope,route.intent,request,{run.id+'-request'})
                 from relaymind.agents.presentation import direct_reply
                 if error is None:
                     answer=direct_reply('factual',answer)
@@ -382,7 +382,7 @@ class CoordinationEngine:
                     if not verdict.ok:
                         # One deterministic rebuild from fresh records (covers read/check races and
                         # producer bugs); if the rebuilt answer still fails, show nothing wrong.
-                        answer,error,claims=factual_answer(self.client,self.job_scope,route.intent)
+                        answer,error,claims=factual_answer(self.client,self.job_scope,route.intent,request,{run.id+'-request'})
                         if error is None:
                             answer=direct_reply('factual',answer)
                             verdict=oversee(answer,claims,GraphFacts(self.client,self.job_scope)
@@ -394,6 +394,8 @@ class CoordinationEngine:
                 run.request_kind='factual'
                 run.answer=answer
                 run.overseer=verdict
+                if error is None and claims is not None:
+                    run.memory_refs=list(claims.source_quotes)    # navigation to the quoted earlier chats
                 run.status='blocked' if error else 'completed'
                 run.error=f'factual: {error}' if error else None
                 run.events.append(AgentEvent(seq=1,agent='system',summary=f'Answered from records ({route.intent})'))

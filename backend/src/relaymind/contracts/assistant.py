@@ -53,6 +53,18 @@ def quoted_line(*parts: str) -> tuple[str, list[QuotedSpan]]:
     return line, [QuotedSpan(line=line, start=s, length=n) for s, n in spans]
 
 
+class MemoryRef(StrictModel):
+    """A verbatim excerpt of a stored message, with what the UI needs to navigate to its chat
+    (docs/memory-api.md). The Overseer verifies `snippet` is literally present in `message_id`."""
+    message_id: str
+    session_id: str
+    chat_title: str
+    role: Literal["user", "assistant"]
+    created_at: int = 0
+    snippet: str
+    memory_id: str | None = None
+
+
 class Claims(StrictModel):
     """What an answer asserts, in verifiable form. Producers fill these from the records they read."""
     cited_ids: list[str] = Field(default_factory=list, description="Every ID the text presents; each must resolve in scope")
@@ -67,6 +79,8 @@ class Claims(StrictModel):
     lint_state_words: bool = Field(default=True, description="False for model prose already covered by the Reviewer")
     quoted_spans: list[QuotedSpan] = Field(default_factory=list,
                                            description="Exact places record text was copied into the answer")
+    source_quotes: list[MemoryRef] = Field(default_factory=list,
+                                           description="Verbatim message excerpts; each must be in its source")
 
 
 class OverseerFailure(StrictModel):

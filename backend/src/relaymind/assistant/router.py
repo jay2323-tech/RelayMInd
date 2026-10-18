@@ -25,7 +25,8 @@ from pydantic import Field, model_validator
 
 from relaymind.contracts.models import StrictModel
 
-Intent = Literal["approvals", "current_decisions", "changes", "exposed_orders", "affected_tasks", "run_status"]
+Intent = Literal["approvals", "current_decisions", "changes", "exposed_orders", "affected_tasks", "run_status",
+                 "recall"]
 
 
 class RouteDecision(StrictModel):
@@ -54,6 +55,7 @@ INSTRUCTION = "\n".join([
     '    affected_tasks = which work is still based on old decisions',
     '    approvals = what the user approved or rejected',
     "    run_status = ONLY the state of plans/runs in this conversation ('is my plan done?')",
+    "    recall = what the user said in earlier chats ('what was that thing I said about pricing?')",
     '- plan: ONLY when the user clearly asks for a plan, next steps, recommendations or what to do.',
     "- work_setup: ONLY when the user names a concrete task to track or be reminded about ('remind me to call X', 'I need to send Y by Friday', 'track the Z follow-up'). Put the task in their own words in work_title. A complaint or a description of a situation is NOT work setup.",
     "- clarify: ambiguous messages, complaints and vague situations ('this is getting messy', 'things changed'). Ask exactly ONE short question. If they probably need a plan, ask whether to prepare one and set offers_plan=true.",
