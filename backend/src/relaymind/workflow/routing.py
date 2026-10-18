@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, Literal
 
 from relaymind.contracts.agent_jobs import AgentJobScope
+from relaymind.contracts.assistant import Claims
 
 Intent = Literal["approvals", "current_decisions", "changes", "exposed_orders", "affected_tasks", "run_status"]
 
@@ -63,56 +64,72 @@ def classify(text: str) -> Route:
 
 # --------------------------------------------------------------------------- answers
 
-def _decisions(client, ctx, project_id) -> str:
+def _decisions(client, ctx, project_id) -> tuple[str, Claims]:
     from relaymind.memory.decisions import get_current_decisions
     state = get_current_decisions(client, ctx, project_id)
+    claims = Claims(covers_decisions=True, allowed_state_words=["approved"],
+                    current_decision_ids=[d.id for d in state.current],
+                    cited_ids=[i for d in state.current for i in [d.id, *d.source_ids]]
+                    + [i for c in state.conflicts for i in c.decision_ids])
     if not state.current and not state.conflicts:
-        return "No current approved decision is recorded for this project."
+        return "No current approved decision is recorded for this project.", claims
     lines = ["**Current approved decisions**"]
     lines += [f"- {d.topic}: {d.text} ({d.id}, version {d.version}; sources {', '.join(d.source_ids)})"
               for d in sorted(state.current, key=lambda d: d.topic)]
     for c in state.conflicts:
         lines.append(f"- **In conflict, needs human resolution:** {c.topic} has more than one current decision "
                      f"({', '.join(c.decision_ids)}). I won't pick one.")
-    return "\n".join(lines)
+    return "\n".join(lines), claims
 
 
-def _changes(client, ctx, project_id) -> str:
+def _changes(client, ctx, project_id) -> tuple[str, Claims]:
     from relaymind.memory.decisions import get_current_decisions, get_decision
     state = get_current_decisions(client, ctx, project_id)
-    lines = []
+    lines, cited, current = [], [], []
     for d in sorted(state.current + state.conflicting, key=lambda d: d.topic):
         for old_id in d.supersedes:
             old = get_decision(client, ctx, project_id, old_id)
             lines.append(f"- {d.topic}: **was** {old.text} ({old.id}) → **now** {d.text} ({d.id}; sources "
                          f"{', '.join(d.source_ids)})")
+            cited += [old.id, d.id, *d.source_ids]
+            if d.is_current:
+                current.append(d.id)
+    claims = Claims(covers_decisions=True, allowed_state_words=["approved", "superseded"],
+                    cited_ids=cited, current_decision_ids=current)
     if not lines:
-        return "No approved decision in this project has been superseded, so nothing has changed yet."
-    tasks = _affected_task_lines(client, ctx, project_id)
+        return "No approved decision in this project has been superseded, so nothing has changed yet.", claims
+    task_rows, task_claims = _affected_task_lines(client, ctx, project_id)
+    claims = claims.model_copy(update={
+        "affected_task_ids": task_claims.affected_task_ids,
+        "cited_ids": claims.cited_ids + task_claims.cited_ids,
+        "allowed_state_words": claims.allowed_state_words + task_claims.allowed_state_words})
     out = ["**What changed (approved decisions)**", *lines]
-    if tasks:
-        out += ["", "**Work still based on the old decisions**", *tasks]
-    return "\n".join(out)
+    if task_rows:
+        out += ["", "**Work still based on the old decisions**", *task_rows]
+    return "\n".join(out), claims
 
 
-def _affected_task_lines(client, ctx, project_id) -> list[str]:
+def _affected_task_lines(client, ctx, project_id) -> tuple[list[str], Claims]:
     from relaymind.memory.tasks import find_affected_tasks
-    rows = []
-    for a in sorted(find_affected_tasks(client, ctx, project_id), key=lambda a: a.task.task_id):
+    rows, affected = [], sorted(find_affected_tasks(client, ctx, project_id), key=lambda a: a.task.task_id)
+    for a in affected:
         owner = f", owner {a.task.assigned_to}" if a.task.assigned_to else ", no owner recorded"
         rows.append(f"- {a.task.task_id} \"{a.task.title}\" ({a.task.status}{owner}) still implements superseded "
                     f"{a.superseded_decision_id}; replaced by {', '.join(a.replaced_by) or 'nothing recorded'}")
-    return rows
+    claims = Claims(affected_task_ids=sorted({a.task.task_id for a in affected}),
+                    cited_ids=[i for a in affected for i in [a.task.task_id, a.superseded_decision_id, *a.replaced_by]],
+                    allowed_state_words=["superseded"] + sorted({a.task.status for a in affected}))
+    return rows, claims
 
 
-def _affected_tasks(client, ctx, project_id) -> str:
-    rows = _affected_task_lines(client, ctx, project_id)
+def _affected_tasks(client, ctx, project_id) -> tuple[str, Claims]:
+    rows, claims = _affected_task_lines(client, ctx, project_id)
     if not rows:
-        return "No task in this project still implements a superseded decision."
-    return "\n".join(["**Tasks affected by changed decisions**", *rows])
+        return "No task in this project still implements a superseded decision.", claims
+    return "\n".join(["**Tasks affected by changed decisions**", *rows]), claims
 
 
-def _orders(client, ctx, project_id) -> str:
+def _orders(client, ctx, project_id) -> tuple[str, Claims]:
     from relaymind.memory import manufacturing as mf
     from relaymind.memory.decisions import get_current_decisions
     state = get_current_decisions(client, ctx, project_id)
@@ -120,10 +137,14 @@ def _orders(client, ctx, project_id) -> str:
                     if d.topic.startswith(mf.HOLD_TOPIC_PREFIX)})
     if not holds:
         return ("No current hold is recorded for this project, so no order is exposed by a hold. "
-                "(This is not a statement about other risks.)")
-    out = []
+                "(This is not a statement about other risks.)"), Claims(exposed_orders={})
+    out, exposed_map, unknown_ids, cited, statuses = [], {}, [], [], set()
     for hold_id in holds:
         r = mf.affected_orders(client, ctx, project_id, hold_id)
+        exposed_map[hold_id] = [a.order.order_id for a in r.affected]
+        unknown_ids += [o.order_id for o in r.unknown_traceability]
+        cited += [hold_id, r.hold.decision_id] + exposed_map[hold_id] + [o.order_id for o in r.unknown_traceability]
+        statuses |= {a.order.status for a in r.affected}
         out.append(f"**Orders exposed by {hold_id}** (current version {r.hold.decision_id}, held batches "
                    f"{', '.join(r.hold.held_batches) or 'none'})")
         out += [f"- {a.order.order_id}: {a.order.status}, "
@@ -132,10 +153,12 @@ def _orders(client, ctx, project_id) -> str:
         if r.unknown_traceability:
             out.append("**Unknown, not proven safe** (no installation trace): "
                        + ", ".join(o.order_id for o in r.unknown_traceability))
-    return "\n".join(out)
+    claims = Claims(exposed_orders=exposed_map, unknown_order_ids=sorted(set(unknown_ids)), cited_ids=cited,
+                    allowed_state_words=["shipped"] + sorted(statuses))
+    return "\n".join(out), claims
 
 
-def _approvals(client, scope: AgentJobScope) -> str:
+def _approvals(client, scope: AgentJobScope) -> tuple[str, Claims]:
     from relaymind.services.actions import list_actions
     from relaymind.workflow.plan_reviews import list_reviews
     ctx = scope.trusted_context()
@@ -144,9 +167,12 @@ def _approvals(client, scope: AgentJobScope) -> str:
     actions = sorted((a for a in list_actions(client, ctx, scope.project_id)
                       if a.status != "proposed" and a.decided_by == scope.user_id),
                      key=lambda a: a.decided_at or 0, reverse=True)[:20]
+    statuses = {a.status for a in actions} | {a.new_status for a in actions if a.new_status}
+    claims = Claims(allowed_state_words=["approved", "rejected", "confirmed"] + sorted(statuses))
     if not reviews and not actions:
         return ("You have not approved, rejected or sent back any plan or action in this project yet. "
-                "Project decisions that were already approved when the project was set up are not your approvals.")
+                "Project decisions that were already approved when the project was set up are not your approvals."
+                ), claims
     words = {"approved": "Approved", "rejected": "Rejected", "needs_changes": "Requested changes to"}
     out = []
     if reviews:
@@ -157,10 +183,10 @@ def _approvals(client, scope: AgentJobScope) -> str:
         out.append("**Actions you decided**")
         out += [f"- {a.status.capitalize()}: {a.kind.replace('_', ' ')} on {a.task_id}"
                 + (f" → {a.new_status}" if a.new_status else "") + f" ({a.id})" for a in actions]
-    return "\n".join(out)
+    return "\n".join(out), claims
 
 
-def _run_status(client, scope: AgentJobScope) -> str:
+def _run_status(client, scope: AgentJobScope) -> tuple[str, Claims]:
     import json
     from relaymind.graph.access import authorized_graph
     from relaymind.workflow.plan_reviews import review_for_handoff
@@ -170,17 +196,19 @@ def _run_status(client, scope: AgentJobScope) -> str:
         params={"s": scope.session_id, "o": scope.user_id, "p": scope.project_id}).result_set
     runs = [json.loads(r[0]) for r in rows]
     runs = [r for r in runs if r.get("company_id") == scope.company_id and r.get("request_kind", "planning") == "planning"]
+    claims = Claims(allowed_state_words=["approved", "rejected", "completed", "cancelled"]
+                    + sorted({r["status"] for r in runs}))
     if not runs:
-        return "There are no plans in this conversation yet."
+        return "There are no plans in this conversation yet.", claims
     out = ["**Plans in this conversation**"]
     for r in runs[-5:]:
         review = review_for_handoff(client, scope, r["handoff_ids"][-1]) if r.get("handoff_ids") else None
         human = f"; you {review.decision.replace('_', ' ')} it" if review else ""
         out.append(f"- {r['request'][:80]}: {r['status'].replace('_', ' ')}{human} ({r['id']})")
-    return "\n".join(out)
+    return "\n".join(out), claims
 
 
-_ANSWERS: dict[Intent, Callable[[Any, AgentJobScope], str]] = {
+_ANSWERS: dict[Intent, Callable[[Any, AgentJobScope], tuple[str, Claims]]] = {
     "current_decisions": lambda c, s: _decisions(c, s.trusted_context(), s.project_id),
     "changes": lambda c, s: _changes(c, s.trusted_context(), s.project_id),
     "affected_tasks": lambda c, s: _affected_tasks(c, s.trusted_context(), s.project_id),
@@ -190,11 +218,13 @@ _ANSWERS: dict[Intent, Callable[[Any, AgentJobScope], str]] = {
 }
 
 
-def factual_answer(client: Any, scope: AgentJobScope, intent: Intent) -> tuple[str, str | None]:
-    """(answer, error_code). Errors are explicit and never replaced by a guess."""
+def factual_answer(client: Any, scope: AgentJobScope, intent: Intent) -> tuple[str, str | None, Claims | None]:
+    """(answer, error_code, claims). Errors are explicit and never replaced by a guess; the claims
+    are what the Overseer verifies against the graph before the answer is shown."""
     try:
-        text = _ANSWERS[intent](client, scope)
+        text, claims = _ANSWERS[intent](client, scope)
     except Exception as exc:   # access-safe: no record content, only the error class
         return ("I couldn't read the records needed to answer this, so I haven't answered it. "
-                f"(Error: {type(exc).__name__})"), type(exc).__name__
-    return text + ("\n\n_Answered directly from the project's records; no plan was made and nothing was changed._"), None
+                f"(Error: {type(exc).__name__})"), type(exc).__name__, None
+    return text + ("\n\n_Answered directly from the project's records; no plan was made and nothing was changed._"
+                   ), None, claims

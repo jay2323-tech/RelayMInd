@@ -131,14 +131,27 @@ def _submit(scope: AgentJobScope, run_id: str, work: Callable[[], None]):
 
 
 def _summarize(scope: AgentJobScope, run_id: str):
-    """Assistant message describing the persisted outcome, written with the captured scope."""
+    """Assistant message describing the persisted outcome, written with the captured scope.
+
+    The narrated text passes the Overseer first (citations re-checked against the graph); a failing
+    narration is replaced by a deterministic safe summary, and the verdict is persisted on the run."""
+    from relaymind.assistant.overseer import narrated_summary
+    from relaymind.contracts.coordination import RunRecord
     engine = _engine(scope)
     run = _require_scoped(engine.store.get("run", run_id), scope)
-    from relaymind.agents.presentation import conversation_reply
     plan = None
     if run["handoff_ids"]:
         plan = _require_scoped(engine.store.get("handoff", run["handoff_ids"][-1]), scope)["plan"]
-    text = conversation_reply(run, plan)
+    if run.get("answer"):
+        # Factual / capability / work-setup answers were already overseen when they were created;
+        # re-gating here would overwrite that verdict with an empty one.
+        text = run["answer"]
+    else:
+        text, verdict = narrated_summary(get_client(), scope, run, plan)
+        try:
+            engine.store.update_run(RunRecord.model_validate(run | {"overseer": verdict.model_dump()}))
+        except Exception:
+            pass   # verdict persistence must never lose the summary message
     save_message(get_client(), scope.trusted_context(), scope.project_id, scope.session_id,
                  f"{run_id}-{run['status']}-summary", "assistant", text[:16000])
 

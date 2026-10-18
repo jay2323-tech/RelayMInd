@@ -352,12 +352,33 @@ class CoordinationEngine:
             from relaymind.workflow.routing import classify,factual_answer
             route=classify(request)
             if route.kind=='factual':
-                answer,error=factual_answer(self.client,self.job_scope,route.intent)
+                from relaymind.assistant.overseer import GraphFacts,oversee
+                answer,error,claims=factual_answer(self.client,self.job_scope,route.intent)
+                verdict=None
+                if error is None:
+                    verdict=oversee(answer,claims,GraphFacts(self.client,self.job_scope))
+                    if not verdict.ok:
+                        # One deterministic rebuild from fresh records (covers read/check races and
+                        # producer bugs); if the rebuilt answer still fails, show nothing wrong.
+                        answer,error,claims=factual_answer(self.client,self.job_scope,route.intent)
+                        if error is None:
+                            verdict=oversee(answer,claims,GraphFacts(self.client,self.job_scope)
+                                            ).model_copy(update={'rewritten':True})
+                            if not verdict.ok:
+                                error='overseer_'+verdict.failures[0].check
+                                answer=('My prepared answer did not match the project records on recheck, '
+                                        'so I am not showing it. Please ask again.')
                 run.request_kind='factual'
                 run.answer=answer
+                run.overseer=verdict
                 run.status='blocked' if error else 'completed'
                 run.error=f'factual: {error}' if error else None
                 run.events.append(AgentEvent(seq=1,agent='system',summary=f'Answered from records ({route.intent})'))
+                if verdict is not None:
+                    outcome=(f'Overseer checked {verdict.checks_run} claims against project records'
+                             + (' after one rebuild' if verdict.rewritten else '')) if verdict.ok else \
+                            f'Overseer withheld the answer ({verdict.failures[0].check})'
+                    run.events.append(AgentEvent(seq=2,agent='system',summary=outcome))
                 self.store.put('run',run.id,run.model_dump())
                 return run
         self.store.put('run',run.id,run.model_dump())

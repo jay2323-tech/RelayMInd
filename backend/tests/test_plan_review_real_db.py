@@ -234,6 +234,7 @@ def test_what_did_i_approve_reads_human_reviews_in_chat(world):
                                                 json={"request": "What did I approve?"}).json()["run_id"])["run"]
     first = ask()
     assert first["request_kind"] == "factual" and "have not approved" in first["answer"]
+    assert first["overseer"]["ok"] is True and first["overseer"]["checks_run"] > 0   # verdict survives summarize
     assert f"{pid}-dec" not in first["answer"]                     # seeded decision is not "my approval"
     rid, done = start(c, pid, sid)
     handoff = done["run"]["handoff_ids"][-1]
