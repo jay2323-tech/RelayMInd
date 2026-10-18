@@ -48,3 +48,14 @@ Both images were built with these exact files and run as a fresh deployment in a
 first start loaded all three companies; health check passed in ~8 s; UI and SPA routes served; login and wrong
 password (401) behaved; factual answer, memory save and cross-chat recall passed the Overseer; a container
 restart kept the data ("demo data already present"); the in-process reminder worker reported online.
+
+## Public demo mode (easy tester access)
+
+`render.yaml` sets `RELAYMIND_PUBLIC_DEMO=1`: the login screen can fetch the shared demo password from
+`GET /api/auth/demo` → `{public_demo: true, password, accounts: [{username, label}]}` and show it next to the
+account dropdown (UI work: Codex). With the flag unset it returns `{public_demo: false}` and nothing leaks.
+Only use it on deployments holding synthetic demo data: anyone with the link can sign in.
+
+**AI usage cap** (protects your model quota when the link is shared): `RELAYMIND_MODEL_CALLS_PER_USER_HOUR`
+(default 60) and `RELAYMIND_MODEL_CALLS_PER_HOUR` (default 300). Over the cap, plans fail honestly as
+`model_budget_exceeded`; answers, memory and work setup (no model) are never limited.

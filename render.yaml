@@ -39,6 +39,12 @@ services:
         value: "1"
       - key: RELAYMIND_REMINDER_WORKER
         value: "1"
+      - key: RELAYMIND_PUBLIC_DEMO      # "1" shows the demo password on the login screen (synthetic data only)
+        value: "1"
+      - key: RELAYMIND_MODEL_CALLS_PER_USER_HOUR
+        value: "60"
+      - key: RELAYMIND_MODEL_CALLS_PER_HOUR
+        value: "300"
 
   - type: pserv
     name: relaymind-falkordb

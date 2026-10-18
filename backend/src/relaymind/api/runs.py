@@ -17,6 +17,7 @@ Limits: thread pool + in-process locks = one backend process; one active job per
 from __future__ import annotations
 
 import json
+import os
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from typing import Callable, Literal
@@ -66,9 +67,40 @@ class _UnconfiguredModel:
         raise ModelNotConfigured("The AI model is not configured on this server")
 
 
-def _provider_or_unconfigured():
+class ModelBudgetExceeded(RuntimeError):
+    code = "model_budget_exceeded"         # surfaces as run.error "planning: model_budget_exceeded"
+
+
+_usage_lock = threading.Lock()
+_usage: dict[str, list[float]] = {}        # key -> timestamps of model calls in the last hour (single instance)
+
+
+class _BudgetedModel:
+    """Caps AI model calls per user and in total per hour (RELAYMIND_MODEL_CALLS_PER_USER_HOUR, default 60;
+    RELAYMIND_MODEL_CALLS_PER_HOUR, default 300). Protects a shared demo link from exhausting the model quota.
+    Model-free answers (facts, memory, work setup) never reach here and are never limited."""
+
+    def __init__(self, inner, user_id: str):
+        self.inner, self.user_id = inner, user_id
+
+    def reply(self, *args, **kwargs):
+        import time as _time
+        now = _time.time()
+        per_user = int(os.getenv("RELAYMIND_MODEL_CALLS_PER_USER_HOUR", "60"))
+        total = int(os.getenv("RELAYMIND_MODEL_CALLS_PER_HOUR", "300"))
+        with _usage_lock:
+            for key in (self.user_id, "*"):
+                _usage[key] = [t for t in _usage.get(key, []) if now - t < 3600]
+            if len(_usage[self.user_id]) >= per_user or len(_usage["*"]) >= total:
+                raise ModelBudgetExceeded("The hourly AI usage limit for this demo was reached")
+            _usage[self.user_id].append(now)
+            _usage["*"].append(now)
+        return self.inner.reply(*args, **kwargs)
+
+
+def _provider_or_unconfigured(user_id: str = "anonymous"):
     try:
-        return provider_factory()
+        return _BudgetedModel(provider_factory(), user_id)
     except ValueError as exc:
         return _UnconfiguredModel(str(exc))
 
@@ -223,7 +255,7 @@ def start_run(project_id: str, session_id: str, body: RunBody, me: Principal = D
     run_id = str(uuid4())
     with api_errors():
         scope = job_scope(me, project_id, session_id)          # captured before queueing
-        provider = _provider_or_unconfigured()                 # model-free answers work without a model key
+        provider = _provider_or_unconfigured(me.user_id)       # model-free answers work without a model key
     queue_plan(scope, run_id, body.request, provider, mode=body.mode)
     return {"run_id": run_id, "job": _visible_job(run_id, scope)}
 
