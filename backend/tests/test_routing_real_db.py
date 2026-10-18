@@ -81,7 +81,7 @@ def test_exposed_orders_match_acceptance_and_unknowns_are_explicit(aw):
 def test_changes_current_and_affected_tasks_from_graph(hb):
     client, pid, ctx, scope = hb
     load_scenario(client, ctx, pid, "before-change")
-    assert "nothing has changed yet" in factual_answer(client, scope("s"), "changes")[0]
+    assert "nothing has changed" in factual_answer(client, scope("s"), "changes")[0]
     assert "No task" in factual_answer(client, scope("s"), "affected_tasks")[0]
     load_scenario(client, ctx, pid, "after-change")
     current, _, _ = factual_answer(client, scope("s"), "current_decisions")

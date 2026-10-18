@@ -214,8 +214,8 @@ def receipt_text(review: PlanReview) -> str:
     prefix = (f"You changed your decision on plan revision {review.handoff_id} "
               f"(decision version {review.review_version}; earlier decisions stay in the history). "
               if changed else "")
-    undo_note = (" Actions that were already approved and applied under an earlier decision remain "
-                 "applied; changing this decision does not undo them." if changed else "")
+    undo_note = (" Changing this decision does not reverse any business change made earlier through the "
+                 "Actions panel." if changed else "")
     if review.decision == "approved":
         return (prefix + f"You approved plan revision {review.handoff_id}. This records your approval of the "
                 "plan only; no business changes were applied. Approve individual actions to apply them.")

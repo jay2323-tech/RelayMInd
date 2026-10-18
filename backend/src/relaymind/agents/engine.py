@@ -341,6 +341,12 @@ class CoordinationEngine:
                 setup,setup_error=('I could not update the work setup, so nothing was saved. '
                                    f'(Error: {type(exc).__name__})'),type(exc).__name__
             if setup is not None:
+                if setup_error is None:
+                    from relaymind.assistant.overseer import gate
+                    reply,claims=setup
+                    setup,run.overseer=gate(self.client,self.job_scope,reply,claims,
+                        'Your work setup change was saved, but I could not verify my summary of it against '
+                        'the records, so I am not repeating it. Open the work item to see its current state.')
                 run.request_kind='work_setup'
                 run.answer=setup
                 run.status='blocked' if setup_error else 'completed'

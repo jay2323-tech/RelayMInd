@@ -271,7 +271,7 @@ def test_change_decision_appends_history_and_never_overwrites(world):
     assert [h["id"] for h in history] == [second["id"], first["id"]]                 # append-only, both kept
     msgs = c.get(f"/api/projects/{pid}/sessions/{sid}/messages").json()
     receipt = next(m for m in msgs if m["id"] == f"{second['id']}-receipt")
-    assert "changed your decision" in receipt["content"] and "does not undo" in receipt["content"]
+    assert "changed your decision" in receipt["content"] and "does not reverse" in receipt["content"]
 
     # Approving again goes through the SAME freshness rules, and concurrent changers conflict.
     third = decide(c, pid, sid, rid, handoff, "approved", expected=2)

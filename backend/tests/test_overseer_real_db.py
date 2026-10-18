@@ -82,3 +82,76 @@ def test_narrated_summary_falls_back_when_citation_breaks(hb):
     text, verdict = narrated_summary(client, scope("s1"), run, broken)
     assert not verdict.ok and verdict.failures[0].check == "grounding"
     assert "could not re-verify" in text and "hb-ghost-99" not in text     # safe fallback, no broken claim shown
+
+
+# --------------------------------------------------------- regressions for Codex's PR #23 review
+
+def test_regression_memory_citations_resolve_like_the_engine(hb):
+    """Finding #1: the Overseer must accept the episode/message memory the engine accepts."""
+    client, pid, ctx, scope = hb
+    load_scenario(client, ctx, pid, "after-change")
+    create_session(client, ctx, pid, "s1")
+    facts = GraphFacts(client, scope("s1"))
+    engine = engine_for(client, scope("s1"))
+    for memory_id in ("harbor-episode-01", "harbor-history-msg-01"):
+        engine.evidence(memory_id)                                   # the engine resolves it ...
+        assert facts.resolves(memory_id), memory_id                  # ... so the Overseer must too
+    assert oversee("Per harbor-episode-01", Claims(cited_ids=["harbor-episode-01"]), facts).ok
+    assert not facts.resolves("harbor-episode-99")
+
+
+def test_regression_superseded_hold_fails_currency_on_real_graph(monkeypatch):
+    """Finding #2 on real data: an answer based on QH-17 v1 fails after v2, even with the same exposed set."""
+    from uuid import uuid4
+
+    from relaymind.contracts.agent_jobs import AgentJobScope
+    from relaymind.contracts.models import TrustedContext
+    from relaymind.graph import access
+    from relaymind.graph.access import authorized_graph
+    from relaymind.graph.connection import create_client
+    from relaymind.platform.aw_incident import load_incident
+    tag = uuid4().hex[:10]
+    pid, gname = f"ovtest-{tag}", f"relaymind_awtest_{tag}"
+    monkeypatch.setitem(access._DEMO_ACCESS, ("adventureworks", "aw-analyst"), (gname, frozenset({pid})))
+    client = create_client()
+    ctx = TrustedContext(tenant_id="adventureworks", user_id="aw-analyst")
+    graph = authorized_graph(client, ctx, pid)
+    try:
+        load_incident(client, ctx, pid, "before-change")
+        create_session(client, ctx, pid, "s1")
+        scope = AgentJobScope(tenant_id="adventureworks", user_id="aw-analyst", company_id="adventureworks",
+                              project_id=pid, session_id="s1")
+        text_v1, claims_v1 = routing._orders(client, ctx, pid)
+        assert claims_v1.hold_versions == {"QH-17": "aw-dec-hold-v1"}
+        load_incident(client, ctx, pid, "after-change")
+        facts = GraphFacts(client, scope)
+        exposed_now, unknown_now = facts.exposed("QH-17")
+        same_set = claims_v1.model_copy(update={"exposed_orders": {"QH-17": sorted(exposed_now)},
+                                                "unknown_order_ids": sorted(unknown_now)})
+        verdict = oversee(text_v1, same_set, facts)
+        assert not verdict.ok and any(f.check == "currency" and "aw-dec-hold-v1" in f.detail for f in verdict.failures)
+        text_v2, claims_v2 = routing._orders(client, ctx, pid)
+        assert oversee(text_v2, claims_v2, facts).ok                       # the fresh answer passes
+    finally:
+        assert graph.name.startswith("relaymind_awtest_")
+        graph.delete()
+
+
+def test_regression_work_setup_replies_are_gated(hb):
+    """Finding #3: setup and confirmation replies pass the Overseer, with record-backed states."""
+    from relaymind.contracts.assistant import RecordState
+    client, pid, ctx, scope = hb
+    load_scenario(client, ctx, pid, "after-change")
+    create_session(client, ctx, pid, "s1")
+    engine = engine_for(client, scope("s1"))
+    draft = engine.plan_run("Set up new work: Coldline follow-up", procedure_id="route-change-review")
+    assert draft.request_kind == "work_setup" and draft.overseer is not None and draft.overseer.ok
+    engine.plan_run("outcome: Customer notified\nstart: 2030-01-01\ndeadline: 2030-01-05\n"
+                    "timezone: Asia/Kolkata\nowner: me\nreminders: daily at 09:00", procedure_id="route-change-review")
+    done = engine.plan_run("confirm", procedure_id="route-change-review")
+    assert "Confirmed" in done.answer and done.overseer.ok
+    assert done.overseer.checks_run >= 2                                   # work item + reminder states verified
+    facts = GraphFacts(client, scope("s1"))
+    item_id = done.answer.split("(")[1].split(")")[0]
+    wrong = Claims(record_states=[RecordState(kind="work_item", id=item_id, status="completed")])
+    assert any(f.check == "records" for f in oversee("It is completed.", wrong, facts).failures)

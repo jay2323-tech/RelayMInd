@@ -88,8 +88,13 @@ def post_plan_review(project_id: str, session_id: str, run_id: str, body: PlanRe
             request = pr.revision_request(run, handoff, body.feedback or "")
             runs_api.queue_plan(scope, next_run_id, request, provider,
                                 message=f"Request changes to {handoff.id}: {body.feedback}")
+        from relaymind.assistant.overseer import gate
+        from relaymind.contracts.assistant import Claims, RecordState
+        receipt, _ = gate(client, scope, pr.receipt_text(review),
+                          Claims(record_states=[RecordState(kind="plan_review", id=review.id, status=review.decision)]),
+                          f"Your decision on plan revision {review.handoff_id} was recorded ({review.id}).")
         save_message(client, scope.trusted_context(), project_id, session_id,
-                     f"{review.id}-receipt", "assistant", pr.receipt_text(review))
+                     f"{review.id}-receipt", "assistant", receipt)
         return review
 
 
