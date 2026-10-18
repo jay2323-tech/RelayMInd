@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { api, fetchHealth, setProject, currentProject, UnauthorizedError } from './api/client';
+import { api, fetchHealth, setProject, currentProject, ApiError, UnauthorizedError } from './api/client';
 import type { AffectedTask, CurrentDecisions, Decision, Evidence, Identity, ImpactReport, ProposedAction, RunView } from './types';
 import type { ChatMessage } from './components/chat/ChatPanel';
 import type { SessionSummary } from './components/chat/ConversationHistory';
@@ -93,7 +93,7 @@ function Workspace({ identity, healthy, onSignOut, onExpired }: {
     const refresh = async () => {
       try { const next = await workflowApi.capabilities(); if (!cancelled) setCapabilities(next); }
       catch (error) {
-        if (!cancelled) { setCapabilities({ plan_review: false, work_setup: false, reminders: false }); fail(error); }
+        if (!cancelled) { setCapabilities(previous => ({ ...previous, reminder_delivery: null })); fail(error); }
       }
     };
     void refresh();
@@ -230,16 +230,21 @@ function Workspace({ identity, healthy, onSignOut, onExpired }: {
     return () => window.removeEventListener('keydown', close);
   }, [sheetOpen]);
 
-  async function decidePlan(id: string, decision: PlanDecision, feedback: string, operationId: string) {
+  async function decidePlan(id: string, decision: PlanDecision, feedback: string, operationId: string, expectedReviewVersion?: number) {
     const handoff = runViews[id]?.handoffs.at(-1);
     if (!sessionId || !handoff) throw new Error('Load the saved plan before reviewing it.');
     setBusy(true);
     try {
-      const receipt = await workflowApi.decide(sessionId, id, handoff.id, decision, feedback, operationId);
+      const receipt = await workflowApi.decide(sessionId, id, handoff.id, decision, feedback, operationId, expectedReviewVersion);
       setPlanReviews(previous => ({ ...previous, [id]: receipt }));
       if (receipt.next_run_id) { setRunId(receipt.next_run_id); setView(await api.run(sessionId, receipt.next_run_id)); }
     } catch (error) {
       setRunViews(previous => ({ ...previous })); // re-read any durable review after an ambiguous failure
+      if (error instanceof ApiError && error.status === 409) {
+        const latest = await workflowApi.review(sessionId, id);
+        setPlanReviews(previous => ({ ...previous, [id]: latest }));
+        throw new Error('This plan or decision changed. The latest decision has been reloaded; review it before trying again.');
+      }
       throw error;
     } finally { setBusy(false); }
   }
@@ -287,8 +292,8 @@ function Workspace({ identity, healthy, onSignOut, onExpired }: {
               return <div className="chat-plan">
                 <PlanCard run={saved.run} handoffs={saved.handoffs} currentDecisionIds={currentIds}
                   currentHolds={Object.fromEntries(impacts.map(item => [item.hold.hold_id, item.hold.decision_id]))} onEvidence={showEvidence} />
-                <InlinePlanControls view={saved} supported={capabilities.plan_review} review={planReviews[id] ?? null} busy={busy || jobActive}
-                  onDecision={(decision, feedback, operationId) => decidePlan(id, decision, feedback, operationId)} />
+                <InlinePlanControls sessionId={sessionId!} view={saved} supported={capabilities.plan_review} review={planReviews[id] ?? null} busy={busy || jobActive}
+                  onDecision={(decision, feedback, operationId, expectedVersion) => decidePlan(id, decision, feedback, operationId, expectedVersion)} />
                 <InlineActions view={saved} actions={actions} impacts={impacts} affected={affected} busy={busy || jobActive} onEvidence={showEvidence}
                   onPropose={body => act(() => api.propose(body), 'Proposed')} onApprove={actionId => act(() => api.approve(actionId), 'Approve')}
                   onReject={actionId => act(() => api.reject(actionId), 'Reject')} />
@@ -304,7 +309,7 @@ function Workspace({ identity, healthy, onSignOut, onExpired }: {
           </div>
         </main>
         <div className="chat-composer-dock"><div className="chat-reading-column">
-          {capabilities.reminders && sessionId && <ReminderControls key={sessionId} sessionId={sessionId} onError={fail} />}
+          {sessionId && <ReminderControls key={sessionId} sessionId={sessionId} supported={capabilities.reminders} delivery={capabilities.reminder_delivery} onError={fail} />}
           <Composer busy={busy || jobActive} showSuggestions={!messages.length} pauseAfterPlan={pauseAfterPlan} project={currentProject()}
             onPauseChange={setPauseAfterPlan} onSend={send} />
           <p className="composer-note">Evidence-backed proposals. You control business changes.</p>
