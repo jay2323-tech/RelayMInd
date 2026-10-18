@@ -1,0 +1,98 @@
+# RelayMind evaluation set (grows during Phases 0-2; runner lands in Phase 4).
+# Each case: the question as a user would type it, the route that must handle it,
+# IDs the answer must contain, and claims it must never make.
+# route: factual | planning | work_setup | capability
+# must_cite: every listed ID appears in the answer.  forbidden: none of these phrases appear.
+
+- id: AW-01
+  project: aw-qh-17
+  user: aw.quality
+  stage: before-change
+  question: "Which orders are exposed before the change?"
+  route: factual
+  must_cite: [AW-O101, AW-O102]
+  forbidden: ["AW-O103"]
+- id: AW-02
+  project: aw-qh-17
+  user: aw.quality
+  stage: after-change
+  question: "Which orders are exposed under the current hold, and which are unknown?"
+  route: factual
+  must_cite: [AW-O101, AW-O102, AW-O103, AW-O105]
+  forbidden: ["AW-O105 is safe", "unaffected"]
+- id: AW-07
+  project: aw-qh-17
+  user: aw.quality
+  stage: after-change
+  question: "Is AW-O105 unaffected?"
+  route: planning          # judgement question; the deterministic router must NOT answer it as fact
+  forbidden: ["AW-O105 is safe"]
+- id: AW-APPROVALS
+  project: aw-qh-17
+  user: aw.quality
+  stage: after-change
+  question: "What did I approve?"
+  route: factual
+  forbidden: ["aw-dec-hold-v1", "aw-dec-hold-v2"]   # seeded decisions are not the user's approvals
+- id: HB-01
+  project: hb-route-07
+  user: harbor.lead
+  stage: before-change
+  question: "Current route for HB-O201?"
+  route: factual
+  must_cite: [hb-dec-route-v1]
+  forbidden: [hb-dec-route-v2]
+- id: HB-02
+  project: hb-route-07
+  user: harbor.lead
+  stage: after-change
+  question: "Which tasks are affected?"
+  route: factual
+  must_cite: [hb-task-book-route-a, hb-task-confirm-friday]
+  forbidden: [hb-task-book-route-b]
+- id: HB-03
+  project: hb-route-07
+  user: harbor.lead
+  stage: after-change
+  question: "May we confirm Friday?"
+  route: planning
+  forbidden: ["yes, confirm Friday"]
+- id: HB-PLAN
+  project: hb-route-07
+  user: harbor.lead
+  stage: after-change
+  question: "Port North changed our plans. What changed for HB-O201 and what should dispatch and account management do next?"
+  route: planning
+  must_cite: [hb-dec-route-v2]
+- id: NS-CHANGES
+  project: launch-01
+  user: northstar.lead
+  question: "What changed?"
+  route: factual
+- id: NS-PLAN
+  project: launch-01
+  user: northstar.lead
+  question: "Continue launch preparation. What changed, and what should we do next?"
+  route: planning
+- id: WS-NATURAL
+  project: hb-route-07
+  user: harbor.lead
+  question: "I'm working on the Coldline notification, deadline is 25 October 2026"
+  route: work_setup
+  must_cite: [Coldline notification, 2026-10-25]
+- id: WS-NO-GUESS
+  project: hb-route-07
+  user: harbor.lead
+  question: "I'm working on the Coldline notification, deadline is Friday"
+  route: work_setup
+  forbidden: ["2026-10-23", "2026-10-24"]   # no guessed Friday
+- id: WS-NOT-TRIGGERED
+  project: hb-route-07
+  user: harbor.lead
+  question: "I'm working on the launch, what should we do next?"
+  route: planning
+- id: CAP-MEMORY
+  project: launch-01
+  user: northstar.lead
+  question: "Can you remember things?"
+  route: capability

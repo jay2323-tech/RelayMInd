@@ -19,6 +19,7 @@ import json
 import re
 import time
 from datetime import date
+from datetime import datetime as _dt
 from typing import Any, Callable
 
 from relaymind.contracts.agent_jobs import AgentJobScope
@@ -232,6 +233,25 @@ def transition(client: Any, scope: AgentJobScope, item_id: str, action: str, exp
 
 # ------------------------------------------------------------------- chat parsing
 
+_ORDINAL = re.compile(r"\b(\d{1,2})(st|nd|rd|th)\b", re.I)
+_DATE_FORMATS = ("%d %B %Y", "%d %b %Y", "%B %d %Y", "%b %d %Y", "%B %d, %Y", "%b %d, %Y")
+
+
+def parse_date_text(value: str) -> date:
+    """ISO or an unambiguous written date WITH a year ('25 October 2026'). Anything else raises."""
+    v = _ORDINAL.sub(r"\1", value.strip())
+    try:
+        return date.fromisoformat(v)
+    except ValueError:
+        pass
+    for fmt in _DATE_FORMATS:
+        try:
+            return _dt.strptime(v, fmt).date()
+        except ValueError:
+            continue
+    raise ValueError("unparseable date")
+
+
 _START = re.compile(r"^\s*(please\s+)?(set\s?up|create|start|add|new)\s+(a\s+|an\s+|some\s+)?(new\s+)?"
                     r"(work(\s+item)?|workstream|initiative|piece of work|project work)\b(.*)$", re.I | re.S)
 _KEYS = {
@@ -279,7 +299,7 @@ def parse_fields(text: str, me: str) -> tuple[WorkFields, list[str]]:
         field, value = _key_of(m.group("key")), m.group("value").strip().rstrip(".")
         try:
             if field in ("start_date", "deadline"):
-                values[field] = date.fromisoformat(value)
+                values[field] = parse_date_text(value)
             elif field == "timezone":
                 values[field] = valid_timezone(value)
             elif field == "owner_id":
@@ -291,7 +311,8 @@ def parse_fields(text: str, me: str) -> tuple[WorkFields, list[str]]:
         except ValueError as exc:
             msg = str(exc).splitlines()[0]
             if field in ("start_date", "deadline"):
-                msg = f"{LABELS[field]}: '{value}' is not a YYYY-MM-DD date (I don't guess relative dates)"
+                msg = (f"{LABELS[field]}: '{value}' is not a date I can use. Give YYYY-MM-DD or a written "
+                       "date with the year, like 25 October 2026. I don't guess relative dates like 'Friday'.")
             errors.append(msg)
     return WorkFields.model_validate(values), errors
 
@@ -326,6 +347,58 @@ def _guide(client, scope, item: WorkItem, errors: list[str]) -> str:
     return "\n".join(out)
 
 
+_STOP_WORDS = r"(?:,|;|\.|\n|$|\band\b|\bdeadline\b|\bdue\b|\bstarting\b|\bstart(?:s)?\b|\bowner\b|\bby\b|\bfrom\b)"
+_NL_WORK = re.compile(r"\b(?:i\s*am|i'm|i\s*will\s*be|we\s*are|we're)\s+"
+                      r"(?:doing|working\s+on|starting(?:\s+on)?|handling|taking\s+up)\s+"
+                      r"(?P<title>.{3,140}?)\s*(?=" + _STOP_WORDS + ")", re.I)
+_NL_DEADLINE = re.compile(
+    r"\b(?:deadline|due(?:\s+date)?|finish(?:\s+it)?\s+by)\s*(?:is|:|on|by)?\s*"
+    r"(?P<v>\d{4}-\d{2}-\d{2}|\d{1,2}(?:st|nd|rd|th)?\s+\w+,?\s+\d{4}|\w+\s+\d{1,2},?\s+\d{4}"
+    r"|[A-Za-z]+(?:\s+[A-Za-z]+)?)", re.I)   # last alternative: short junk like Friday -> ask-again error
+_NL_START = re.compile(r"\b(?:start(?:s|ing)?|begin(?:s|ning)?)\s*(?:is|:|on|from)?\s*"
+                       r"(?P<v>\d{4}-\d{2}-\d{2}|\d{1,2}(?:st|nd|rd|th)?\s+\w+\s+\d{4}|\w+\s+\d{1,2},?\s+\d{4})", re.I)
+_NL_OWNER = re.compile(r"\b(?:owner|responsible)\s+(?:is\s+|person\s+is\s+)?(?P<v>[\w.-]{2,60})", re.I)
+_NL_SELF_OWNER = re.compile(r"\bi(?:'ll| will)? own (?:it|this)\b|\bi am the owner\b", re.I)
+_NL_NOT_SETUP = re.compile(r"\?|\b(what should|should (we|i)|plan\b|propose|recommend|suggest|how (do|should|can))\b", re.I)
+
+
+def natural_setup(text: str, me: str) -> tuple[WorkFields, list[str]] | None:
+    """'I'm working on X, deadline is 25 October 2026' -> fields for a draft, or None.
+
+    Conservative on purpose: needs a clear work phrase AND at least one concrete detail
+    (deadline / start / owner), and never fires on questions or planning-style requests.
+    Dates are parsed only when absolute; relative ones become an ask-again error.
+    """
+    if _NL_NOT_SETUP.search(text):
+        return None
+    work = _NL_WORK.search(text)
+    if work is None:
+        return None
+    values: dict = {}
+    errors: list[str] = []
+    if m := _NL_DEADLINE.search(text):
+        try:
+            values["deadline"] = parse_date_text(m.group("v"))
+        except ValueError:
+            errors.append(f"{LABELS['deadline']}: '{m.group('v').strip()}' is not a date I can use. "
+                          "Give YYYY-MM-DD or a written date with the year. I don't guess relative dates.")
+    if m := _NL_START.search(text):
+        try:
+            values["start_date"] = parse_date_text(m.group("v"))
+        except ValueError:
+            pass
+    if _NL_SELF_OWNER.search(text):
+        values["owner_id"] = me
+    elif (m := _NL_OWNER.search(text)) and m.group("v").lower() not in ("is", "me"):
+        values["owner_id"] = me if m.group("v").lower() in ("me", "myself", "i") else m.group("v")
+    if not values and not errors:
+        return None                         # a work phrase alone is not enough to auto-start
+    title = re.sub(r"^(the|a|an|my|our)\s+", "", work.group("title").strip(" .:"), flags=re.I)
+    if title:
+        values["title"] = title[:200]
+    return WorkFields.model_validate(values), errors
+
+
 _CONFIRM = ("confirm", "yes confirm", "confirm it", "yes, confirm", "confirm.")
 _CANCEL = ("cancel setup", "cancel", "cancel it", "stop setup")
 
@@ -335,7 +408,9 @@ def chat_turn(client: Any, scope: AgentJobScope, text: str, operation_id: str) -
     from relaymind.workflow.reminders import confirmation_note
     start = _START.match(text)
     lowered = " ".join(text.lower().split())
-    if start is None and lowered not in _CONFIRM + _CANCEL and not _LINE.search(text.replace(";", "\n")):
+    nl = natural_setup(text, scope.user_id)
+    if start is None and nl is None and lowered not in _CONFIRM + _CANCEL \
+            and not _LINE.search(text.replace(";", "\n")):
         return None                       # cheap exit: not setup-shaped, no database read
     draft = open_draft(client, scope)
     if draft is not None and lowered in _CONFIRM:
@@ -349,14 +424,19 @@ def chat_turn(client: Any, scope: AgentJobScope, text: str, operation_id: str) -
         return f"Cancelled the draft {item.title or item.id}. Nothing was scheduled."
     fields, errors = parse_fields(text, scope.user_id)
     has_fields = any(v is not None for v in fields.model_dump().values())
-    if start is None and not (draft is not None and (has_fields or errors)):
+    nl_start = False
+    if nl is not None and not has_fields and not errors:
+        fields, errors = nl               # natural phrasing supplies the fields
+        has_fields = any(v is not None for v in fields.model_dump().values())
+        nl_start = draft is None and (has_fields or bool(errors))
+    if start is None and not nl_start and not (draft is not None and (has_fields or errors)):
         return None
     if start is not None and fields.title is None:
         rest = re.sub(r"^[\s:,-]*(called|named|titled)?\s*", "", start.group(7).split("\n")[0]).strip(" .:")
         if rest and not _LINE.match(rest):
             fields = fields.model_copy(update={"title": rest[:200]})
     try:
-        if start is not None or draft is None:
+        if start is not None or nl_start or draft is None:
             item = create_draft(client, scope, fields, operation_id)
         else:
             item = update_draft(client, scope, draft.id, fields, draft.version)

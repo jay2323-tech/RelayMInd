@@ -32,3 +32,22 @@ def test_setup_trigger_is_specific():
     for text in ("Create a plan for the launch", "What changed?", "Start the review", "Plan the launch"):
         assert not _START.match(text)
     assert parse_fields("What changed for HB-O201?", "u") == (parse_fields("", "u")[0], [])
+
+
+def test_natural_language_setup_detection():
+    from datetime import date
+
+    from relaymind.workflow.work_setup import natural_setup, parse_date_text
+
+    assert parse_date_text("25th October 2026") == date(2026, 10, 25)
+    assert parse_date_text("October 25, 2026") == date(2026, 10, 25)
+    f, errors = natural_setup("I'm working on the supplier follow-up, deadline is 25 October 2026", "u1")
+    assert (f.title, f.deadline, errors) == ("supplier follow-up", date(2026, 10, 25), [])
+    f, errors = natural_setup("I am doing payroll migration and deadline is 2026-11-01 and I will own it", "u1")
+    assert (f.title, f.deadline, f.owner_id) == ("payroll migration", date(2026, 11, 1), "u1")
+    f, errors = natural_setup("I'm working on the Coldline notification, deadline is Friday", "u1")
+    assert f.deadline is None and len(errors) == 1 and "don't guess" in errors[0]
+    # Never fires on questions, planning requests, or work talk without a concrete detail.
+    for text in ("I'm working on the launch, what should we do next?", "I'm working on stuff today",
+                 "Plan the launch", "What changed?", "Should we start the review?"):
+        assert natural_setup(text, "u1") is None, text
