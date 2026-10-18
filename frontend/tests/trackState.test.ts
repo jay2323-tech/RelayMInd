@@ -1,11 +1,11 @@
 // Run: node --test frontend/tests/trackState.test.ts   (Node >= 23.6 strips types natively)
-// Uses REAL persisted runs exported from FalkorDB (docs/ai-work-log/claude/evidence/...), no invented sequences.
+// Uses REAL persisted runs exported from FalkorDB (frontend/tests/fixtures/...), no invented sequences.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { deriveTrack, eventToBeat, newEvents } from '../src/ui/track/trackState.ts';
 
-const evidence = JSON.parse(readFileSync(new URL('../../docs/ai-work-log/claude/evidence/2026-10-17-live-runs-before-reset.json', import.meta.url), 'utf8'));
+const evidence = JSON.parse(readFileSync(new URL('./fixtures/2026-10-17-live-runs-before-reset.json', import.meta.url), 'utf8'));
 const runs = evidence.runs.map((r: { run: unknown }) => r.run) as any[];
 const view = (run: any, job: string | null = 'done') => ({ run, job: job ? { state: job, error: null } : null, handoffs: [] });
 

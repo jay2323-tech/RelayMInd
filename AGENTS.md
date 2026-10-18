@@ -1,8 +1,8 @@
 # RelayMind contributor instructions
 
-Read README.md, docs/team-ownership.md, docs/contracts.md, and
- docs/implementation-plan.md before editing. This is an early scaffold, not a working
-agent product. Preserve that distinction in code, UI, and documentation.
+Read README.md and the README.md, TEAM-CONTRIBUTIONS.md, SUBMISSION.md and DEMO.md
+files under docs/submission-drafts/ before editing. This is a hackathon prototype;
+distinguish implemented features, synthetic fixtures and verified live execution.
 
 - Primary track: Agent Memory and Coordination. Keep the MVP small.
 - A owns agent execution, conversation/episode/procedure memory and handoffs.
@@ -19,9 +19,8 @@ agent product. Preserve that distinction in code, UI, and documentation.
 
 ## AI work log (required)
 
-Every AI assistant keeps its own log under `docs/ai-work-log/<assistant>/`, using
-the rules and template in `docs/ai-work-log/README.md`. Codex writes only in
-`docs/ai-work-log/codex/`; Claude Code writes only in `docs/ai-work-log/claude/`.
-After each task, append to that day's `YYYY-MM-DD.md`: what was done, how it works,
-what it affects, problems found and how they were resolved, actual verification
-results ("not run" if not run), and open items. Never edit another assistant's log.
+After each task, append a concise assistant-labeled entry to the maintenance record in
+`docs/submission-drafts/DEMO.md`. Record what changed, how it works, effects,
+problems/resolutions, actual verification results ("not run" if not run), and open items.
+Never rewrite another assistant's entries. Older assistant-specific logs are in Git history;
+do not recreate the removed docs folders.

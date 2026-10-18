@@ -1,132 +1,206 @@
 # RelayMind
 
-**Agents that remember decisions and hand off work with evidence — on a FalkorDB graph.**
+**Agents that remember decisions, hand off work and catch outdated plans using FalkorDB.**
 
-FalkorDB Graph Hacks · Primary track: **Agent Memory and Coordination** · all data is synthetic.
+Graph Hacks · Primary track: **Agent Memory and Coordination** · Hackathon prototype
 
-RelayMind is a two-agent system. A **Planner** builds a plan from what the company has *currently*
-decided, saves it as a persisted **handoff**, and an independent **Reviewer** — possibly in another
-process, with no access to the Planner's conversation — reloads that handoff, re-checks it against
-the graph and a versioned review procedure, and accepts, requests one correction, or blocks.
-Decisions change over time without erasing history; the graph always knows which one is current.
-Nothing changes in the real world until a **human approves** it, and approval re-checks that nothing
-moved underneath.
+## 1. What the project is about and what it solves
 
-## What it does (demo stories)
+Business decisions change, but agents can continue working from yesterday's conversation. A launch plan still includes postponed payments, a logistics plan still uses a closed port, or a quality response misses orders exposed by an expanded hold. Handing that plan to another agent helps only if it can recover the evidence and check what is current.
 
-**Northstar (software launch).** "Launch Friday with payments" is superseded by "postpone payments,
-free tier only". The Planner is paused at its saved handoff, the decision changes, and on resume the
-Reviewer detects the change, the plan is revised to address the tasks that implemented the old
-decision, and you approve pausing those tasks (`task-01 v1 → v2`).
+RelayMind stores conversations, sourced historical episodes, approved decisions, procedures and agent handoffs in FalkorDB. A **Planner** proposes next steps and saves a cited handoff. An independent **Reviewer** reloads it and checks current records and the pinned review procedure. Changed evidence or decisions can require revision; the workflow allows one correction round and reports the actual outcome.
 
-**Harbor (logistics route change).** Order HB-O201 was planned via Route A (Port North) for Friday; Port
-North closes and route v2 (Route B, Port South, Saturday) supersedes v1. The two tasks built on
-Route A become required affected tasks, and the plan must not confirm Friday to the customer.
+People review the plan and separately approve supported task/order updates. **Approving a plan records intent; it applies no business changes.** Supported actions update synthetic records in the demo graph. Shipping, payment and external messaging systems are not connected.
 
-**AdventureWorks (manufacturing quality hold).** Hold QH-17 v1 covers batch AW-B101; an expanded
-notice v2 supersedes it and adds AW-B102. A graph traversal recomputes exposed orders
-(AW-O101, AW-O102 → + AW-O103), keeps AW-O105 as *unknown traceability* (never "safe"), marks the
-shipped order for QA review instead of a hold, and lets you approve holding AW-O103 — a hold proposed
-under v1 becomes **stale** automatically once v2 exists.
+### Why the graph matters
 
-## Why a graph (and FalkorDB) is essential
-
-- **Current truth is a graph property:** a decision is current when no approved decision
-  `SUPERSEDES` it. No stored status flag can drift out of date; conflicts (two current decisions on
-  one topic) are detected and reported, never resolved by timestamp.
-- **Impact is a traversal:** decision → tasks that `IMPLEMENT` it → tasks they block; hold version →
-  `HOLDS` batches → assemblies → orders. "What does this change affect?" is one parameterized query.
-- **Immutable versions:** tasks and orders are identities with `HAS_VERSION` chains linked by
-  `PREVIOUS`; approvals append a version only if the base version is still current.
-- **Coordination state lives in the graph:** sessions, messages, episodes, procedures, runs, handoffs
-  and reviews are FalkorDB records, so a fresh process can resume or review any run.
-
-Graph model and the essential Cypher queries: [docs/graph-model.md](docs/graph-model.md).
-
-## Architecture
-
-```
-React (Vite) ──/api──▶ FastAPI ──▶ CoordinationEngine (Planner / Reviewer, read-only tools)
-   login, chat,          auth, membership,        │            Gemini (primary) / Groq (fallback)
-   Relay Track,          scoped job queue         ▼
-   evidence, approvals   approvals, impact   GraphPlatformBridge ──▶ FalkorDB (one graph per tenant)
+```mermaid
+flowchart LR
+  Session -->|HAS_MESSAGE| Message
+  Episode -->|SUPPORTED_BY| Message
+  D2[Decision v2] -->|SUPERSEDES| D1[Decision v1]
+  D2 -->|SUPPORTED_BY| Source
+  Task -->|IMPLEMENTS| D1
+  DependentTask[Dependent task] -->|BLOCKED_BY| Task
+  Task -->|HAS_VERSION| TV2[TaskVersion v2]
+  TV2 -->|PREVIOUS| TV1[TaskVersion v1]
+  HoldDecision[Hold decision] -->|HOLDS| Batch
+  Assembly -->|USES_BATCH| Batch
+  Assembly -->|ALLOCATED_TO| Order
+  Artifact[AgentArtifact: run / handoff / review] -->|IN_SESSION| Session
 ```
 
-- Identity is server-side: local demo accounts, hashed password, server sessions. Every route checks
-  project membership; agent jobs capture an immutable company/user/project/session scope **before**
-  they are queued. The browser and the model never choose a tenant, company, graph or Cypher.
-- Models only read through validated tools; all writes are done by engine/platform code.
+A current approved decision has no incoming `SUPERSEDES` edge. Multiple current decisions on one topic are reported as a conflict. `IMPLEMENTS` links reveal work based on replaced decisions; batch/assembly/order links reveal manufacturing impact. Saved handoff payloads retain proposals, evidence snapshots and procedure references for independent review.
 
-## Quick start (macOS/Linux; Windows: use `.venv\Scripts\python`)
+Agents use validated read-only tools backed by parameterized queries. For example:
 
-Prerequisites: Python 3.11+, Node 20.19+ (or 22.12+), Docker with Compose.
+```cypher
+MATCH (d:Decision)-[:ABOUT]->(:Project {id: $project})
+WHERE NOT (d)<-[:SUPERSEDES]-(:Decision)
+OPTIONAL MATCH (d)-[:SUPPORTED_BY]->(s:Source)
+RETURN d.id, d.topic, d.text, collect(DISTINCT s.id)
+```
+
+The server selects the authorized tenant graph and groups results to detect conflicts. Models never select graphs or write arbitrary Cypher. Read the [technical architecture and graph reference](docs/submission-drafts/README.md) for the complete model and request lifecycle, and the [core Cypher query implementations](docs/submission-drafts/README.md#core-query-implementations) for affected tasks, manufacturing impact, memory retrieval, handoff claims and guarded approvals.
+
+## 2. Setup and manual instructions
+
+### Try the hosted demo
+
+**[Open the temporary live demo](https://flights-lawyers-prove-revisions.trycloudflare.com)**. The login page displays its public demo password and account choices. This free HTTPS tunnel runs the app and FalkorDB on the host Mac; the Mac, internet connection and tunnel must stay running. It is a temporary demonstration endpoint, not independent cloud hosting.
+
+The mandatory video is still pending in the [submission details](docs/submission-drafts/SUBMISSION.md#submission-links-and-human-details--pending). Start with the [five-minute user walkthrough](docs/submission-drafts/USER-MANUAL.md#2-five-minute-browser-walkthrough).
+
+### Run locally
+
+Requirements: Python 3.11+, Node.js 20.19+ or 22.12+, and Docker with Compose. Commands below use macOS/Linux; on Windows use `.venv\Scripts\python` instead of `.venv/bin/python` and your shell's copy command.
 
 ```sh
+git clone https://github.com/jay2323-tech/RelayMInd.git
+cd RelayMInd
 cp .env.example .env
-# edit .env: FALKORDB_PASSWORD, RELAYMIND_DEMO_PASSWORD (login for all demo accounts),
-#            GEMINI_API_KEY + GEMINI_MODEL (e.g. gemini-3.5-flash-lite), optional GROQ_API_KEY + GROQ_MODEL
+```
+
+Edit `.env` locally:
+
+- Set `FALKORDB_PASSWORD` and `RELAYMIND_DEMO_PASSWORD`.
+- Set `AGENT_PROVIDER=gemini`, an available `GEMINI_MODEL`, and your `GEMINI_API_KEY`.
+- Optional fallback: configure `AGENT_FALLBACK_PROVIDER=groq`, `GROQ_MODEL` and `GROQ_API_KEY`. Leave `AGENT_FALLBACK_PROVIDER` empty to disable fallback. Model availability depends on your provider account.
+
+Keep credentials server-side and out of Git. Then run:
+
+```sh
 docker compose up -d
 python3 -m venv .venv
 .venv/bin/python -m pip install -r backend/requirements.lock.txt
 .venv/bin/python -m pip install -e "./backend[employee-import]"
-
-.venv/bin/python scripts/setup_graph.py                              # indexes + unique constraints
-.venv/bin/python scripts/seed_northstar.py --stage before-change      # Northstar demo data
-.venv/bin/python scripts/seed_adventureworks.py --stage before-change # AdventureWorks incident
-
-.venv/bin/python -m uvicorn relaymind.main:app --port 8000 --env-file .env   # terminal 1
-cd frontend && npm ci && npm run dev                                         # terminal 2
+.venv/bin/python scripts/setup_graph.py
+.venv/bin/python scripts/seed_northstar.py --stage before-change
+.venv/bin/python scripts/seed_harbor.py --stage before-change
+.venv/bin/python scripts/seed_adventureworks.py --stage before-change
 ```
 
-Open http://127.0.0.1:5173 and sign in (password = `RELAYMIND_DEMO_PASSWORD`):
-
-| Account | Company · project | Use |
-|---|---|---|
-| `northstar.lead` | Northstar · `launch-01` | software launch story |
-| `northstar.peer` | Northstar · `launch-01` | same company, cannot see the lead's sessions |
-| `harbor.lead` | Harbor · `hb-route-07` (own graph) | logistics route change + cross-company isolation |
-| `aw.quality` | AdventureWorks · `aw-qh-17` | manufacturing quality hold |
-
-### Demo script
-
-One-command reset of both scenarios to before-change: `scripts/demo_reset.py --scenario all`.
-
-Northstar: reset (`scripts/demo_reset.py --scenario northstar`) → sign in as `northstar.lead` → switch on *Pause after the Planner* → ask
-"Continue launch preparation. What changed, and what should we do next?" → run pauses at handoff r1 →
-apply the change with `scripts/seed_northstar.py` → **Resume** → needs revision → revised plan →
-Reviewer accepted → Inspector: *Why changed*, decision graph v1 → v2 → *Actions*: propose and approve
-pausing an affected task.
-
-AdventureWorks: reset (`scripts/demo_reset.py --scenario aw`) → sign in as `aw.quality` → Inspector *Actions* shows exposed orders →
-apply the expanded notice with `scripts/seed_adventureworks.py --stage after-change` → reload →
-AW-O103 now exposed under hold v2 → propose and approve the hold. Full script: [docs/demo-script.md](docs/demo-script.md).
-
-## Tests
+Install frontend dependencies in another terminal:
 
 ```sh
-.venv/bin/python -m pytest backend/tests                               # unit (no DB)
-RUN_LIVE_FALKORDB_TESTS=1 .venv/bin/python -m pytest backend/tests     # + live FalkorDB
-node --test frontend/tests/trackState.test.ts                          # UI state machine on real recorded runs
-cd frontend && npm run build
+cd frontend
+npm ci
 ```
 
-Latest results and exact scope (scripted vs live model, two-process atomicity tests, isolation tests,
-known failures): [docs/verification.md](docs/verification.md).
+From the repository root, start the local backend, reminder worker and development UI:
 
-## Honest limitations
+```sh
+.venv/bin/python scripts/start_demo.py --frontend
+```
 
-- Local demo authentication (synthetic accounts, one shared password, in-memory sessions; one backend
-  process). Not a production identity provider.
-- Real-model runs depend on free-tier providers: Gemini is sometimes overloaded or returns invalid
-  JSON; Groq's free tier rate-limits the review step. Failures are shown as failures, never as success.
-- On AdventureWorks the real-model Planner succeeds, but the independent review step has returned
-  invalid JSON in our runs; scripted-model tests cover the complete flow.
-- All companies, people, orders and incidents are synthetic; AdventureWorks HR data is derived from
-  Microsoft's MIT-licensed sample (see `fixtures/adventureworks/`).
+Open `http://127.0.0.1:5173` and sign in with an account below and the password configured in `RELAYMIND_DEMO_PASSWORD`. Login is disabled if that value is unset. Restarting the backend requires signing in again; graph persistence is separate from login sessions. The starter is for local development, not a production deployment recipe.
 
-## Team, ownership and AI assistance
+### Use the app
 
-Two-person team; ownership in [docs/team-ownership.md](docs/team-ownership.md) and
-[docs/platform-upgrade-poa.md](docs/platform-upgrade-poa.md). AI coding assistants (Claude Code and
-Codex) were used; what each did is logged in [docs/ai-work-log/](docs/ai-work-log/) and summarised in
-[docs/ai-assistance.md](docs/ai-assistance.md).
+Choose **+ New conversation**, ask a factual question or request a plan, and inspect **Sources**, **Details** and **Activity**. Composer **Options → Pause before independent review** saves a checkpoint; **Continue to review** resumes it. Plan decisions and **Business changes** have separate controls and receipts.
+
+See the [user manual](docs/submission-drafts/USER-MANUAL.md) for exact prompts, work setup, reminders, troubleshooting and the tester checklist. The [demo guide](docs/submission-drafts/DEMO.md) gives a narrated walkthrough and verification scope.
+
+## 3. Test datasets, accounts and scenarios
+
+These scenarios model real operational problems using **fictional data**. Seed scripts load the records into FalkorDB; the provider then runs against that graph. A fixture file is not an executed result. Shared demo state may already have been changed by another tester, so confirm the active stage with the host.
+
+| Account | Chosen operational problem | What to test |
+|---|---|---|
+| `northstar.lead` · `launch-01` | A software launch changes scope after work has been planned | Saved handoff, stale-decision detection, revised task coverage and separately approved task pause |
+| `northstar.peer` · `launch-01` | Colleagues share approved project knowledge but need private conversations | Same-company conversation privacy and separately scoped approval history |
+| `harbor.lead` · `hb-route-07` | A port closure invalidates a shipment route and promised delivery date | Revised route, affected booking/customer-confirmation tasks and cross-company separation |
+| `aw.quality` · `aw-qh-17` | An expanded manufacturing quality hold exposes additional customer orders | Multi-hop impact, shipped-versus-open handling, unknown traceability and approved order hold |
+
+### Northstar: a launch plan becomes outdated
+
+**Problem:** The original decision launches Friday with payments. Its replacement postpones payments and launches only the free tier.
+
+1. Sign in as `northstar.lead`. Ask **“What are the current decisions?”**
+2. For the change test, start with the before-change stage, create a new conversation and enable **Pause before independent review**.
+3. Ask **“Continue launch preparation. What changed, and what should we do next?”** Inspect the saved proposal citing `decision-01`.
+4. Have the operator apply the replacement decision using the command below, then click **Continue to review**.
+5. Check that the old basis is detected as changed. A complete revised proposal uses `decision-02` and addresses `task-01` and `task-02`. Inspect the actual final review; acceptance is not guaranteed on every model run.
+6. For a current accepted proposal, optionally **Approve plan**. To test execution separately, use **Business changes → Prepare task pause → Approve this change**, then inspect the applied receipt/version history.
+
+### Northstar peer: private conversation boundaries
+
+Create a conversation as `northstar.lead`, then sign out and sign in as `northstar.peer`. The peer should not see the lead's private conversation. Ask **“What are the current decisions?”** to inspect shared project knowledge, and **“What did I approve?”** to inspect this user's own recorded decisions. Seeded decisions must not be described as the peer's approvals.
+
+### Harbor: a closed port changes the route
+
+**Problem:** HB-O201 was planned via Route A through Port North for Friday delivery. A closure forces Route B through Port South and Saturday delivery instead.
+
+1. Sign in as `harbor.lead`. Ask **“What are the current decisions?”**
+2. After the operator applies the after-change stage, ask **“What changed?”** and **“Which tasks are affected?”**
+3. Request **“Port North changed our plans. What changed for HB-O201 and what should dispatch and account management do next?”**
+4. Check the new route decision `hb-dec-route-v2`, affected tasks `hb-task-book-route-a` and `hb-task-confirm-friday`, and the requirement to notify Coldline Foods before confirming a delivery date. The new plan must not continue promising Friday under the replacement route.
+5. Open Sources to inspect the closure and replacement plan. Pausing a supported task changes its graph record; it does not book a carrier or send a customer message.
+
+### AdventureWorks: an expanding quality hold
+
+**Problem:** Hold QH-17 initially covers batch AW-B101. Its expansion adds AW-B102, exposing an additional order through assembly/batch relationships.
+
+1. Sign in as `aw.quality`. Ask **“Which orders are exposed?”**
+2. Before-change expectation: AW-O101 and AW-O102. After-change expectation: those orders plus AW-O103.
+3. In both stages, AW-O105 must stay **unknown traceability**, not proven safe. Shipped AW-O102 needs exposure review; it is not an open order to put on hold.
+4. Ask **“Investigate hold QH-17, identify affected orders, evaluate replacement options and prepare an owned recovery plan. Do not approve shipments or replacements.”** Inspect the actual plan, citations, uncertainties and review result.
+5. After expansion, an eligible open AW-O103 can receive a separately proposed and approved graph hold through **Business changes** or **Sources → Actions**. Inspect the receipt and order version.
+
+### Operator controls and dataset locations
+
+For a clean test on disposable local data, use `.venv/bin/python scripts/demo_reset.py --scenario northstar`, `harbor` or `aw`. Reset preserves sessions/runs/procedures, so use a fresh conversation; do not reset a shared deployment while others are testing.
+
+Apply a change **after** inspecting the before-change state:
+
+| Scenario | Operator command from repository root |
+|---|---|
+| Northstar | `.venv/bin/python scripts/seed_northstar.py` |
+| Harbor | `.venv/bin/python scripts/seed_harbor.py --stage after-change` |
+| AdventureWorks | `.venv/bin/python scripts/seed_adventureworks.py --stage after-change` |
+
+| Dataset | Purpose |
+|---|---|
+| [Northstar](fixtures/northstar.json) | Launch decisions, sourced history, procedures and versioned tasks |
+| [Harbor](fixtures/harbor-route-change.json) | Port notice, route versions, customer terms and affected tasks |
+| [AdventureWorks incident](fixtures/adventureworks/quality-hold.json) | Synthetic hold stages, source documents, batch/assembly/order links and acceptance cases |
+| [Company directories](fixtures/companies/) and [AdventureWorks directory](fixtures/adventureworks/directory.json) | Supporting synthetic/sample organization data; not a completed directory-upload or agent-directory UI |
+| [Test-only cases](fixtures/test-scenarios.json) | Conflict/outdated-handoff verification; not ordinary demo data or hardcoded model answers |
+
+AdventureWorks employee data derives from Microsoft's fictional sample database. Its [provenance](fixtures/adventureworks/provenance.json) and [Microsoft license notice](fixtures/adventureworks/MICROSOFT-LICENSE.txt) are retained. The quality-hold incident is original synthetic content, not a historical Microsoft event. Acceptance expectations are test oracles, not answers supplied to the model.
+
+## 4. Features and detailed documentation
+
+| Feature | Detail |
+|---|---|
+| Persistent conversation and sourced episodic memory | [Memory, persistence and access checks](docs/submission-drafts/USER-MANUAL.md) |
+| Current decisions, history and conflicts | [Graph model and query examples](docs/submission-drafts/README.md#why-falkordb-is-central) |
+| Planner, saved handoff and independent Reviewer | [Core walkthrough and actual review outcomes](docs/submission-drafts/USER-MANUAL.md) |
+| Pause/resume and changed-context revision | [Operator-assisted change demonstration](docs/submission-drafts/DEMO.md) |
+| Source inspection and per-step citations | [Feature table and UI instructions](docs/submission-drafts/USER-MANUAL.md) |
+| Human plan approval, rejection, changes and decision history | [Approval semantics](docs/submission-drafts/USER-MANUAL.md#4-understand-plan-review-and-business-changes) |
+| Separate supported task/order changes with version checks | [Action walkthroughs](docs/submission-drafts/USER-MANUAL.md) |
+| Manufacturing impact and unknown traceability | [Manufacturing test guide](docs/submission-drafts/USER-MANUAL.md#6-test-manufacturing-impact) |
+| Staleness alerts and bounded deterministic answer checks | [Technical architecture](docs/submission-drafts/README.md) |
+| Guided work setup and worker-delivered in-app reminders | [Setup fields, scheduling and snooze](docs/submission-drafts/USER-MANUAL.md#7-set-up-work-and-reminders) |
+
+### Verification and limitations
+
+```sh
+.venv/bin/python -m pytest backend/tests
+# Optional live FalkorDB checks; these do not imply every test calls a real model:
+RUN_LIVE_FALKORDB_TESTS=1 .venv/bin/python -m pytest backend/tests
+node --test frontend/tests/activityState.test.ts frontend/tests/trackState.test.ts frontend/tests/memoryLinks.test.ts
+```
+
+Frontend build: run `npm run build` from `frontend/`. See the [dated verification snapshot](docs/submission-drafts/DEMO.md#verification-snapshot) for observed results and what remains unverified. No fresh deployment success is claimed by this README.
+
+Limits: synthetic demo accounts and shared password; in-memory login sessions and single API-process job management; bounded lexical search; variable model/provider reliability; in-app reminders requiring a worker; no external shipping/payment/email/Slack integrations. Model review is not a guarantee of semantic correctness, and production-scale concurrency is not claimed.
+
+### Team and submission material
+
+The [full event rules](https://www.wemakedevs.org/hackathons/falkordb/rules) require a public repository, setup and graph model, dependent queries/algorithms, a working demo video, a deployment or complete local setup, and the entered track. AI assistance must also be disclosed. Track: **Agent Memory and Coordination**. See the [deliverable checklist and pending items](docs/submission-drafts/SUBMISSION.md#required-submission-checklist); a hosted app does not replace the required video.
+
+**Jayanth Krishna + Claude Code:** graph/platform responsibilities. **Kanak Garg + Codex:** agent memory/coordination responsibilities. Read [team contributions and AI assistance](docs/submission-drafts/TEAM-CONTRIBUTIONS.md) for the agreed split and substantial AI-assisted implementation.
+
+[User manual and tester checklist](docs/submission-drafts/USER-MANUAL.md) · [Technical reference](docs/submission-drafts/README.md) · [Demo and verification guide](docs/submission-drafts/DEMO.md) · [Submission write-up](docs/submission-drafts/SUBMISSION.md)
