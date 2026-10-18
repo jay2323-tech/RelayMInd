@@ -98,6 +98,8 @@ class RunRecord(StrictModel):
     pending_memory_text: str | None = None
     memory_receipt: dict | None = Field(default=None, description="Durable receipt of a completed memory write")
     memory_search: dict | None = Field(default=None, description="How recall searched: method, scanned, matches, more")
+    pending_memory_ids: list[str] = Field(default_factory=list, description="Message IDs a recall offer would plan with")
+    selected_memory_ids: list[str] = Field(default_factory=list, description="Message IDs carried into this plan")
 
 
 class NoArguments(StrictModel):
