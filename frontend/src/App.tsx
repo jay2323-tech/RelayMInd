@@ -12,6 +12,7 @@ import { workflowApi } from './api/workflow';
 import type { PlanReview, WorkflowCapabilities, PlanDecision } from './types/workflow';
 import { ReminderControls } from './ui/ReminderControls';
 import { InlineActions, InlinePlanControls } from './ui/InlinePlanControls';
+import { OverseerBadge } from './ui/OverseerBadge';
 import { LoginScreen } from './ui/LoginScreen';
 
 const message = (e: unknown) => (e instanceof Error ? e.message : 'Request failed');
@@ -287,9 +288,11 @@ function Workspace({ identity, healthy, onSignOut, onExpired }: {
         <main className="chat-conversation" aria-label="Conversation workspace">
           <div className="chat-reading-column">
             <ChatStream messages={messages} onEvidence={showEvidence} hasPlan={message => !!planFor(message)} renderAfter={message => {
-              const entry = planFor(message); if (!entry) return null;
+              const matchingRun = Object.values(runViews).find(item => message.id === `${item.run?.id}-${item.run?.status}-summary`)?.run ?? null;
+              const badge = <OverseerBadge run={matchingRun} message={message} />;
+              const entry = planFor(message); if (!entry) return badge;
               const [id, saved] = entry;
-              return <div className="chat-plan">
+              return <>{badge}<div className="chat-plan">
                 <PlanCard run={saved.run} handoffs={saved.handoffs} currentDecisionIds={currentIds}
                   currentHolds={Object.fromEntries(impacts.map(item => [item.hold.hold_id, item.hold.decision_id]))} onEvidence={showEvidence} />
                 <InlinePlanControls sessionId={sessionId!} view={saved} supported={capabilities.plan_review} review={planReviews[id] ?? null} busy={busy || jobActive}
@@ -297,7 +300,7 @@ function Workspace({ identity, healthy, onSignOut, onExpired }: {
                 <InlineActions view={saved} actions={actions} impacts={impacts} affected={affected} busy={busy || jobActive} onEvidence={showEvidence}
                   onPropose={body => act(() => api.propose(body), 'Proposed')} onApprove={actionId => act(() => api.approve(actionId), 'Approve')}
                   onReject={actionId => act(() => api.reject(actionId), 'Reject')} />
-              </div>;
+              </div></>;
             }} />
             {jobActive && <p className="chat-working" role="status"><span className="spinner" aria-hidden /> Checking evidence and preparing your response…</p>}
             {view && <details className="chat-activity"><summary>Activity · {view.run?.status.replaceAll('_', ' ') ?? 'queued'}</summary>
