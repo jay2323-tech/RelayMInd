@@ -41,10 +41,14 @@ export interface EvidenceVersion { evidence_id: string; version_id: string; stat
 export interface Handoff { id: string; revision: number; plan: Plan; decisions: { id: string; topic: string; text: string }[]; manufacturing_versions?: EvidenceVersion[] }
 export interface Review { status: 'accepted' | 'needs_revision' | 'blocked'; issues: { reason: string; evidence_ids: string[] }[] }
 export type RunStatus = 'planning' | 'awaiting_review' | 'paused' | 'completed' | 'needs_revision' | 'blocked' | 'failed';
+export interface OverseerVerdict {
+  ok: boolean; checks_run: number; failures: { check: string; detail: string }[]; rewritten: boolean;
+}
 export interface RunRecord {
   id: string; status: RunStatus; request: string; handoff_ids: string[]; events: AgentEvent[];
   result: { review: Review; procedure_id: string; procedure_version: number; decision_ids: string[] } | null;
   error: string | null;
+  overseer?: OverseerVerdict | null;
   request_kind?: 'planning' | 'capability' | 'factual' | 'work_setup'; answer?: string | null;
 }
 export interface Job { state: 'queued' | 'running' | 'done' | 'error'; error: string | null }
