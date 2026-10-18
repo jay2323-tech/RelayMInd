@@ -206,3 +206,21 @@ Processes intentionally remain running for the demo: app exec session 59408, tun
 ### Codex — 18 October 2026: recording prompt sequence
 
 Provided exact Northstar recording prompts and UI/operator steps for current decisions, saved Planner handoff, operator-applied decision replacement, resumed independent review, affected work and separate plan/action approval. Included optional manufacturing exposure prompts and preserved the synthetic-data boundary. No reset, seed, approval or product change performed. Verification: sequence checked against the documented primary walkthrough; tests and new live execution not run. Open: rehearse against the active scenario stage and record actual review outcomes.
+
+### Claude Code — preserved HF deployment entry from PR #43
+
+Transcribed unchanged from the removed historical log during conflict resolution. Verification below is Claude’s reported result, not a new Codex deployment check.
+
+- FREE deployment option (Jayanth: no card): Hugging Face Docker Space with FalkorDB + app in one container
+  (`deploy/hf/Dockerfile`, `deploy/hf/start.sh`: FalkorDB on 127.0.0.1 with a random per-start password, uid 1000,
+  port 7860, public demo mode on), `scripts/export_hf_space.py` (prepares the Space folder: root Dockerfile,
+  Space README header, no secrets, git init), `docs/deploy-free.md`. Verified locally as uid 1000: healthy in
+  ~6 s, demo seeded, UI, demo endpoint, login with the shown password, answers and memory verified; the exported
+  folder builds. Trade-off documented: data resets on restart. Render (paid) path kept for persistence.
+
+
+### Codex — resolve PR #43 documentation conflict
+
+Jayanth supplied the conflicting PR for resolution. Merged main into deploy/hf-space, preserved HF Docker/start/export files and transcribed Claude’s added log entry above before retaining the consolidated-doc layout. No deployment implementation changed. Verification: shell syntax check and isolated export checks below; full container build and hosted deployment not run by Codex. Public-demo login UI from merged main is now included. Old complete log remains in Git history.
+
+Codex verification result: `sh -n deploy/hf/start.sh` passed. Ran exporter into an isolated temporary folder; verified root Dockerfile, startup script, Space port metadata, current public-demo login UI, and absence of .env files/node_modules. Export checks passed. No Docker image rebuild or HF upload performed.
