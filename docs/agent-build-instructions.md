@@ -104,3 +104,38 @@ The one new model agent (design §§5–6), only after 1–3 are merged.
 ```
 1+2 can run in parallel (different files); 3+4 likewise. Nothing in 1–4 changes any existing endpoint,
 so the demo keeps working after every merge.
+
+## Amendments (2026-10-18, after Codex's review — agreed by all three)
+
+1. **Overseer input is structured claims, not prose.** Narrator builds each answer from verified
+   fields (`current_decision_ids`, `affected_order_ids`, `action_status`, unknowns); the Overseer
+   verifies those fields against the graph, plus one prose lint: state words
+   (approved/applied/shipped/scheduled/delivered) require a matching record. Badge wording:
+   **"Checked against project records"** — never "everything is correct".
+2. **Feature support ≠ worker health.** `capabilities.reminders` means *supported* and stays true;
+   a new additive field reports delivery health: `reminder_delivery: {online, last_heartbeat_ms}`.
+   UI shows "Delivery offline (last heartbeat …)" and "Saved; delivery is waiting for the worker."
+   Never imply a delivery happened.
+3. **Changing an approval ≠ changing a plan.** "Change decision" APPENDS a review record (full
+   history kept; POST carries the expected current review version so concurrent changes conflict
+   instead of overwriting). Editing plan content creates a new revision that needs review again.
+   Revoking approval never implies applied business actions were undone (the receipt says so).
+4. **Watcher alerts are durable and version-specific.** Ack dismisses the notification only — it
+   never makes a plan current. Sweeps are idempotent (no duplicates) and recover missed changes
+   after a worker restart. Approval endpoints keep their own freshness check regardless of the
+   Watcher (already live in B1; unchanged).
+5. **Phase 3 (Assistant) is gated**, not scheduled: it starts only after the full
+   approval → change → alert → revision demo passes. Eval cases are written during Phases 0–2,
+   with the runner completing in Phase 4.
+6. Wording fixes: superseding plan reviews *does* change API behaviour — the claim is now
+   "changes are additive; existing clients remain compatible." And the older design's
+   "one model rewrite" rule (design §5 step 6) is replaced for this milestone by: at most ONE
+   routing model call per non-planning turn; the Narrator is template-only; a failed Overseer
+   check falls back to the deterministic template, never to a model rewrite.
+
+**Phase 0 ordering:** Claude publishes the two contracts first — (a) plan-review history
+(append-only records + expected version) and (b) capabilities + `reminder_delivery` health — in the
+Phase 0 PR description before Codex starts the "Change decision" UI and the offline reminder state.
+Phase 0 also adds natural-language work-setup detection ("I'm doing X, deadline is 2026-10-25"
+auto-starts the guided setup; dates still never guessed) and a single command that starts backend,
+frontend and worker together.
