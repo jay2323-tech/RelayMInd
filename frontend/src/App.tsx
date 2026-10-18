@@ -13,6 +13,7 @@ import type { PlanReview, WorkflowCapabilities, PlanDecision } from './types/wor
 import { ReminderControls } from './ui/ReminderControls';
 import { InlineActions, InlinePlanControls } from './ui/InlinePlanControls';
 import { WatcherAlerts } from './ui/WatcherAlerts';
+import { planMessage, planNeedsRefresh } from './ui/planMessage';
 import { outdatedTargets } from './ui/watcherState';
 import type { WatcherAlert } from './types/workflow';
 import { OverseerBadge } from './ui/OverseerBadge';
@@ -52,7 +53,7 @@ function Workspace({ identity, healthy, onSignOut, onExpired }: {
   const [capabilities, setCapabilities] = useState<WorkflowCapabilities>({ plan_review: false, work_setup: false, reminders: false });
   const [alerts, setAlerts] = useState<WatcherAlert[]>([]);
   const staleTargets = useMemo(() => outdatedTargets(alerts), [alerts]);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(() => window.matchMedia('(min-width: 761px)').matches);
   const activeSession = useRef<string | undefined>(undefined);
   const [pauseAfterPlan, setPauseAfterPlan] = useState(false);
   const [comparison, setComparison] = useState<ChangeComparison>();
@@ -280,13 +281,7 @@ function Workspace({ identity, healthy, onSignOut, onExpired }: {
     }
   }
 
-  function planFor(message: ChatMessage) {
-    if (message.role !== 'assistant') return null;
-    const entry = Object.entries(runViews).find(([id]) => message.id.startsWith(id + '-'));
-    if (!entry || !entry[1].handoffs.length) return null;
-    if (messages.some(item => item.role === 'assistant' && item.id.startsWith(entry[0] + '-') && messages.indexOf(item) > messages.indexOf(message))) return null;
-    return entry;
-  }
+  const planFor = (message: ChatMessage) => planMessage(message, runViews);
 
   return <>
     <AuroraBackground />
@@ -294,7 +289,7 @@ function Workspace({ identity, healthy, onSignOut, onExpired }: {
       <div className="chat-sidebar">
         <div className="sidebar-heading"><strong>RelayMind</strong><button className="btn btn--small btn--ghost" aria-label="Close conversation sidebar" onClick={() => setSidebarOpen(false)}>←</button></div>
         <SessionRail sessions={sessions} activeId={sessionId} busy={busy || jobActive}
-          onSelect={id => { openSession(id).catch(fail); }} onNew={newSession} />
+          onSelect={id => { openSession(id).catch(fail); if (window.matchMedia('(max-width: 760px)').matches) setSidebarOpen(false); }} onNew={() => { newSession(); if (window.matchMedia('(max-width: 760px)').matches) setSidebarOpen(false); }} />
         <details className="sidebar-account" onKeyDown={event => {
           if (event.key === 'Escape') { event.currentTarget.open = false; event.currentTarget.querySelector('summary')?.focus(); }
         }}>
@@ -317,26 +312,28 @@ function Workspace({ identity, healthy, onSignOut, onExpired }: {
         </div>
         <main className="chat-conversation" aria-label="Conversation workspace">
           <div className="chat-reading-column">
-            {capabilities.watcher && <WatcherAlerts alerts={alerts} onAcknowledge={acknowledgeAlert} onOpen={alert => {
+            {capabilities.watcher && <WatcherAlerts sessions={sessions} activeSession={sessionId} alerts={alerts} onAcknowledge={acknowledgeAlert} onOpen={alert => {
               if (alert.session_id) void openSession(alert.session_id).catch(fail);
               else { openTab('actions'); setSheetOpen(true); }
             }} />}
-            <ChatStream messages={messages} onEvidence={showEvidence} hasPlan={message => !!planFor(message)} renderAfter={message => {
+            <ChatStream key={sessionId ?? 'new'} messages={messages} onEvidence={showEvidence} hasPlan={message => !!planFor(message)} renderAfter={message => {
               const matchingRun = Object.values(runViews).find(item => message.id === `${item.run?.id}-${item.run?.status}-summary`)?.run ?? null;
               const badge = <OverseerBadge run={matchingRun} message={message} />;
               const entry = planFor(message); if (!entry) return badge;
               const [id, saved] = entry;
               const latestHandoff = saved.handoffs.at(-1)?.id;
-              const outdated = !!latestHandoff && staleTargets.has(latestHandoff);
-              return <>{badge}<div className="chat-plan">
+              const outdated = (!!latestHandoff && staleTargets.has(latestHandoff)) || planNeedsRefresh(saved.handoffs.at(-1), decisions ? currentIds : null,
+                Object.fromEntries(impacts.map(item => [item.hold.hold_id, item.hold.decision_id])));
+              return <div className="chat-plan">
                 <PlanCard outdated={outdated} run={saved.run} handoffs={saved.handoffs} currentDecisionIds={currentIds}
-                  currentHolds={Object.fromEntries(impacts.map(item => [item.hold.hold_id, item.hold.decision_id]))} onEvidence={showEvidence} />
-                <InlinePlanControls outdated={outdated} sessionId={sessionId!} view={saved} supported={capabilities.plan_review} review={planReviews[id] ?? null} busy={busy || jobActive}
+                  currentHolds={Object.fromEntries(impacts.map(item => [item.hold.hold_id, item.hold.decision_id]))} onEvidence={showEvidence} savedText={message.content}>
+                <InlinePlanControls reviewLoading={capabilities.plan_review && !(id in planReviews)} outdated={outdated} sessionId={sessionId!} view={saved} supported={capabilities.plan_review} review={planReviews[id] ?? null} busy={busy || jobActive}
                   onDecision={(decision, feedback, operationId, expectedVersion) => decidePlan(id, decision, feedback, operationId, expectedVersion)} />
+                {badge}</PlanCard>
                 <InlineActions view={saved} actions={actions} impacts={impacts} affected={affected} busy={busy || jobActive} onEvidence={showEvidence}
                   onPropose={body => act(() => api.propose(body), 'Proposed')} onApprove={actionId => act(() => api.approve(actionId), 'Approve')}
                   onReject={actionId => act(() => api.reject(actionId), 'Reject')} />
-              </div></>;
+              </div>;
             }} />
             {jobActive && <p className="chat-working" role="status"><span className="spinner" aria-hidden /> Checking evidence and preparing your response…</p>}
             {view && <details className="chat-activity"><summary>Activity · {view.run?.status.replaceAll('_', ' ') ?? 'queued'}</summary>

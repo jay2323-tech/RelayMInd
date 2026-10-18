@@ -26,6 +26,7 @@ export function ReminderControls({ sessionId, supported, delivery, onError }: { 
       setItems((await workflowApi.reminders()).filter(item => item.session_id === sessionId));
     } catch (error) { onError(error); } finally { setBusy(false); }
   }
+  if (!supported || !active.length) return null;
   return <details className="reminder-controls"><summary>In-app reminders · {active.length} · {!supported ? 'Unavailable' : !delivery ? 'Delivery status unknown' : delivery.online ? 'Delivery online' : 'Delivery offline'}</summary>
     <p className="caption" role="status">{!supported ? 'Reminder support is unavailable or has not been verified on this server.' : !delivery ? 'Delivery status is unknown. A saved schedule does not confirm delivery.' : delivery.online ? 'Delivery worker online. Delivered reminders appear in this conversation.' : `Delivery offline — ${delivery.last_heartbeat_ms ? 'last seen ' + new Date(delivery.last_heartbeat_ms).toLocaleString() : 'no heartbeat recorded'}. Saved schedules are waiting for the worker.`}</p>
     {supported && !active.length && <p className="caption">No reminders in this conversation. Ask in chat to set up work and a reminder schedule.</p>}

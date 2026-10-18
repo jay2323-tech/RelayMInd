@@ -6,8 +6,8 @@ import { EvidenceChip } from './common';
 
 type Proposal = { target?: 'order' | 'task'; task_id: string; new_status: string; reason: string; based_on: string[]; expected_task_version: number; run_id?: string };
 
-export function InlinePlanControls({ sessionId, view, supported, review, busy, onDecision, outdated = false }: {
-  outdated?: boolean;
+export function InlinePlanControls({ sessionId, view, supported, review, busy, onDecision, outdated = false, reviewLoading = false }: {
+  outdated?: boolean; reviewLoading?: boolean;
   sessionId: string; view: RunView; supported: boolean; review: PlanReview | null; busy: boolean;
   onDecision: (decision: PlanDecision, feedback: string, operationId: string, expectedVersion?: number) => Promise<void>;
 }) {
@@ -41,21 +41,22 @@ export function InlinePlanControls({ sessionId, view, supported, review, busy, o
     try { await onDecision(decision, feedback, pending.current.id, version); setEditing(false); setChanging(false); }
     catch (e) { setError(e instanceof Error ? e.message : 'Could not save your decision.'); }
   }
-  const label = (decision: PlanDecision) => decision === 'approved' ? 'Approved' : decision === 'rejected' ? 'Rejected' : 'Changes requested';
+  const label = (decision: PlanDecision) => decision === 'approved' ? (outdated ? 'Approved for an earlier state' : 'Approved') : decision === 'rejected' ? 'Rejected' : 'Changes requested';
   return <div className="inline-plan-controls">
     {recorded && <div className="approval-receipt" role="status"><strong>{label(review.decision)}</strong>
-      <p className="caption">Recorded by {review.reviewed_by} · {new Date(review.created_at).toLocaleString()}{version ? ` · decision v${version}` : ''}</p>
+      <p className="caption receipt-meta">{review.reviewed_by} · {new Date(review.created_at).toLocaleString()}{version ? ` · decision v${version}` : ''}</p>
       {review.feedback && <p>{review.feedback}</p>}
-      <p className="caption">Plan approval records intent. Changing this decision does not undo any business changes already applied.</p>
+
       <button className="btn btn--small" disabled={busy || !supported || version === undefined} onClick={() => setChanging(value => !value)}>{changing ? 'Cancel decision change' : 'Change decision'}</button>
       {version === undefined && <p className="caption">Decision changes require the updated server.</p>}
-      <details className="decision-history"><summary>Decision history{history.length ? ` · ${history.length}` : ''}</summary>
+      <details className="decision-history"><summary>Decision history{history.length ? ` · ${history.length}` : ''}</summary><p className="caption">Changing a plan decision does not undo business changes already applied.</p>
         {historyLoading && <p>Loading history…</p>}{historyError && <p role="alert">{historyError}</p>}
         {history.map(item => <div className="decision-history-entry" key={item.id}><strong>{label(item.decision)} · v{item.review_version ?? 1}</strong>
           <p className="caption">{item.reviewed_by} · {new Date(item.created_at).toLocaleString()}</p>{item.feedback && <p>{item.feedback}</p>}</div>)}
       </details>
     </div>}
-    {(!recorded || changing) && <>
+    {reviewLoading && <p className="caption" role="status">Loading saved decision…</p>}
+    {!reviewLoading && (!recorded || changing) && <>
       <div className="row"><button className="btn btn--primary" disabled={busy || !supported || !accepted || outdated} onClick={() => void decide('approved')}>Approve plan</button>
         <button className="btn" disabled={busy || !supported} onClick={() => setEditing(value => !value)}>Request changes</button>
         <button className="btn btn--ghost btn--danger-text" disabled={busy || !supported} onClick={() => void decide('rejected')}>Reject plan</button></div>
@@ -67,6 +68,7 @@ export function InlinePlanControls({ sessionId, view, supported, review, busy, o
         <div className="row"><button className="btn btn--primary" disabled={busy || !feedback.trim()}>Send changes</button><button type="button" className="btn btn--ghost" onClick={() => setEditing(false)}>Cancel</button></div>
       </form>}
     </>}
+    {!reviewLoading && !recorded && supported && accepted && <p className="caption approval-scope">Approval saves this plan. It applies no business changes.</p>}
     {error && <p className="alert alert--danger" role="alert">{error}</p>}
   </div>;
 }
@@ -83,8 +85,8 @@ export function InlineActions({ view, actions, impacts, affected, busy, onPropos
     .map(row => ({ row, hold: impact.hold })));
   const tasks = affected.filter(item => ids.has(item.task.task_id) && !['paused', 'done', 'cancelled'].includes(item.task.status));
   const pendingFor = (id: string) => actions.some(action => action.task_id === id && action.status === 'proposed');
-  if (!relevant.length && !openOrders.length && !tasks.length) return <p className="caption execution-note">No supported business change is waiting for approval for these records.</p>;
-  return <section className="inline-actions" aria-label="Individual business changes"><h3>Individual business changes</h3>
+  if (!relevant.length && !openOrders.length && !tasks.length) return null;
+  return <details className="inline-actions" open={relevant.some(action => action.status === 'proposed')}><summary>Business changes · {relevant.length + openOrders.length + tasks.length}</summary>
     <p className="caption">Each button applies only the named change. It does not approve or execute the whole plan.</p>
     {openOrders.map(({ row, hold }) => <div className="inline-action" key={row.order.order_id + row.batch_id}>
       <p>Put order <EvidenceChip id={row.order.order_id} onOpen={onEvidence} /> on hold.</p>
@@ -101,5 +103,5 @@ export function InlineActions({ view, actions, impacts, affected, busy, onPropos
         <button className="btn btn--ghost btn--danger-text" disabled={busy} onClick={() => onReject(action.id)}>Reject change</button></div>
         : <p className="caption">{action.result ?? 'Decision recorded.'}</p>}
     </div>)}
-  </section>;
+  </details>;
 }
