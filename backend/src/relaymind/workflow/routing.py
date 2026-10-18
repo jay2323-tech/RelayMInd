@@ -55,7 +55,9 @@ class Route:
 
 def classify(text: str) -> Route:
     t = " ".join(re.sub(r"[^a-z0-9'\s-]", " ", text.lower()).split())
-    if not t or len(t) > 300 or _PLANNING.search(t):
+    if not t or len(t) > 300:
+        return Route("planning")          # long/pasted or symbol-only input: let the Assistant decide
+    if _PLANNING.search(t):
         return Route("planning", explicit=True)
     for intent, pattern in _INTENTS:
         if pattern.search(t):

@@ -130,3 +130,77 @@ def test_model_written_clarify_question_is_overseen(world, monkeypatch):
     sid = c.post(f"/api/projects/{pid}/sessions").json()["id"]
     run = say(c, pid, sid, "what about it")["run"]
     assert "shipped" not in run["answer"] and run["overseer"]["ok"] is False   # unbacked claims never shown
+
+
+# ------------------------------------------------ regressions from Codex's PR #29 review
+
+def offer():
+    return ScriptedModel([route(route="clarify", clarifying_question="Do you want me to prepare a plan for this?",
+                                offers_plan=True)])
+
+
+def test_regression_long_input_goes_to_the_assistant_not_straight_to_planning(world, monkeypatch):
+    pid, _ = world
+    model = ScriptedModel([route(route="help")])
+    install(monkeypatch, model)
+    c = login("northstar.lead")
+    sid = c.post(f"/api/projects/{pid}/sessions").json()["id"]
+    pasted = "Notes from the call. " + "Several things came up about vendors and timing. " * 12   # > 300 chars
+    run = say(c, pid, sid, pasted)["run"]
+    assert run["request_kind"] == "capability" and run["handoff_ids"] == []
+    assert len(model.inputs) == 1                                   # routed by the Assistant, no plan started
+
+
+def test_regression_offer_counts_only_if_it_was_shown(world, monkeypatch):
+    pid, _ = world
+    unshown = ScriptedModel([route(route="clarify", offers_plan=True,
+                                   clarifying_question="It was shipped and approved - shall I plan?")])
+    after = ScriptedModel([route(route="help")])
+    install(monkeypatch, unshown, after)
+    c = login("northstar.lead")
+    sid = c.post(f"/api/projects/{pid}/sessions").json()["id"]
+    first = say(c, pid, sid, "things changed")["run"]
+    assert first["overseer"]["ok"] is False and first["pending_plan_request"] is None   # fallback shown, no offer
+    second = say(c, pid, sid, "yes")["run"]
+    assert second["request_kind"] != "planning" and len(after.inputs) == 1
+
+
+def test_regression_consumed_and_declined_offers_cannot_start_a_plan_later(world, monkeypatch):
+    pid, _ = world
+    install(monkeypatch, offer(), ScriptedModel(plan_replies(pid)), ScriptedModel([route(route="help")]),
+            offer(), ScriptedModel([]), ScriptedModel([route(route="help")]))   # "no" uses no model call
+    c = login("northstar.lead")
+    sid = c.post(f"/api/projects/{pid}/sessions").json()["id"]
+    say(c, pid, sid, "the launch is getting messy")
+    assert say(c, pid, sid, "yes")["run"]["request_kind"] == "planning"          # offer consumed
+    again = say(c, pid, sid, "yes")["run"]
+    assert again["request_kind"] != "planning"                                   # cannot be reused
+    say(c, pid, sid, "the pricing is getting messy")
+    assert say(c, pid, sid, "no")["run"]["request_kind"] == "clarify"           # declined
+    later = say(c, pid, sid, "yes")["run"]
+    assert later["request_kind"] != "planning" and later["handoff_ids"] == []
+
+
+def test_regression_latest_messages_are_used_in_long_sessions(world, monkeypatch):
+    from relaymind.memory.conversations import save_message
+    from test_plan_review_real_db import NS
+    pid, client = world
+    install(monkeypatch, offer(), ScriptedModel(plan_replies(pid)))
+    c = login("northstar.lead")
+    sid = c.post(f"/api/projects/{pid}/sessions").json()["id"]
+    for i in range(105):                                                          # more than one page of history
+        save_message(client, NS, pid, sid, f"old-{i}", "user" if i % 2 == 0 else "assistant", f"old message {i}")
+    say(c, pid, sid, "the launch is getting messy")
+    run = say(c, pid, sid, "yes")["run"]
+    assert run["request_kind"] == "planning" and run["status"] == "completed"
+
+
+def test_regression_offer_is_session_isolated(world, monkeypatch):
+    pid, _ = world
+    install(monkeypatch, offer(), ScriptedModel([route(route="help")]))
+    c = login("northstar.lead")
+    sid_a = c.post(f"/api/projects/{pid}/sessions").json()["id"]
+    sid_b = c.post(f"/api/projects/{pid}/sessions").json()["id"]
+    say(c, pid, sid_a, "the launch is getting messy")
+    other = say(c, pid, sid_b, "yes")["run"]                                     # a DIFFERENT conversation
+    assert other["request_kind"] != "planning" and other["handoff_ids"] == []
