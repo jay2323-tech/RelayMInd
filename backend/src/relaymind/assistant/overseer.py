@@ -251,10 +251,9 @@ def oversee(text: str, claims: Claims, facts) -> OverseerVerdict:
 
     # state words need a verified record of a matching kind -------------------
     if claims.lint_state_words:
-        # Verbatim record text (decision wording, titles, user input) is masked: words inside it are the
-        # record's own content, not the assistant asserting a state. Only exact copies are masked.
-        for quote in sorted({q for q in claims.quoted_spans if q and len(q) >= 3}, key=len, reverse=True):
-            text = text.replace(quote, "\u00ab" + "quoted" + "\u00bb")
+        # Verbatim record text is masked ONLY at the exact line + column where the producer placed it.
+        # The same words elsewhere (e.g. a sentence the assistant added) are still checked.
+        text = mask_quotes(text, claims.quoted_spans)
         checks += 1
         unbacked = set()
         for m in _STATE_RE.finditer(text):
@@ -284,6 +283,16 @@ def oversee(text: str, claims: Claims, facts) -> OverseerVerdict:
             fail("state_words", "state words without a verified backing record: " + ", ".join(sorted(unbacked)))
 
     return OverseerVerdict(ok=not failures, checks_run=checks, failures=failures)
+
+
+def mask_quotes(text: str, spans) -> str:
+    lines = text.split("\n")
+    for i, line in enumerate(lines):
+        for span in sorted((s for s in spans if s.line == line), key=lambda s: s.start, reverse=True):
+            if span.start + span.length <= len(line):
+                line = line[:span.start] + "\u00abquoted\u00bb" + line[span.start + span.length:]
+        lines[i] = line
+    return "\n".join(lines)
 
 
 def gate(client: Any, scope: AgentJobScope, text: str, claims: Claims, fallback: str) -> tuple[str, OverseerVerdict]:

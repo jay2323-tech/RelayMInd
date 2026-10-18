@@ -317,19 +317,43 @@ def parse_fields(text: str, me: str) -> tuple[WorkFields, list[str]]:
     return WorkFields.model_validate(values), errors
 
 
-def _describe(item: WorkItem) -> list[str]:
+class _Reply(str):
+    """Reply text that remembers where it quoted user/record text (for the Overseer)."""
+    spans: list = []
+
+
+def _reply(lines: list, spans: list) -> "_Reply":
+    out = _Reply("\n".join(lines))
+    out.spans = list(spans)
+    return out
+
+
+def _describe(item: WorkItem) -> tuple[list[str], list]:
+    from relaymind.contracts.assistant import Quote, quoted_line
     r = item.reminder
     reminder = None if r is None else {
         "none": "none", "daily_summary": f"daily summary at {r.time_of_day}",
         "milestones": f"milestones at {r.time_of_day}", "custom": "custom: " + ", ".join(r.custom_times)}[r.kind]
     shown = {"title": item.title, "outcome": item.outcome, "start_date": item.start_date, "deadline": item.deadline,
              "timezone": item.timezone, "owner_id": item.owner_id, "reminder": reminder}
-    return [f"- {LABELS[k].split(' (')[0]}: {v}" for k, v in shown.items() if v is not None]
+    lines, spans = [], []
+    for k, v in shown.items():
+        if v is None:
+            continue
+        label = f"- {LABELS[k].split(' (')[0]}: "
+        line, s = quoted_line(label, Quote(v)) if k in ("title", "outcome") else (label + str(v), [])
+        lines.append(line)
+        spans += s
+    return lines, spans
 
 
 def _guide(client, scope, item: WorkItem, errors: list[str]) -> str:
-    out = [f"**Work setup: {item.title or 'untitled'}** ({item.id}, {item.status}, version {item.version})"]
-    captured = _describe(item)
+    from relaymind.contracts.assistant import Quote, quoted_line
+    head, spans = quoted_line("**Work setup: ", Quote(item.title or "untitled"),
+                              f"** ({item.id}, {item.status}, version {item.version})")
+    out = [head]
+    captured, more = _describe(item)
+    spans += more
     if captured:
         out += ["Captured:", *captured]
     if errors:
@@ -344,7 +368,7 @@ def _guide(client, scope, item: WorkItem, errors: list[str]) -> str:
                 "custom YYYY-MM-DDTHH:MM, or none."]
     elif item.status == "draft":
         out += ["", "Everything is filled in. Reply **confirm** to confirm this work, or change any field."]
-    return "\n".join(out)
+    return _reply(out, spans)
 
 
 _STOP_WORDS = r"(?:,|;|\.|\n|$|\band\b|\bdeadline\b|\bdue\b|\bstarting\b|\bstart(?:s)?\b|\bowner\b|\bby\b|\bfrom\b)"
@@ -411,9 +435,7 @@ def chat_turn(client: Any, scope: AgentJobScope, text: str, operation_id: str):
         return None
     if isinstance(result, tuple):
         return result
-    draft = open_draft(client, scope)   # guidance replies quote the draft's own user-entered text
-    quotes = [v for v in ((draft.title, draft.outcome) if draft else ()) if v]
-    return result, Claims(quoted_spans=quotes)
+    return result, Claims(quoted_spans=getattr(result, "spans", []))   # exact quote positions from _guide
 
 
 def _chat_turn(client: Any, scope: AgentJobScope, text: str, operation_id: str):
@@ -433,17 +455,22 @@ def _chat_turn(client: Any, scope: AgentJobScope, text: str, operation_id: str):
         from relaymind.contracts.assistant import Claims, RecordState
         from relaymind.workflow.reminders import list_reminders
         scheduled = list_reminders(client, scope, item_id=item.id, status="scheduled")
-        reply = "\n".join([f"**Confirmed: {item.title}** ({item.id})", *_describe(item), "",
-                           confirmation_note(client, scope, item)])
-        return reply, Claims(quoted_spans=[v for v in (item.title, item.outcome) if v],
+        from relaymind.contracts.assistant import Quote, quoted_line
+        head, spans = quoted_line("**Confirmed: ", Quote(item.title), f"** ({item.id})")
+        described, more = _describe(item)
+        reply = "\n".join([head, *described, "", confirmation_note(client, scope, item)])
+        return reply, Claims(quoted_spans=spans + more,
                              record_states=[RecordState(kind="work_item", id=item.id, status="confirmed",
                                                         aliases=[item.title] if item.title else [])]
                              + [RecordState(kind="reminder", id=r["id"], status="scheduled") for r in scheduled])
     if draft is not None and lowered in _CANCEL:
         from relaymind.contracts.assistant import Claims, RecordState
+        from relaymind.contracts.assistant import Quote, quoted_line
         item = transition(client, scope, draft.id, "cancel", draft.version)
-        return (f"Cancelled the draft {item.title or item.id}. Nothing was scheduled.",
-                Claims(record_states=[RecordState(kind="work_item", id=item.id, status="cancelled",
+        line, cancel_spans = quoted_line("Cancelled the draft ", Quote(item.title or item.id), ". Nothing was scheduled.")
+        return (line,
+                Claims(quoted_spans=cancel_spans,
+                       record_states=[RecordState(kind="work_item", id=item.id, status="cancelled",
                                                   aliases=[item.title] if item.title else [])]))
     fields, errors = parse_fields(text, scope.user_id)
     has_fields = any(v is not None for v in fields.model_dump().values())

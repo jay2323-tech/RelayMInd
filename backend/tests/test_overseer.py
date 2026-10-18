@@ -163,3 +163,15 @@ def test_uuid_like_ids_are_whole_tokens():
     from relaymind.assistant.overseer import _id_tokens
     tokens = _id_tokens("Plan 0b6f1c2a-9d3e-4f5a-8b7c-1234567890ab-r1 on 2026-10-18 via in-app, a-1, AW-O102")
     assert tokens == {"0b6f1c2a-9d3e-4f5a-8b7c-1234567890ab-r1", "a-1", "AW-O102"}
+
+
+def test_regression_quote_exemption_is_positional_not_global():
+    """Codex PR #27 re-review: a record titled "shipped" must not hide an assistant sentence saying shipped."""
+    from relaymind.contracts.assistant import Quote, quoted_line
+    line, spans = quoted_line('- t-1 "', Quote("shipped"), '" (todo) still open')
+    claims = Claims(quoted_spans=spans)
+    assert oversee(line, claims, FakeFacts()).ok                                   # the quoted title is exempt
+    assert failed(oversee(line + "\nAll affected orders were shipped.", claims, FakeFacts()), "state_words")
+    assert failed(oversee(line + " and it was shipped", claims, FakeFacts()), "state_words")   # same line, edited
+    same_line_twice = line + "\n" + line                                           # an identical producer line
+    assert oversee(same_line_twice, claims, FakeFacts()).ok
