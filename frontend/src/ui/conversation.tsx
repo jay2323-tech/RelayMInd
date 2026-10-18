@@ -1,3 +1,4 @@
+import { StatusOrb } from './ThinkingFeedback';
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react';
 import type { ChatMessage } from '../components/chat/ChatPanel';
 import type { SessionSummary } from '../components/chat/ConversationHistory';
@@ -99,7 +100,7 @@ export function Composer({ busy, showSuggestions, pauseAfterPlan, onPauseChange,
     const value = text.trim();
     if (!value || busy || sending) return;
     setSending(true); setError(null);
-    try { await onSend(value); setDraft(''); }
+    try { await onSend(value); setDraft(previous => previous.trim() === value ? '' : previous); }
     catch (e) { setError(e instanceof Error ? e.message : 'Message could not be sent. Your draft is kept.'); }
     finally { setSending(false); }
   }
@@ -113,7 +114,7 @@ export function Composer({ busy, showSuggestions, pauseAfterPlan, onPauseChange,
       <button key={s} type="button" className="suggestion" disabled={working} title={s} onClick={() => { setDraft(s); document.getElementById('composer')?.focus(); }}>
         <span>{(SUGGESTION_LABELS[project] ?? SUGGESTION_LABELS.default)[i]}</span><span aria-hidden>↗</span></button>)}</div>}
     <label htmlFor="composer" className="sr-only">Message</label>
-    <textarea ref={input} rows={1} id="composer" value={draft} maxLength={16000} disabled={working} placeholder="Ask about your project or plan your next step…"
+    <textarea ref={input} rows={1} id="composer" value={draft} maxLength={16000} disabled={sending} placeholder="Ask about your project or plan your next step…"
       onChange={e => setDraft(e.target.value)} onKeyDown={key} />
     {error && <p className="alert alert--danger" role="alert">{error}</p>}
     <div className="composer__row">
@@ -126,7 +127,7 @@ export function Composer({ busy, showSuggestions, pauseAfterPlan, onPauseChange,
       </details>
       <span className="topbar__spacer" />
       <button type="submit" className="btn btn--primary" disabled={working || !draft.trim()}>
-        {working ? <><span className="spinner" aria-hidden /> Working</> : 'Send ↑'}</button>
+        {working ? <><StatusOrb state="working" /> Working</> : 'Send ↑'}</button>
     </div>
   </form>;
 }
