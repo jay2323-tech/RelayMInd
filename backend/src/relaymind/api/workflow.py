@@ -21,13 +21,17 @@ from relaymind.workflow import plan_reviews as pr
 router = APIRouter(prefix="/projects/{project_id}")
 
 # Flip a flag only when the feature is implemented AND verified (tests + live check).
-CAPABILITIES = WorkflowCapabilities(plan_review=True, work_setup=True, reminders=False)
+# `reminders` means SUPPORTED; delivery liveness is reported separately so the feature
+# never disappears from the UI when the worker is down (it shows "delivery offline" instead).
+CAPABILITIES = WorkflowCapabilities(plan_review=True, work_setup=True, reminders=True)
 
 
 def capabilities_now() -> WorkflowCapabilities:
-    # Reminders count as available only while a delivery worker is running (heartbeat under 2 minutes old).
-    from relaymind.workflow.reminders import worker_alive
-    return CAPABILITIES.model_copy(update={"reminders": worker_alive(get_client())})
+    from relaymind.contracts.workflow import ReminderDeliveryHealth
+    from relaymind.workflow.reminders import last_heartbeat, worker_alive
+    client = get_client()
+    return CAPABILITIES.model_copy(update={"reminder_delivery": ReminderDeliveryHealth(
+        online=worker_alive(client), last_heartbeat_ms=last_heartbeat(client))})
 
 
 @router.get("/workflow/capabilities", response_model=WorkflowCapabilities)
@@ -45,6 +49,18 @@ def get_plan_review(project_id: str, session_id: str, run_id: str, me: Principal
         scope = runs_api.job_scope(me, project_id, session_id)
         run = _run(runs_api._engine(scope), scope, run_id)
         return pr.review_for_run(get_client(), scope, run)
+
+
+@router.get("/sessions/{session_id}/runs/{run_id}/plan-review/history", response_model=list[PlanReview])
+def plan_review_history_for_run(project_id: str, session_id: str, run_id: str,
+                                me: Principal = Depends(project_member)):
+    """Every human decision on the run's current plan revision, newest first."""
+    with api_errors():
+        scope = runs_api.job_scope(me, project_id, session_id)
+        run = _run(runs_api._engine(scope), scope, run_id)
+        if not run.handoff_ids:
+            return []
+        return pr.review_history(get_client(), scope, run.handoff_ids[-1])
 
 
 @router.post("/sessions/{session_id}/runs/{run_id}/plan-review", response_model=PlanReview)
@@ -142,6 +158,7 @@ def create_work_item(project_id: str, session_id: str, body: WorkItemCreate, me:
 
 @router.post("/work-items/{item_id}", response_model=WorkItem)
 def update_work_item(project_id: str, item_id: str, body: WorkItemUpdate, me: Principal = Depends(project_member)):
+    """Edit a draft or confirmed item; each change is a new version with a snapshot kept."""
     with api_errors():
         scope = _item_scope(me, project_id, item_id)
         fields = ws.WorkFields.model_validate(body.model_dump(exclude={"expected_version"}))
