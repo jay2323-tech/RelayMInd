@@ -80,32 +80,52 @@ _AFFIRMATIVE = re.compile(r"^\s*(yes|yeah|yep|yup|sure|ok|okay|please do|go ahea
 _NEGATIVE = re.compile(r"^\s*(no|nope|not now|no thanks|cancel)\b[\s.!]*$", re.I)
 
 
+def _latest(engine, limit: int = 8) -> list[dict]:
+    """The newest messages of the caller's own session, oldest first (owner + project checked in the query)."""
+    rows = engine.store.graph.ro_query(
+        "MATCH (s:Session {id: $session, owner_id: $owner})-[:ABOUT]->(:Project {id: $project}) "
+        "MATCH (s)-[:HAS_MESSAGE]->(m:Message) RETURN m.id, m.role, m.content, m.seq "
+        "ORDER BY m.seq DESC LIMIT $limit",
+        params={"session": engine.session_id, "owner": engine.context.user_id, "project": engine.project_id,
+                "limit": limit}).result_set
+    return [{"id": r[0], "role": r[1], "content": r[2] or "", "seq": r[3]} for r in reversed(rows)]
+
+
 def _recent(engine, limit: int = 6) -> list[dict]:
-    from relaymind.memory.conversations import load_messages
     try:
-        msgs = load_messages(engine.client, engine.context, engine.project_id, engine.session_id, 0, 100)
+        msgs = _latest(engine, limit + 1)
     except Exception:
         return []
-    return [{"role": m.role, "content": m.content[:500]} for m in msgs[-(limit + 1):-1]]   # exclude the current message
+    return [{"role": m["role"], "content": m["content"][:500]} for m in msgs[:-1]]   # exclude the current message
 
 
 def _pending_plan(engine) -> str | None:
-    """If the previous assistant turn offered a plan, the request it offered; else None."""
+    """The plan the Assistant offered in the IMMEDIATELY previous turn of this session, or None.
+
+    Valid only if (a) the last assistant message is that offer's summary, (b) its run recorded an offer
+    (set only when the offered question itself was shown), and (c) the current message is the first user
+    reply after it. A consumed or declined offer can therefore never start a plan later.
+    """
     from relaymind.contracts.coordination import RunRecord
-    from relaymind.memory.conversations import load_messages
     try:
-        msgs = load_messages(engine.client, engine.context, engine.project_id, engine.session_id, 0, 100)
+        msgs = _latest(engine, 4)
     except Exception:
         return None
-    previous = [m for m in msgs[:-1] if m.role == "assistant"]
-    if not previous or not previous[-1].id.endswith("-summary"):
+    if len(msgs) < 3 or msgs[-1]["role"] != "user":
         return None
-    run_id = previous[-1].id[:-len("-summary")].rsplit("-", 1)[0]       # "<run id>-<status>-summary"
+    offer, before = msgs[-2], msgs[-3]
+    if offer["role"] != "assistant" or not offer["id"].endswith("-summary"):
+        return None                                      # something else came between the offer and this reply
+    run_id = offer["id"][:-len("-summary")].rsplit("-", 1)[0]       # "<run id>-<status>-summary"
+    if before["role"] != "user" or before["id"] != f"{run_id}-request":
+        return None                                      # the offer must answer the message right before it
     try:
         prior = RunRecord.model_validate(engine.store.get("run", run_id))
     except Exception:
         return None
-    return prior.pending_plan_request if prior.request_kind == "clarify" else None
+    if prior.request_kind != "clarify" or not prior.pending_plan_request or prior.answer != offer["content"]:
+        return None                                      # only an offer that was actually shown counts
+    return prior.pending_plan_request
 
 
 def decide(provider, request: str, recent: list[dict]) -> RouteDecision | None:
@@ -174,5 +194,6 @@ def assist(engine, run, request: str):
     text, verdict = gate(engine.client, engine.job_scope, question, Claims(),
                          "Could you tell me a bit more? For example: a question about the records, a plan, "
                          "or work you want to track.")
+    shown_offer = decision.offers_plan and verdict.ok     # the generic fallback offers nothing
     return finish("clarify", text, "Assistant asked one clarifying question", verdict,
-                  pending=request if decision.offers_plan else None)
+                  pending=request if shown_offer else None)
