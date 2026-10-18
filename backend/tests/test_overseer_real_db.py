@@ -36,8 +36,8 @@ def test_doctored_answer_is_caught_and_rebuilt(hb, monkeypatch):
     real = routing.factual_answer
     calls = []
 
-    def doctored(client_, scope_, intent):
-        text, error, claims = real(client_, scope_, intent)
+    def doctored(client_, scope_, intent, *rest):
+        text, error, claims = real(client_, scope_, intent, *rest)
         calls.append(intent)
         if len(calls) == 1:   # first build drops a task from both text and claims (a lying producer)
             return text.replace("hb-task-confirm-friday", "hb-task-omitted"), error, claims.model_copy(
@@ -56,8 +56,8 @@ def test_persistently_wrong_answer_is_withheld(hb, monkeypatch):
     create_session(client, ctx, pid, "s1")
     real = routing.factual_answer
 
-    def always_wrong(client_, scope_, intent):
-        text, error, claims = real(client_, scope_, intent)
+    def always_wrong(client_, scope_, intent, *rest):
+        text, error, claims = real(client_, scope_, intent, *rest)
         return text, error, claims.model_copy(update={"affected_task_ids": ["hb-task-book-route-a"]})
     monkeypatch.setattr(routing, "factual_answer", always_wrong)
     run = engine_for(client, scope("s1")).plan_run("Which tasks are affected?", procedure_id="route-change-review")

@@ -110,6 +110,16 @@ class GraphFacts:
         except (AccessDenied, LookupError, AgentBlocked):
             return False
 
+    def message_text(self, message_id: str) -> str | None:
+        """Stored content of one of the CALLER's own messages in this project (owner-checked), or None."""
+        from relaymind.graph.access import authorized_graph
+        graph = authorized_graph(self.client, self.ctx, self.project_id)
+        rows = graph.ro_query(
+            "MATCH (s:Session {owner_id: $owner})-[:ABOUT]->(:Project {id: $p}) "
+            "MATCH (s)-[:HAS_MESSAGE]->(m:Message {id: $id}) RETURN m.content",
+            params={"owner": self.ctx.user_id, "p": self.project_id, "id": message_id}).result_set
+        return rows[0][0] if len(rows) == 1 else None
+
     def exists(self, token: str) -> bool:
         """Any record in this project scope with this exact id (evidence records or people)."""
         if self.resolves(token):
@@ -182,6 +192,16 @@ def oversee(text: str, claims: Claims, facts) -> OverseerVerdict:
         checks += 1
         if not facts.resolves(cited):
             fail("grounding", f"cited ID does not resolve in this project scope: {cited}")
+
+    # quotes from earlier chats must be literally present in the message they cite ------
+    for ref in claims.source_quotes:
+        checks += 1
+        source = facts.message_text(ref.message_id)
+        excerpt = " ".join(ref.snippet.strip("…").split())
+        if source is None:
+            fail("quotes", f"quoted message is not one of your messages in this project: {ref.message_id}")
+        elif not excerpt or excerpt not in " ".join(source.split()):
+            fail("quotes", f"the quote attributed to {ref.message_id} is not what that message says")
 
     # currency + conflicts (incl. the hold versions order answers are based on) ---------
     presented_current = list(dict.fromkeys(claims.current_decision_ids + list(claims.hold_versions.values())))
@@ -260,8 +280,11 @@ def oversee(text: str, claims: Claims, facts) -> OverseerVerdict:
         text = mask_quotes(text, claims.quoted_spans)
         checks += 1
         unbacked = set()
+        id_spans = [t.span() for t in _RECORD_ID.finditer(text) if any(ch.isdigit() for ch in t.group())]
         for m in _STATE_RE.finditer(text):
             word = m.group(1).lower()
+            if any(a <= m.start() < b for a, b in id_spans):
+                continue                                  # part of a record ID, not a claim
             if _negated(text, m.start()):
                 continue
             pairs = WORD_BACKING[word]

@@ -44,6 +44,11 @@ class FakeFacts:
     def exists(self, token):
         return token in self.known or any(rid == token for _, rid in self.records)
 
+    messages = {"msg-1": "Coldline prefers phone calls before 10am, never email."}
+
+    def message_text(self, message_id):
+        return self.messages.get(message_id)
+
 
 def failed(verdict, check):
     return not verdict.ok and any(f.check == check for f in verdict.failures)
@@ -186,3 +191,22 @@ def test_one_name_can_belong_to_several_records():
     text = "- Rejected plan h1-r1: summary\n- Approved plan h1-r1: summary"
     assert oversee(text, claims, FakeFacts(records=records)).ok
     assert failed(oversee("- Applied plan h1-r1", claims, FakeFacts(records=records)), "state_words")
+
+
+
+def test_quotes_must_be_literally_in_their_source_message():
+    from relaymind.contracts.assistant import MemoryRef
+
+    def ref(snippet, mid="msg-1"):
+        return Claims(source_quotes=[MemoryRef(message_id=mid, session_id="s", chat_title="t", role="user",
+                                               snippet=snippet)])
+    assert oversee("q", ref("Coldline prefers phone calls before 10am"), FakeFacts()).ok
+    assert oversee("q", ref("…phone calls before   10am, never email."), FakeFacts()).ok   # window + spacing
+    assert failed(oversee("q", ref("Coldline prefers email"), FakeFacts()), "quotes")          # altered quote
+    assert failed(oversee("q", ref("anything", mid="msg-9"), FakeFacts()), "quotes")           # not your message
+
+
+def test_regression_state_words_inside_record_ids_are_not_claims():
+    """Jayanth's live test: message ids like '<run>-completed-summary' tripped the state-word lint."""
+    assert oversee("RelayMind replied: «quoted» (0b6f1c2a-9d3e-completed-summary)", Claims(), FakeFacts()).ok
+    assert failed(oversee("The work was completed.", Claims(), FakeFacts()), "state_words")

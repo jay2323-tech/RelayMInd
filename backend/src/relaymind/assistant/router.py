@@ -25,7 +25,8 @@ from pydantic import Field, model_validator
 
 from relaymind.contracts.models import StrictModel
 
-Intent = Literal["approvals", "current_decisions", "changes", "exposed_orders", "affected_tasks", "run_status"]
+Intent = Literal["approvals", "current_decisions", "changes", "exposed_orders", "affected_tasks", "run_status",
+                 "recall"]
 
 
 class RouteDecision(StrictModel):
@@ -54,6 +55,7 @@ INSTRUCTION = "\n".join([
     '    affected_tasks = which work is still based on old decisions',
     '    approvals = what the user approved or rejected',
     "    run_status = ONLY the state of plans/runs in this conversation ('is my plan done?')",
+    "    recall = what the user said in earlier chats ('what was that thing I said about pricing?')",
     '- plan: ONLY when the user clearly asks for a plan, next steps, recommendations or what to do.',
     "- work_setup: ONLY when the user names a concrete task to track or be reminded about ('remind me to call X', 'I need to send Y by Friday', 'track the Z follow-up'). Put the task in their own words in work_title. A complaint or a description of a situation is NOT work setup.",
     "- clarify: ambiguous messages, complaints and vague situations ('this is getting messy', 'things changed'). Ask exactly ONE short question. If they probably need a plan, ask whether to prepare one and set offers_plan=true.",
@@ -78,6 +80,26 @@ FALLBACK = ("I'm not sure what you need yet. You can ask a question about the pr
 
 _AFFIRMATIVE = re.compile(r"^\s*(yes|yeah|yep|yup|sure|ok|okay|please do|go ahead|do it|y|yes please)\b[\s.!]*$", re.I)
 _NEGATIVE = re.compile(r"^\s*(no|nope|not now|no thanks|cancel)\b[\s.!]*$", re.I)
+
+# Casual declines of a pending offer ("nahh nahh dw", "nope, I'm good", "don't worry about it").
+# Every word must be decline vocabulary AND at least one core "no" word must appear, so a real request that
+# merely contains "no" ("no, plan the launch instead") is never swallowed as a decline.
+_DECLINE_CORE = re.compile(r"^(no+|na+h*|nope|nop|dw|nvm|nevermind|skip|cancel|pass|dont|don't|nah+)$")
+_DECLINE_WORDS = {"no", "nope", "nah", "dw", "nvm", "never", "mind", "nevermind", "dont", "don't", "worry", "about",
+                  "it", "that", "this", "not", "now", "needed", "necessary", "thanks", "thank", "you", "thx", "ty",
+                  "im", "i'm", "i", "am", "good", "fine", "all", "skip", "cancel", "pass", "later", "maybe", "its",
+                  "it's", "ok", "okay", "bro", "man", "mate", "buddy", "please", "pls", "just", "leave", "forget",
+                  "do", "need", "want", "required"}
+
+
+def is_decline(text: str) -> bool:
+    words = re.findall(r"[a-z']+", text.lower().replace("\u2019", "'"))
+    if not words or len(words) > 10:
+        return False
+    norm = [re.sub(r"(.)\1{2,}", r"\1\1", w) for w in words]          # "nahhhh" -> "nahh"
+    def known(w):
+        return w in _DECLINE_WORDS or bool(_DECLINE_CORE.match(w))
+    return all(known(w) for w in norm) and any(_DECLINE_CORE.match(w) for w in norm)
 
 
 def _latest(engine, limit: int = 8) -> list[dict]:
@@ -123,8 +145,10 @@ def _pending_plan(engine) -> str | None:
         prior = RunRecord.model_validate(engine.store.get("run", run_id))
     except Exception:
         return None
-    if prior.request_kind != "clarify" or not prior.pending_plan_request or prior.answer != offer["content"]:
+    if prior.request_kind not in ("clarify", "factual") or not prior.pending_plan_request \
+            or prior.answer != offer["content"]:
         return None                                      # only an offer that was actually shown counts
+    _pending_plan.memory_ids = list(prior.pending_memory_ids)   # the exact records shown (M3)
     return prior.pending_plan_request
 
 
@@ -160,11 +184,13 @@ def assist(engine, run, request: str):
         engine.store.put("run", run.id, run.model_dump())
         return "done", run
 
+    _pending_plan.memory_ids = []
     pending = _pending_plan(engine)
     if pending and _AFFIRMATIVE.match(request):
+        run.selected_memory_ids = list(_pending_plan.memory_ids)    # revalidated by the engine before planning
         run.events.append(AgentEvent(seq=1, agent="system", summary="Assistant: you confirmed the offered plan"))
         return "plan", f"{pending}\n\n(The user confirmed they want a plan for this: \"{request.strip()}\")"
-    if pending and _NEGATIVE.match(request):
+    if pending and (_NEGATIVE.match(request) or is_decline(request)):
         return finish("clarify", "Okay, I won't prepare a plan. Ask me anything about the project when you're ready.",
                       "Assistant: plan offer declined")
 
@@ -181,6 +207,12 @@ def assist(engine, run, request: str):
     if decision.route == "work_setup":
         from relaymind.workflow.work_setup import chat_turn
         title = " ".join((decision.work_title or "").split())[:200]
+        words = [w for w in re.findall(r"[a-z0-9']{3,}", title.lower())]
+        if not words or sum(w in request.lower() for w in words) < max(1, len(words) // 2):
+            # the model took the title from earlier conversation, not from this message: never act on that
+            return finish("clarify", "Do you want to set up new work? Tell me what it is in this message, for "
+                          "example \"set up new work: call Coldline about the delay\".",
+                          "Assistant: work setup title was not in the message; asked instead")
         result = chat_turn(engine.client, engine.job_scope, f"Set up new work: {title}" if title else
                            "Set up new work", run.id)
         if result is not None:

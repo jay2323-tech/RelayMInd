@@ -1,6 +1,6 @@
 from typing import Literal
 from pydantic import Field, field_validator, model_validator
-from relaymind.contracts.assistant import OverseerVerdict
+from relaymind.contracts.assistant import MemoryRef, OverseerVerdict
 from relaymind.contracts.models import StrictModel, Plan, Review, AgentEvent
 from relaymind.contracts.retrieval import EvidenceVersion
 
@@ -82,7 +82,7 @@ class RunRecord(StrictModel):
     tenant_id: str | None = None
     company_id: str | None = None
     request: str
-    request_kind: Literal["planning", "capability", "factual", "work_setup", "clarify"] = "planning"
+    request_kind: Literal["planning", "capability", "factual", "work_setup", "clarify", "memory"] = "planning"
     user_message: str | None = Field(default=None, description="The user's own words when request was expanded")
     pending_plan_request: str | None = Field(default=None, description="A plan the Assistant offered (clarify)")
     answer: str | None = None
@@ -92,6 +92,14 @@ class RunRecord(StrictModel):
     result: ReviewRecord | None = None
     error: str | None = None
     overseer: OverseerVerdict | None = Field(default=None, description="Checked against project records")
+    memory_refs: list[MemoryRef] = Field(default_factory=list, description="Earlier-chat sources quoted/used")
+    memory_choices: list[MemoryRef] = Field(default_factory=list, description="Choices awaiting a pick")
+    pending_memory_op: Literal["forget", "replace", "save"] | None = None
+    pending_memory_text: str | None = None
+    memory_receipt: dict | None = Field(default=None, description="Durable receipt of a completed memory write")
+    memory_search: dict | None = Field(default=None, description="How recall searched: method, scanned, matches, more")
+    pending_memory_ids: list[str] = Field(default_factory=list, description="Message IDs a recall offer would plan with")
+    selected_memory_ids: list[str] = Field(default_factory=list, description="Message IDs carried into this plan")
 
 
 class NoArguments(StrictModel):
