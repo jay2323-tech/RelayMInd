@@ -1,33 +1,42 @@
-# Phase 2 Watcher UI integration proposal
+# Phase 2 Watcher UI contract
 
 Codex owns frontend + agents/presentation.py and the pre-gate formatting hook in
 agents/engine.py. Claude owns assistant/watcher.py, alert storage/API/hooks/worker.
-Do not edit each other's files without reviewing current changes.
 
-Before UI wiring is enabled, Claude must confirm this additive contract:
-- GET /api/projects/{project_id}/workflow/capabilities adds `watcher: true` only
-  when the alert API is implemented. Omitted/false means UI off, no alert requests.
-- GET /api/projects/{project_id}/alerts -> WatcherAlert[] scoped by server identity.
-  Include both acknowledged and open alerts so acknowledgement never makes an old
-  plan appear current. No model-selected graphs or identity fields.
-- WatcherAlert = {id, kind, reason, target_ids: string[], created_at: epoch ms,
-  acknowledged_at: epoch ms|null}. Targets include exact run/handoff/review/action
-  IDs as applicable, never only a mutable task or run ID for version-specific staleness.
-  Plan staleness must name the exact handoff and/or review ID; the UI does not apply
-  an old handoff alert to a newer handoff merely because they share a run ID.
-- POST /api/projects/{project_id}/alerts/{id}/ack, no body -> same WatcherAlert.
-  Idempotent. Acknowledge dismisses notification only; target remains outdated.
-- Old plan/action IDs remain historical/outdated; a new revision gets new IDs.
-  Alert list must not drop acknowledged records while UI uses them for stale badges.
-  If backend prefers open-only list, supply a separate persistent outdated-target
-  map before enabling the capability; do not silently reinterpret ack as resolve.
+## API reviewed at PR #27, 7253212
 
-UI polls 30 s while visible and on visibility changes. Backend approval endpoints
-always enforce freshness; alerts and disabled buttons are not an authorization gate.
-No auto-resume, auto-revision, auto-approval or action execution from alerts.
+- GET /api/projects/{project_id}/alerts returns all states by default, newest first,
+  up to 200 records, scoped to the authenticated owner/company/project. Optional
+  status=open|acknowledged|resolved. Reading rechecks the caller's plans/actions,
+  so worker liveness does not control alert availability.
+- WatcherAlert = {id, kind: plan_stale|approved_plan_stale|action_stale,
+  target_id, run_id: string|null, session_id: string|null, reason, basis: string,
+  status: open|acknowledged|resolved, created_at: epoch ms,
+  acknowledged_at: epoch ms|null, resolved_at: epoch ms|null}.
+- Plan target_id is the exact handoff revision; action target_id is the action ID.
+  basis is an opaque fingerprint, not a list of record IDs.
+- POST /api/projects/{project_id}/alerts/{id}/ack (no body) returns the same shape.
+  Idempotent for acknowledged records; resolved -> 409, inaccessible -> 404.
+- Open alerts are shown in the attention list. Open AND acknowledged plan alerts
+  mark their exact handoff outdated. Resolved alerts do not. An action alert cannot
+  mark a plan stale, and a shared run ID cannot mark a newer handoff stale.
+- Acknowledgement never approves, refreshes or revises anything. Approval receipts
+  and their history stay visible. Reject/request changes remain available; approving
+  an outdated plan is disabled. Server freshness checks remain authoritative.
 
-Implementation status: prepared UI behind absent-by-default watcher capability.
-Live browser acceptance awaits Claude's confirmed endpoint/schema and real sweep.
+## UI behavior and integration prerequisite
+
+UI polls all alert states every 30 seconds while visible and on visibility changes;
+refreshes after a human plan decision. Independent chat notices are polled even
+when reminders are unsupported. View conversation opens the affected session;
+action alerts open the Actions drawer. Technical reasons are expandable.
+
+The capability endpoint must add watcher=true when this API is supported, independent
+of reminder-worker heartbeat. Omitted/false means no alert requests and no alert list.
+PR #27 currently omits that field in both WorkflowCapabilities and CAPABILITIES;
+Claude must add it before the UI can activate. See pr27-review.md for two additional
+reproduced backend lifecycle findings. No frontend shim enables an unavailable API.
+The full live browser acceptance remains pending backend fixes and integration.
 
 Narrator handoff: direct_reply(kind,text) is applied by the engine BEFORE Overseer
 checks/rebuilds factual/setup output. presentation.py also exports pure

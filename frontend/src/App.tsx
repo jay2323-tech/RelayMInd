@@ -129,9 +129,9 @@ function Workspace({ identity, healthy, onSignOut, onExpired }: {
     setAlerts(previous => previous.map(alert => alert.id === id ? receipt : alert));
   }
 
-  // In-app reminder messages arrive independently of agent runs.
+  // Reminder and Watcher messages arrive independently of agent runs.
   useEffect(() => {
-    if (!sessionId || !capabilities.reminders || jobActive) return;
+    if (!sessionId || !(capabilities.reminders || capabilities.watcher) || jobActive) return;
     let cancelled = false;
     const timer = window.setInterval(async () => {
       if (document.hidden) return;
@@ -141,7 +141,7 @@ function Workspace({ identity, healthy, onSignOut, onExpired }: {
       } catch (error) { if (!cancelled) fail(error); }
     }, 15000);
     return () => { cancelled = true; clearInterval(timer); };
-  }, [sessionId, capabilities.reminders, jobActive, fail]);
+  }, [sessionId, capabilities.reminders, capabilities.watcher, jobActive, fail]);
 
   // Selected evidence shows derived state, so reload it whenever platform data refreshes.
   useEffect(() => {
@@ -272,7 +272,12 @@ function Workspace({ identity, healthy, onSignOut, onExpired }: {
         throw new Error('This plan or decision changed. The latest decision has been reloaded; review it before trying again.');
       }
       throw error;
-    } finally { setBusy(false); }
+    } finally {
+      if (capabilities.watcher) {
+        try { setAlerts(await workflowApi.alerts()); } catch (error) { fail(error); }
+      }
+      setBusy(false);
+    }
   }
 
   function planFor(message: ChatMessage) {
@@ -312,15 +317,17 @@ function Workspace({ identity, healthy, onSignOut, onExpired }: {
         </div>
         <main className="chat-conversation" aria-label="Conversation workspace">
           <div className="chat-reading-column">
-            {capabilities.watcher && <WatcherAlerts alerts={alerts} onAcknowledge={acknowledgeAlert} />}
+            {capabilities.watcher && <WatcherAlerts alerts={alerts} onAcknowledge={acknowledgeAlert} onOpen={alert => {
+              if (alert.session_id) void openSession(alert.session_id).catch(fail);
+              else { openTab('actions'); setSheetOpen(true); }
+            }} />}
             <ChatStream messages={messages} onEvidence={showEvidence} hasPlan={message => !!planFor(message)} renderAfter={message => {
               const matchingRun = Object.values(runViews).find(item => message.id === `${item.run?.id}-${item.run?.status}-summary`)?.run ?? null;
               const badge = <OverseerBadge run={matchingRun} message={message} />;
               const entry = planFor(message); if (!entry) return badge;
               const [id, saved] = entry;
               const latestHandoff = saved.handoffs.at(-1)?.id;
-              const outdated = !!latestHandoff && staleTargets.has(latestHandoff)
-                || !!planReviews[id]?.id && staleTargets.has(planReviews[id]!.id);
+              const outdated = !!latestHandoff && staleTargets.has(latestHandoff);
               return <>{badge}<div className="chat-plan">
                 <PlanCard outdated={outdated} run={saved.run} handoffs={saved.handoffs} currentDecisionIds={currentIds}
                   currentHolds={Object.fromEntries(impacts.map(item => [item.hold.hold_id, item.hold.decision_id]))} onEvidence={showEvidence} />
