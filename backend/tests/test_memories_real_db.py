@@ -199,10 +199,18 @@ def test_regression_assistant_suggestion_recall_is_shown(world):
     pid, client = world
     c = login("northstar.lead")
     sid = chat(c, pid)
+    from relaymind.contracts.agent_jobs import AgentJobScope
+    from relaymind.memory.artifacts import ArtifactStore
     rid = "11111111-2222-3333-4444-555555555555"
+    scope = AgentJobScope(tenant_id="demo-a", user_id="developer-a", company_id="northstar", project_id=pid, session_id=sid)
+    ArtifactStore(client, NS, pid, sid).put("run", rid, {"id": rid, "project_id": pid, "session_id": sid,
+        "owner_id": "developer-a", "tenant_id": "demo-a", "company_id": "northstar",
+        "request": "How do we handle the Coldline delay?", "request_kind": "planning", "status": "completed"})
     save_message(client, NS, pid, sid, f"{rid}-request", "user", "How do we handle the Coldline delay?")
     save_message(client, NS, pid, sid, f"{rid}-completed-summary", "assistant",
                  "I suggest calling Coldline before confirming any new date.")
+    say(c, pid, sid, "Remind me to call Coldline tomorrow.")                 # a work-setup FORM mentioning Coldline
     run = say(c, pid, chat(c, pid), "what did you suggest about Coldline?")
     assert run["status"] == "completed" and run["overseer"]["ok"], run.get("overseer")
     assert "RelayMind replied" in run["answer"] and "calling Coldline before confirming" in run["answer"]
+    assert "Work setup:" not in run["answer"]                               # forms/prompts are not suggestions

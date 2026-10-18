@@ -88,6 +88,8 @@ def search(client: Any, scope: AgentJobScope, terms: list[str], exclude: set[str
         params={"owner": scope.user_id, "project": scope.project_id, "role": role, "max": MAX_SCAN}).result_set
     from relaymind.workflow.memories import suppressed_message_ids
     hidden = suppressed_message_ids(client, scope)          # retracted memories/messages never resurface
+    if role == "assistant":
+        rows = [r for r in rows if r[0] in _plan_summaries(graph, scope, [r[0] for r in rows])]
     memory_of = {r[0]: r[1] for r in graph.ro_query(
         "MATCH (x:Memory) WHERE x.owner_id = $owner AND x.project_id = $project "
         "AND NOT (x)<-[:RETRACTS]-(:MemoryRetraction) RETURN x.source_message_id, x.id",
@@ -117,6 +119,24 @@ def search(client: Any, scope: AgentJobScope, terms: list[str], exclude: set[str
     for m in best:
         m["chat"] = titles.get(m["session_id"], "an earlier chat")
     return best
+
+
+def _plan_summaries(graph, scope: AgentJobScope, message_ids: list[str]) -> set[str]:
+    """Assistant messages that summarise a PLANNING run — RelayMind's actual suggestions. Work-setup forms,
+    memory receipts, clarifying prompts, help text, recall answers, notices and reminders are excluded."""
+    import json
+    run_of = {}
+    for mid in message_ids:
+        if mid.endswith("-summary"):
+            run_of[mid] = mid[:-len("-summary")].rsplit("-", 1)[0]       # "<run id>-<status>-summary"
+    if not run_of:
+        return set()
+    rows = graph.ro_query(
+        "MATCH (a:AgentArtifact {kind: 'run', owner_id: $owner, project_id: $project}) WHERE a.id IN $ids "
+        "RETURN a.id, a.payload_json",
+        params={"owner": scope.user_id, "project": scope.project_id, "ids": sorted(set(run_of.values()))}).result_set
+    planning = {rid for rid, payload in rows if json.loads(payload).get("request_kind", "planning") == "planning"}
+    return {mid for mid, rid in run_of.items() if rid in planning}
 
 
 def _titles(graph, scope: AgentJobScope, session_ids: set[str], hidden: set[str] = frozenset()) -> dict[str, str]:

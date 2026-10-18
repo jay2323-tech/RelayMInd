@@ -71,8 +71,15 @@ def test_recall_is_isolated_per_user_and_company(world):
 def test_assistant_replies_are_recalled_separately_and_labelled(world):
     pid, client = world
     c = login("northstar.lead")
-    chat = seed_chat(c, client, pid, NS, [("user", "How should we handle the Coldline delay?"),
-                                          ("assistant", "I suggest calling Coldline before confirming any new date.")])
+    from relaymind.memory.artifacts import ArtifactStore
+    chat = seed_chat(c, client, pid, NS, [("user", "How should we handle the Coldline delay?")])
+    rid = "22222222-3333-4444-5555-666666666666"                      # a PLANNING run: RelayMind's suggestion
+    ArtifactStore(client, NS, pid, chat).put("run", rid, {
+        "id": rid, "project_id": pid, "session_id": chat, "owner_id": "developer-a", "tenant_id": "demo-a",
+        "company_id": "northstar", "request": "How should we handle the Coldline delay?",
+        "request_kind": "planning", "status": "completed"})
+    save_message(client, NS, pid, chat, f"{rid}-completed-summary", "assistant",
+                 "I suggest calling Coldline before confirming any new date.")
     sid = c.post(f"/api/projects/{pid}/sessions").json()["id"]
     mine = say(c, pid, sid, "what did you suggest about Coldline?")
     assert "RelayMind replied" in mine["answer"] and "calling Coldline before confirming" in mine["answer"]
