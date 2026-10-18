@@ -2,7 +2,7 @@
 
 Use this guide to explore RelayMind's supported features and check their results. All companies, conversations, orders and incidents in the demo are synthetic. This is a hackathon prototype; supported business changes update records in FalkorDB.
 
-**Start here:** use the deployed URL and demo password supplied by the team. Both are pending publication in the [submission details](SUBMISSION.md#submission-links-and-human-details--pending). For local installation, follow the [setup guide](README.md#run-locally). For a narrated recording, see the [demo guide](DEMO.md).
+**Start here:** use the deployed URL and demo password supplied by the team. If the deployment explicitly enables public demo access, the login page shows the shared password beside the account selector: choose an account, select **Use demo password**, then **Sign in**. **Copy** is also available; if clipboard access is unavailable, select the visible password manually. Both are pending publication in the [submission details](SUBMISSION.md#submission-links-and-human-details--pending). For local installation, follow the [setup guide](README.md#run-locally). For a narrated recording, see the [demo guide](DEMO.md).
 
 ## 1. Sign in and choose a scenario
 
