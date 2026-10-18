@@ -91,7 +91,8 @@ def post_plan_review(project_id: str, session_id: str, run_id: str, body: PlanRe
         from relaymind.assistant.overseer import gate
         from relaymind.contracts.assistant import Claims, RecordState
         receipt, _ = gate(client, scope, pr.receipt_text(review),
-                          Claims(record_states=[RecordState(kind="plan_review", id=review.id, status=review.decision)]),
+                          Claims(record_states=[RecordState(kind="plan_review", id=review.id, status=review.decision,
+                                                            aliases=[review.handoff_id, review.run_id])]),
                           f"Your decision on plan revision {review.handoff_id} was recorded ({review.id}).")
         save_message(client, scope.trusted_context(), project_id, session_id,
                      f"{review.id}-receipt", "assistant", receipt)

@@ -47,11 +47,26 @@ _STATE_RE = re.compile(r"\b(" + "|".join(WORD_BACKING) + r")\b", re.I)
 _NEGATORS = re.compile(r"\b(not|no|never|nothing|none|without|neither|nor)\b|n't\b", re.I)
 
 
+_CLAUSE_BREAK = re.compile(r"[.;:,!?\n]|\b(?:and|but|while|whereas|so)\b", re.I)
+_RECORD_ID = re.compile(r"\b[A-Za-z][A-Za-z0-9]*(?:-[A-Za-z0-9]+)+\b")
+
+
 def _negated(text: str, start: int) -> bool:
-    """True if a negator appears within the 6 words before this position, in the same sentence."""
-    sentence_start = max(text.rfind(".", 0, start), text.rfind("\n", 0, start)) + 1
-    window = text[sentence_start:start].split()[-6:]
-    return bool(_NEGATORS.search(" ".join(window)))
+    """True only if a negator governs THIS status word: same clause, at most 4 words before it.
+
+    "No problems remain; action a-1 was applied" -> the "No" is in another clause -> not negated.
+    "No business changes were applied" / "You have not approved or rejected" -> negated.
+    """
+    breaks = [m.end() for m in _CLAUSE_BREAK.finditer(text, 0, start)]
+    clause = text[(breaks[-1] if breaks else 0):start]
+    return bool(_NEGATORS.search(" ".join(clause.split()[-4:])))
+
+
+def _sentence(text: str, start: int) -> str:
+    """The line/sentence containing this position (record identity is checked within it)."""
+    left = max(text.rfind("\n", 0, start), text.rfind(". ", 0, start)) + 1
+    ends = [i for i in (text.find("\n", start), text.find(". ", start)) if i != -1]
+    return text[left:min(ends) if ends else len(text)]
 
 
 class GraphFacts:
@@ -199,16 +214,19 @@ def oversee(text: str, claims: Claims, facts) -> OverseerVerdict:
                 fail("unknowns", f"{unknown_id} has unknown traceability but the answer calls it safe")
 
     # (record, state) pairs ----------------------------------------------------
-    verified: set[tuple[str, str]] = set()
+    # verified: (kind, state) -> the names (id + aliases) of the records that back it
+    verified: dict[tuple[str, str], set[str]] = {}
     for rs in claims.record_states:
         checks += 1
         actual = facts.record_state(rs.kind, rs.id)
         if rs.status in actual:
-            verified.add((rs.kind, rs.status))
+            verified.setdefault((rs.kind, rs.status), set()).update([rs.id, *rs.aliases])
         else:
             fail("records", f"{rs.kind} {rs.id} is not '{rs.status}' (graph: {sorted(actual) or 'not found'})")
-    verified |= {("decision", "current")} if presented_current and not any(
-        f.check in ("currency", "conflicts") for f in failures) else set()
+    if presented_current and not any(f.check in ("currency", "conflicts") for f in failures):
+        verified.setdefault(("decision", "current"), set()).update(presented_current)
+    all_names = {n for names in verified.values() for n in names} | {rs.id for rs in claims.record_states} \
+        | set(claims.cited_ids)
 
     # state words need a verified record of a matching kind -------------------
     if claims.lint_state_words:
@@ -218,8 +236,16 @@ def oversee(text: str, claims: Claims, facts) -> OverseerVerdict:
             word = m.group(1).lower()
             if _negated(text, m.start()):
                 continue
-            if not (WORD_BACKING[word] & verified):
+            backing = set().union(*(verified.get(pair, set()) for pair in WORD_BACKING[word]))
+            if not backing:
                 unbacked.add(word)
+                continue
+            # Record identity: if the sentence names a record, it must be one that backs this state.
+            sentence = _sentence(text, m.start())
+            named = {tok for tok in _RECORD_ID.findall(sentence) if any(ch.isdigit() for ch in tok)}
+            named |= {n for n in all_names if n and n in sentence}
+            if named and not (named & backing):
+                unbacked.add(f"{word} (for {', '.join(sorted(named))})")
         if unbacked:
             fail("state_words", "state words without a verified backing record: " + ", ".join(sorted(unbacked)))
 

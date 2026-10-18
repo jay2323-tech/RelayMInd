@@ -23,6 +23,8 @@ class RecordState(StrictModel):
     kind: RecordKind
     id: str = Field(min_length=1, max_length=300)
     status: str = Field(min_length=1, max_length=60)
+    aliases: list[str] = Field(default_factory=list, max_length=5,
+                               description="Other names the text uses for this record (e.g. a plan revision id)")
 
 
 class Claims(StrictModel):

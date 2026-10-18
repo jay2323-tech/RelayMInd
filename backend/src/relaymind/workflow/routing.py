@@ -169,10 +169,11 @@ def _approvals(client, scope: AgentJobScope) -> tuple[str, Claims]:
     actions = sorted((a for a in list_actions(client, ctx, scope.project_id)
                       if a.status != "proposed" and a.decided_by == scope.user_id),
                      key=lambda a: a.decided_at or 0, reverse=True)[:20]
-    claims = Claims(record_states=[RecordState(kind="plan_review", id=r.id, status=r.decision) for r in reviews]
+    claims = Claims(record_states=[RecordState(kind="plan_review", id=r.id, status=r.decision,
+                                               aliases=[r.handoff_id, r.run_id]) for r in reviews]
                     + [RecordState(kind="action", id=a.id, status=a.status) for a in actions])
     if not reviews and not actions:
-        return ("You have not approved, rejected or sent back any plan or action in this project yet. "
+        return ("You have not approved or rejected any plan or action in this project yet. "
                 "Decisions recorded when the project was set up are not your approvals."), claims
     words = {"approved": "Approved", "rejected": "Rejected", "needs_changes": "Requested changes to"}
     out = []
@@ -206,7 +207,8 @@ def _run_status(client, scope: AgentJobScope) -> tuple[str, Claims]:
         out.append(f"- {r['request'][:80]}: {r['status'].replace('_', ' ')}{human} ({r['id']})")
         states.append(RecordState(kind="run", id=r["id"], status=r["status"]))
         if review:
-            states.append(RecordState(kind="plan_review", id=review.id, status=review.decision))
+            states.append(RecordState(kind="plan_review", id=review.id, status=review.decision,
+                                      aliases=[review.handoff_id, review.run_id]))
     return "\n".join(out), Claims(record_states=states)
 
 
