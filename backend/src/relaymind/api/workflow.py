@@ -23,7 +23,7 @@ router = APIRouter(prefix="/projects/{project_id}")
 # Flip a flag only when the feature is implemented AND verified (tests + live check).
 # `reminders` means SUPPORTED; delivery liveness is reported separately so the feature
 # never disappears from the UI when the worker is down (it shows "delivery offline" instead).
-CAPABILITIES = WorkflowCapabilities(plan_review=True, work_setup=True, reminders=True)
+CAPABILITIES = WorkflowCapabilities(plan_review=True, work_setup=True, reminders=True, watcher=True)
 
 
 def capabilities_now() -> WorkflowCapabilities:
@@ -223,3 +223,27 @@ def reschedule_reminders(project_id: str, item_id: str, body: RescheduleBody, me
 def snooze_reminder(project_id: str, reminder_id: str, body: SnoozeBody, me: Principal = Depends(project_member)):
     with api_errors():
         return rem.snooze(get_client(), _reader_scope(me, project_id), reminder_id, body.minutes)
+
+
+
+# ------------------------------------------------------------------ Phase 2 Watcher alerts
+
+from relaymind.assistant import watcher as wt
+
+
+@router.get("/alerts")
+def list_alerts(project_id: str,
+                status: str | None = Query(None, pattern="^(open|acknowledged|resolved)$"),
+                me: Principal = Depends(project_member)):
+    """This user's staleness alerts. Re-checks the caller's own plans/actions first, so alerts are
+    current even when the background worker is offline."""
+    with api_errors():
+        wt.sweep_for(get_client(), me, project_id)
+        return wt.list_alerts(get_client(), me, project_id, status)
+
+
+@router.post("/alerts/{alert_id}/ack")
+def acknowledge_alert(project_id: str, alert_id: str, me: Principal = Depends(project_member)):
+    """Dismiss the notification only. Never resumes, approves or refreshes the underlying plan/action."""
+    with api_errors():
+        return wt.acknowledge(get_client(), me, project_id, alert_id)

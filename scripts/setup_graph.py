@@ -20,7 +20,8 @@ UNIQUE = [("Decision", "id"), ("Source", "id"), ("Task", "id"),
           ("Order", "id"), ("OrderVersion", "id"), ("OrderVersion", "version_key"),
           ("Batch", "id"), ("Assembly", "id"), ("Hold", "id"),
           ("PlanReview", "id"), ("PlanReview", "operation_id"), ("WorkItem", "id"), ("WorkItem", "operation_id"),
-          ("Reminder", "id"), ("Reminder", "delivery_key"), ("ReminderDelivery", "id")]
+          ("Reminder", "id"), ("Reminder", "delivery_key"), ("ReminderDelivery", "id"),
+          ("WatcherAlert", "key"), ("WatcherAlert", "id")]
 INDEXED = [("Decision", "topic"), ("Project", "id"), ("Person", "id")]
 
 

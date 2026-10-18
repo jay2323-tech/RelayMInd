@@ -101,19 +101,31 @@ def _by_operation(graph, operation_id: str):
     return rows[0] if rows else None
 
 
-def staleness(engine, handoff: HandoffRecord) -> list[str]:
-    """Reasons the plan no longer matches current approved state (same checks as the Reviewer)."""
+def staleness(engine, handoff: HandoffRecord, *, strict: bool = False) -> list[str]:
+    """Reasons the plan no longer matches current approved state (same checks as the Reviewer).
+
+    strict=True (the Watcher): infrastructure failures are RAISED instead of reported as reasons,
+    because a failed read establishes neither staleness nor freshness. Business conditions
+    (conflicting / no current decision) are still reasons in both modes.
+    """
     from relaymind.agents.engine import snapshot
+    from relaymind.agents.loop import AgentBlocked
     reasons = []
     try:
         current = engine.decisions()
-    except Exception:   # conflicts / no current decision: never approvable
+    except AgentBlocked:   # conflicts / no current decision: a real business condition
+        return ["Current approved decisions are unavailable or in conflict"]
+    except Exception:
+        if strict:
+            raise
         return ["Current approved decisions are unavailable or in conflict"]
     if snapshot(current) != snapshot(handoff.decisions):
         reasons.append("Approved decisions changed after this plan was made")
     try:
         changed = engine.changed_evidence(handoff)
     except Exception:
+        if strict:
+            raise
         return reasons + ["Cited evidence could not be rechecked"]
     if changed:
         reasons.append("Cited evidence changed after planning: " + ", ".join(changed[:10]))

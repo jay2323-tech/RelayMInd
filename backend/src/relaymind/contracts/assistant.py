@@ -27,6 +27,32 @@ class RecordState(StrictModel):
                                description="Other names the text uses for this record (e.g. a plan revision id)")
 
 
+class QuotedSpan(StrictModel):
+    """One exact place where a producer copied record text into its answer: the full line it built,
+    and the column range of the copy within that line. Only THIS occurrence is exempt from the
+    state-word lint; the same words anywhere else are still the assistant speaking."""
+    line: str
+    start: int = Field(ge=0)
+    length: int = Field(ge=1)
+
+
+class Quote(str):
+    """Marks a piece of record text inside quoted_line(...)."""
+
+
+def quoted_line(*parts: str) -> tuple[str, list[QuotedSpan]]:
+    """Build one answer line; every Quote(...) part is recorded with its exact column."""
+    pieces, spans, col = [], [], 0
+    for part in parts:
+        text = " ".join(str(part).split()) if isinstance(part, Quote) else str(part)   # quotes stay one line
+        pieces.append(text)
+        if isinstance(part, Quote) and text:
+            spans.append((col, len(text)))
+        col += len(text)
+    line = "".join(pieces)
+    return line, [QuotedSpan(line=line, start=s, length=n) for s, n in spans]
+
+
 class Claims(StrictModel):
     """What an answer asserts, in verifiable form. Producers fill these from the records they read."""
     cited_ids: list[str] = Field(default_factory=list, description="Every ID the text presents; each must resolve in scope")
@@ -39,6 +65,8 @@ class Claims(StrictModel):
     record_states: list[RecordState] = Field(default_factory=list,
                                              description="Each state word in the text must be backed by one of these")
     lint_state_words: bool = Field(default=True, description="False for model prose already covered by the Reviewer")
+    quoted_spans: list[QuotedSpan] = Field(default_factory=list,
+                                           description="Exact places record text was copied into the answer")
 
 
 class OverseerFailure(StrictModel):

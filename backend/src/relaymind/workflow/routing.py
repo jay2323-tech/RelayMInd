@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, Literal
 
 from relaymind.contracts.agent_jobs import AgentJobScope
-from relaymind.contracts.assistant import Claims, RecordState
+from relaymind.contracts.assistant import Claims, Quote, RecordState, quoted_line
 
 Intent = Literal["approvals", "current_decisions", "changes", "exposed_orders", "affected_tasks", "run_status"]
 
@@ -73,9 +73,13 @@ def _decisions(client, ctx, project_id) -> tuple[str, Claims]:
                     + [i for c in state.conflicts for i in c.decision_ids])
     if not state.current and not state.conflicts:
         return "No current approved decision is recorded for this project.", claims
-    lines = ["**Current approved decisions**"]
-    lines += [f"- {d.topic}: {d.text} ({d.id}, version {d.version}; sources {', '.join(d.source_ids)})"
-              for d in sorted(state.current, key=lambda d: d.topic)]
+    lines, spans = ["**Current approved decisions**"], []
+    for d in sorted(state.current, key=lambda d: d.topic):
+        line, s = quoted_line(f"- {d.topic}: ", Quote(d.text),
+                              f" ({d.id}, version {d.version}; sources {', '.join(d.source_ids)})")
+        lines.append(line)
+        spans += s
+    claims = claims.model_copy(update={"quoted_spans": spans})
     for c in state.conflicts:
         lines.append(f"- **In conflict, needs human resolution:** {c.topic} has more than one current decision "
                      f"({', '.join(c.decision_ids)}). I won't pick one.")
@@ -85,22 +89,25 @@ def _decisions(client, ctx, project_id) -> tuple[str, Claims]:
 def _changes(client, ctx, project_id) -> tuple[str, Claims]:
     from relaymind.memory.decisions import get_current_decisions, get_decision
     state = get_current_decisions(client, ctx, project_id)
-    lines, cited, current = [], [], []
+    lines, cited, current, quotes = [], [], [], []
     for d in sorted(state.current + state.conflicting, key=lambda d: d.topic):
         for old_id in d.supersedes:
             old = get_decision(client, ctx, project_id, old_id)
-            lines.append(f"- {d.topic}: **was** {old.text} ({old.id}) → **now** {d.text} ({d.id}; sources "
-                         f"{', '.join(d.source_ids)})")
+            line, s = quoted_line(f"- {d.topic}: **was** ", Quote(old.text), f" ({old.id}) → **now** ", Quote(d.text),
+                                  f" ({d.id}; sources {', '.join(d.source_ids)})")
+            lines.append(line)
             cited += [old.id, d.id, *d.source_ids]
+            quotes += s
             if d.is_current:
                 current.append(d.id)
-    claims = Claims(covers_decisions=True, cited_ids=cited, current_decision_ids=current)
+    claims = Claims(covers_decisions=True, cited_ids=cited, current_decision_ids=current, quoted_spans=quotes)
     if not lines:
         return "Nothing in this project's decision history has been replaced yet, so nothing has changed.", claims
     task_rows, task_claims = _affected_task_lines(client, ctx, project_id)
     claims = claims.model_copy(update={
         "affected_task_ids": task_claims.affected_task_ids,
         "cited_ids": claims.cited_ids + task_claims.cited_ids,
+        "quoted_spans": claims.quoted_spans + task_claims.quoted_spans,
         "record_states": claims.record_states + task_claims.record_states})
     out = ["**What changed (approved decisions)**", *lines]
     if task_rows:
@@ -110,13 +117,18 @@ def _changes(client, ctx, project_id) -> tuple[str, Claims]:
 
 def _affected_task_lines(client, ctx, project_id) -> tuple[list[str], Claims]:
     from relaymind.memory.tasks import find_affected_tasks
-    rows, affected = [], sorted(find_affected_tasks(client, ctx, project_id), key=lambda a: a.task.task_id)
+    rows, spans = [], []
+    affected = sorted(find_affected_tasks(client, ctx, project_id), key=lambda a: a.task.task_id)
     for a in affected:
         owner = f", owner {a.task.assigned_to}" if a.task.assigned_to else ", no owner recorded"
-        rows.append(f"- {a.task.task_id} \"{a.task.title}\" ({a.task.status}{owner}) still implements superseded "
-                    f"{a.superseded_decision_id}; replaced by {', '.join(a.replaced_by) or 'nothing recorded'}")
+        line, s = quoted_line(f"- {a.task.task_id} \"", Quote(a.task.title),
+                              f"\" ({a.task.status}{owner}) still implements superseded "
+                              f"{a.superseded_decision_id}; replaced by {', '.join(a.replaced_by) or 'nothing recorded'}")
+        rows.append(line)
+        spans += s
     claims = Claims(affected_task_ids=sorted({a.task.task_id for a in affected}),
                     cited_ids=[i for a in affected for i in [a.task.task_id, a.superseded_decision_id, *a.replaced_by]],
+                    quoted_spans=spans,
                     record_states=[RecordState(kind="decision", id=i, status="superseded")
                                    for i in sorted({a.superseded_decision_id for a in affected})]
                     + [RecordState(kind="task", id=a.task.task_id, status=a.task.status) for a in affected])
@@ -145,7 +157,8 @@ def _orders(client, ctx, project_id) -> tuple[str, Claims]:
         exposed_map[hold_id] = [a.order.order_id for a in r.affected]
         versions[hold_id] = r.hold.decision_id          # checked for currency even if the set is unchanged
         unknown_ids += [o.order_id for o in r.unknown_traceability]
-        cited += [hold_id, r.hold.decision_id] + exposed_map[hold_id] + [o.order_id for o in r.unknown_traceability]
+        cited += [hold_id, r.hold.decision_id] + exposed_map[hold_id] + [o.order_id for o in r.unknown_traceability] \
+            + list(r.hold.held_batches) + [x for a in r.affected for x in (a.assembly_id, a.batch_id)]
         states += [RecordState(kind="order", id=a.order.order_id, status=a.order.status) for a in r.affected]
         out.append(f"**Orders exposed by {hold_id}** (current version {r.hold.decision_id}, held batches "
                    f"{', '.join(r.hold.held_batches) or 'none'})")
@@ -179,8 +192,15 @@ def _approvals(client, scope: AgentJobScope) -> tuple[str, Claims]:
     out = []
     if reviews:
         out.append("**Plans you reviewed**")
-        out += [f"- {words[r.decision]} plan {r.handoff_id}: {r.plan_summary or 'no summary'}"
-                + (f" (feedback: {r.feedback})" if r.feedback else "") for r in reviews]
+        spans = []
+        for r in reviews:
+            parts = [f"- {words[r.decision]} plan {r.handoff_id}: ", Quote(r.plan_summary or "no summary")]
+            if r.feedback:
+                parts += [" (feedback: ", Quote(r.feedback), ")"]
+            line, s = quoted_line(*parts)
+            out.append(line)
+            spans += s
+        claims = claims.model_copy(update={"quoted_spans": spans})
     if actions:
         out.append("**Actions you decided**")
         out += [f"- {a.status.capitalize()}: {a.kind.replace('_', ' ')} on {a.task_id}"
@@ -200,16 +220,18 @@ def _run_status(client, scope: AgentJobScope) -> tuple[str, Claims]:
     runs = [r for r in runs if r.get("company_id") == scope.company_id and r.get("request_kind", "planning") == "planning"]
     if not runs:
         return "There are no plans in this conversation yet.", Claims()
-    out, states = ["**Plans in this conversation**"], []
+    out, states, spans = ["**Plans in this conversation**"], [], []
     for r in runs[-5:]:
         review = review_for_handoff(client, scope, r["handoff_ids"][-1]) if r.get("handoff_ids") else None
         human = f"; you {review.decision.replace('_', ' ')} it" if review else ""
-        out.append(f"- {r['request'][:80]}: {r['status'].replace('_', ' ')}{human} ({r['id']})")
+        line, s = quoted_line("- ", Quote(r["request"][:80]), f": {r['status'].replace('_', ' ')}{human} ({r['id']})")
+        out.append(line)
+        spans += s
         states.append(RecordState(kind="run", id=r["id"], status=r["status"]))
         if review:
             states.append(RecordState(kind="plan_review", id=review.id, status=review.decision,
                                       aliases=[review.handoff_id, review.run_id]))
-    return "\n".join(out), Claims(record_states=states)
+    return "\n".join(out), Claims(record_states=states, quoted_spans=spans)
 
 
 _ANSWERS: dict[Intent, Callable[[Any, AgentJobScope], tuple[str, Claims]]] = {
