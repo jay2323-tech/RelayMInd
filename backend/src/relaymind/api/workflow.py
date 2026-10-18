@@ -247,3 +247,41 @@ def acknowledge_alert(project_id: str, alert_id: str, me: Principal = Depends(pr
     """Dismiss the notification only. Never resumes, approves or refreshes the underlying plan/action."""
     with api_errors():
         return wt.acknowledge(get_client(), me, project_id, alert_id)
+
+
+
+# ------------------------------------------------------------------ Multi-chat memory M2
+
+from relaymind.workflow import memories as mem
+
+
+class ForgetBody(_Strict):
+    reason: str | None = _Field(default=None, max_length=500)
+
+
+def _memory_out(m: dict) -> dict:
+    return {"id": m["id"], "text": m["text"], "source": m["source"].model_dump(), "status": m["status"],
+            "created_at": m["created_at"], "retracted_at": m["retracted_at"],
+            "retraction_reason": m["retraction_reason"]}
+
+
+@router.get("/memories")
+def list_saved_memories(project_id: str, status: str = Query("active", pattern="^(active|retracted|all)$"),
+                        me: Principal = Depends(project_member)):
+    with api_errors():
+        return [_memory_out(m) for m in mem.list_memories(get_client(), _reader_scope(me, project_id), status)]
+
+
+@router.get("/memories/{memory_id}")
+def get_saved_memory(project_id: str, memory_id: str, me: Principal = Depends(project_member)):
+    with api_errors():
+        return _memory_out(mem.get_memory(get_client(), _reader_scope(me, project_id), memory_id))
+
+
+@router.post("/memories/{memory_id}/forget")
+def forget_memory(project_id: str, memory_id: str, body: ForgetBody, me: Principal = Depends(project_member)):
+    """Retract a memory: it and its source message stop being used in recall and planning. Nothing is deleted."""
+    with api_errors():
+        scope = _reader_scope(me, project_id)
+        receipt = mem.retract(get_client(), scope, memory_id=memory_id, reason=body.reason or "Forgotten by the user")
+        return {**_memory_out(mem.get_memory(get_client(), scope, memory_id)), "receipt": receipt}

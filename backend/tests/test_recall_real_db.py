@@ -96,3 +96,14 @@ def test_doctored_quote_is_caught_and_capability_is_advertised(world, monkeypatc
     run = say(c, pid, sid, "Do you remember what I said about Coldline?")
     assert run["status"] == "blocked" and "emails" not in run["answer"]    # misquote never shown
     assert c.get(f"/api/projects/{pid}/workflow/capabilities").json()["memory"] is True
+
+
+def test_recall_explains_its_search(world):
+    pid, client = world
+    c = login("northstar.lead")
+    seed_chat(c, client, pid, NS, [("user", f"Coldline note number {i}: check the pallets.") for i in range(5)])
+    sid = c.post(f"/api/projects/{pid}/sessions").json()["id"]
+    run = say(c, pid, sid, "Do you remember what I said about Coldline?")
+    info = run["memory_search"]
+    assert (info["method"], info["matches"], info["shown"], info["more"], info["role"]) == ("keyword", 5, 3, True, "user")
+    assert info["scanned"] >= 5 and "2 more matched" in run["answer"] and run["overseer"]["ok"]

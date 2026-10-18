@@ -184,6 +184,11 @@ class CoordinationEngine:
             "MATCH (s:Session {id:$session,owner_id:$owner})-[:HAS_MESSAGE]->(m:Message) "
             "RETURN m.id,m.role,m.content ORDER BY m.seq DESC LIMIT 12",
             params={'session':self.session_id,'owner':self.context.user_id}).result_set
+        hidden=set()
+        if self.job_scope is not None:
+            from relaymind.workflow.memories import suppressed_message_ids
+            hidden=suppressed_message_ids(self.client,self.job_scope)   # retractions apply to planning too
+        rows=[row for row in rows if row[0] not in hidden]
         return {'recent_messages':[{'id':row[0],'role':row[1],'content':row[2][:2000]} for row in reversed(rows)],
                 'episodes':[e.model_dump() for e in load_episodes(self.client,self.context,self.project_id,limit=5)]}
 
@@ -332,6 +337,34 @@ class CoordinationEngine:
             self.store.put('run',run.id,run.model_dump())
             return run
         if self.job_scope is not None:
+            # M2: save / list / forget memories (deterministic, no model)
+            from relaymind.workflow.memories import chat_turn as memory_turn
+            try:
+                turn=memory_turn(self,run,request)
+                turn_error=None
+            except Exception as exc:
+                turn,turn_error=None,type(exc).__name__
+                run.request_kind='memory'
+                run.answer=f'I could not update your memory, so nothing was changed. (Error: {turn_error})'
+                run.status='blocked'
+                run.error=f'memory: {turn_error}'
+                self.store.put('run',run.id,run.model_dump())
+                return run
+            if turn is not None:
+                from relaymind.assistant.overseer import gate
+                kind,text,claims,refs,choices=turn.kind,turn.text,turn.claims,turn.refs,turn.choices
+                text,run.overseer=gate(self.client,self.job_scope,text,claims,
+                    'Your memory request was handled, but I could not verify my summary of it against your '
+                    'messages, so I am not repeating it. Ask "what do you remember?" to see the current list.')
+                run.request_kind,run.answer,run.status=kind,text,'completed'
+                shown=run.overseer.ok                      # choices only count if they were actually shown
+                run.memory_refs,run.memory_choices=refs,(choices if shown else [])
+                run.pending_memory_op=turn.op if shown else None
+                run.pending_memory_text=turn.pending_text if shown else None
+                run.memory_receipt=turn.receipt
+                run.events.append(AgentEvent(seq=1,agent='system',summary=f'Memory: {kind}'))
+                self.store.put('run',run.id,run.model_dump())
+                return run
             # B3: guided work setup turns (explicit fields only; no model).
             from relaymind.workflow.work_setup import chat_turn
             try:
@@ -396,6 +429,9 @@ class CoordinationEngine:
                 run.overseer=verdict
                 if error is None and claims is not None:
                     run.memory_refs=list(claims.source_quotes)    # navigation to the quoted earlier chats
+                if route.intent=='recall':
+                    from relaymind.workflow.recall import SEARCH_INFO
+                    run.memory_search=dict(SEARCH_INFO) or None
                 run.status='blocked' if error else 'completed'
                 run.error=f'factual: {error}' if error else None
                 run.events.append(AgentEvent(seq=1,agent='system',summary=f'Answered from records ({route.intent})'))
