@@ -1,35 +1,60 @@
-import { useRef, useState } from 'react';
+import { workflowApi } from '../api/workflow';
+import { useEffect, useRef, useState } from 'react';
 import type { PlanDecision, PlanReview } from '../types/workflow';
 import type { ProposedAction, RunView, ImpactReport, AffectedTask } from '../types';
 import { EvidenceChip } from './common';
 
 type Proposal = { target?: 'order' | 'task'; task_id: string; new_status: string; reason: string; based_on: string[]; expected_task_version: number; run_id?: string };
 
-export function InlinePlanControls({ view, supported, review, busy, onDecision }: {
-  view: RunView; supported: boolean; review: PlanReview | null; busy: boolean;
-  onDecision: (decision: PlanDecision, feedback: string, operationId: string) => Promise<void>;
+export function InlinePlanControls({ sessionId, view, supported, review, busy, onDecision }: {
+  sessionId: string; view: RunView; supported: boolean; review: PlanReview | null; busy: boolean;
+  onDecision: (decision: PlanDecision, feedback: string, operationId: string, expectedVersion?: number) => Promise<void>;
 }) {
   const [editing, setEditing] = useState(false);
+  const [changing, setChanging] = useState(false);
   const [feedback, setFeedback] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [history, setHistory] = useState<PlanReview[]>([]);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const pending = useRef<{ key: string; id: string } | null>(null);
   const current = view.handoffs.at(-1);
   const accepted = view.run?.status === 'completed' && view.run.result?.review.status === 'accepted';
   const recorded = review && review.handoff_id === current?.id;
+  const version = recorded ? review.review_version : undefined;
+  useEffect(() => { setChanging(false); setEditing(false); setFeedback(''); pending.current = null; }, [review?.id, current?.id]);
+  useEffect(() => {
+    let cancelled = false;
+    setHistory([]); setHistoryError(null);
+    if (!supported || !review || !view.run) return;
+    setHistoryLoading(true);
+    workflowApi.reviewHistory(sessionId, view.run.id).then(rows => { if (!cancelled) setHistory(rows); })
+      .catch(() => { if (!cancelled) setHistoryError('Decision history could not be loaded.'); })
+      .finally(() => { if (!cancelled) setHistoryLoading(false); });
+    return () => { cancelled = true; };
+  }, [sessionId, view.run?.id, review?.id, supported]);
   async function decide(decision: PlanDecision) {
-    const key = `${current?.id}:${decision}:${feedback}`;
+    const key = `${current?.id}:${version ?? 'first'}:${decision}:${feedback}`;
     if (pending.current?.key !== key) pending.current = { key, id: crypto.randomUUID() };
     setError(null);
-    try { await onDecision(decision, feedback, pending.current.id); setEditing(false); }
+    try { await onDecision(decision, feedback, pending.current.id, version); setEditing(false); setChanging(false); }
     catch (e) { setError(e instanceof Error ? e.message : 'Could not save your decision.'); }
   }
+  const label = (decision: PlanDecision) => decision === 'approved' ? 'Approved' : decision === 'rejected' ? 'Rejected' : 'Changes requested';
   return <div className="inline-plan-controls">
-    {recorded ? <div className="approval-receipt" role="status"><strong>
-      {review.decision === 'approved' ? 'You approved this plan' : review.decision === 'rejected' ? 'You rejected this plan' : 'Changes requested'}
-      </strong><p className="caption">Recorded by {review.reviewed_by} · {new Date(review.created_at).toLocaleString()}</p>
+    {recorded && <div className="approval-receipt" role="status"><strong>{label(review.decision)}</strong>
+      <p className="caption">Recorded by {review.reviewed_by} · {new Date(review.created_at).toLocaleString()}{version ? ` · decision v${version}` : ''}</p>
       {review.feedback && <p>{review.feedback}</p>}
-      {review.decision === 'approved' && <p className="caption">Plan approval is recorded. Business changes still need the execution controls below.</p>}
-    </div> : <>
+      <p className="caption">Plan approval records intent. Changing this decision does not undo any business changes already applied.</p>
+      <button className="btn btn--small" disabled={busy || !supported || version === undefined} onClick={() => setChanging(value => !value)}>{changing ? 'Cancel decision change' : 'Change decision'}</button>
+      {version === undefined && <p className="caption">Decision changes require the updated server.</p>}
+      <details className="decision-history"><summary>Decision history{history.length ? ` · ${history.length}` : ''}</summary>
+        {historyLoading && <p>Loading history…</p>}{historyError && <p role="alert">{historyError}</p>}
+        {history.map(item => <div className="decision-history-entry" key={item.id}><strong>{label(item.decision)} · v{item.review_version ?? 1}</strong>
+          <p className="caption">{item.reviewed_by} · {new Date(item.created_at).toLocaleString()}</p>{item.feedback && <p>{item.feedback}</p>}</div>)}
+      </details>
+    </div>}
+    {(!recorded || changing) && <>
       <div className="row"><button className="btn btn--primary" disabled={busy || !supported || !accepted} onClick={() => void decide('approved')}>Approve plan</button>
         <button className="btn" disabled={busy || !supported} onClick={() => setEditing(value => !value)}>Request changes</button>
         <button className="btn btn--ghost btn--danger-text" disabled={busy || !supported} onClick={() => void decide('rejected')}>Reject plan</button></div>
