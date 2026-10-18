@@ -433,13 +433,15 @@ def _chat_turn(client: Any, scope: AgentJobScope, text: str, operation_id: str):
         scheduled = list_reminders(client, scope, item_id=item.id, status="scheduled")
         reply = "\n".join([f"**Confirmed: {item.title}** ({item.id})", *_describe(item), "",
                            confirmation_note(client, scope, item)])
-        return reply, Claims(record_states=[RecordState(kind="work_item", id=item.id, status="confirmed")]
+        return reply, Claims(record_states=[RecordState(kind="work_item", id=item.id, status="confirmed",
+                                                        aliases=[item.title] if item.title else [])]
                              + [RecordState(kind="reminder", id=r["id"], status="scheduled") for r in scheduled])
     if draft is not None and lowered in _CANCEL:
         from relaymind.contracts.assistant import Claims, RecordState
         item = transition(client, scope, draft.id, "cancel", draft.version)
         return (f"Cancelled the draft {item.title or item.id}. Nothing was scheduled.",
-                Claims(record_states=[RecordState(kind="work_item", id=item.id, status="cancelled")]))
+                Claims(record_states=[RecordState(kind="work_item", id=item.id, status="cancelled",
+                                                  aliases=[item.title] if item.title else [])]))
     fields, errors = parse_fields(text, scope.user_id)
     has_fields = any(v is not None for v in fields.model_dump().values())
     nl_start = False

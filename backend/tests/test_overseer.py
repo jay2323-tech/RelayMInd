@@ -111,3 +111,29 @@ def test_verdict_counts_and_safe_summary():
     assert verdict.ok and verdict.checks_run == 4 and verdict.failures == []
     text = safe_summary({"status": "completed", "result": {"review": {"status": "accepted"}}}, {"summary": "s"})
     assert "No business changes were applied" in text and "could not re-verify" in text
+
+
+def test_regression_negation_is_limited_to_the_status_claim():
+    """Codex re-review #1: a negator in another clause must not excuse the status word."""
+    assert failed(oversee("No problems remain; action a-1 was applied.", Claims(), FakeFacts()), "state_words")
+    assert failed(oversee("No problems remain, and action a-1 was applied.", Claims(), FakeFacts()), "state_words")
+    assert failed(oversee("Nothing else to report but the change was applied.", Claims(), FakeFacts()), "state_words")
+    # Genuine negation of the status itself still passes.
+    for text in ("No business changes were applied.", "You have not approved or rejected any plan.",
+                 "The change was not applied.", "Nothing was scheduled."):
+        assert oversee(text, Claims(), FakeFacts()).ok, text
+
+
+def test_regression_status_must_be_backed_by_the_named_record():
+    """Codex re-review #2: a verified state of action a-1 cannot back a claim about action a-2."""
+    facts = FakeFacts(records={("action", "a-1"): {"approved", "applied"}})
+    claim = Claims(record_states=[RecordState(kind="action", id="a-1", status="applied")])
+    assert oversee("Action a-1 was applied.", claim, facts).ok
+    assert failed(oversee("Action a-2 was applied.", claim, facts), "state_words")
+    assert failed(oversee("Action a-1 was approved. Action a-2 was applied.", claim, facts), "state_words")
+    # Aliases let the text use another name for the same record (e.g. a plan revision id).
+    review = Claims(record_states=[RecordState(kind="plan_review", id="h1-plan-review", status="approved",
+                                               aliases=["h1"])])
+    rfacts = FakeFacts(records={("plan_review", "h1-plan-review"): {"approved"}})
+    assert oversee("You approved plan revision h1.", review, rfacts).ok
+    assert failed(oversee("You approved plan revision h2-r1.", review, rfacts), "state_words")
