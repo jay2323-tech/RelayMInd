@@ -134,3 +134,9 @@ send "1", "2", … or "cancel".
 - Planner context key `historical_context.related_memory = {label, items:[{message_id, said_by, chat, date_ms, text,
   saved_memory_id}]}`. Retracted messages cannot be cited (evidence lookup refuses them).
 - UI: a "Use in a plan" button can simply send "yes" while the offer is pending.
+
+### Chat-name links (requested by Jayanth)
+Recall text no longer shows raw message IDs; it names the chat ("In "Coldline follow-up" on 18 Oct 2026 you
+said: …"). Each quote's `memory_refs[i]` carries `chat_title` + `session_id` (+ `message_id`): render the chat
+name as a link that opens `session_id` (optionally scrolled to `message_id`). The Planner is told to refer to
+earlier chats by name in its text and keep message IDs only in step `evidence_ids`.

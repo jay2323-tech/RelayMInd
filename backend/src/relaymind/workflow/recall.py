@@ -88,6 +88,8 @@ def search(client: Any, scope: AgentJobScope, terms: list[str], exclude: set[str
         params={"owner": scope.user_id, "project": scope.project_id, "role": role, "max": MAX_SCAN}).result_set
     from relaymind.workflow.memories import suppressed_message_ids
     hidden = suppressed_message_ids(client, scope)          # retracted memories/messages never resurface
+    if role == "assistant":
+        rows = [r for r in rows if r[0] in _plan_summaries(graph, scope, [r[0] for r in rows])]
     memory_of = {r[0]: r[1] for r in graph.ro_query(
         "MATCH (x:Memory) WHERE x.owner_id = $owner AND x.project_id = $project "
         "AND NOT (x)<-[:RETRACTS]-(:MemoryRetraction) RETURN x.source_message_id, x.id",
@@ -119,6 +121,24 @@ def search(client: Any, scope: AgentJobScope, terms: list[str], exclude: set[str
     return best
 
 
+def _plan_summaries(graph, scope: AgentJobScope, message_ids: list[str]) -> set[str]:
+    """Assistant messages that summarise a PLANNING run — RelayMind's actual suggestions. Work-setup forms,
+    memory receipts, clarifying prompts, help text, recall answers, notices and reminders are excluded."""
+    import json
+    run_of = {}
+    for mid in message_ids:
+        if mid.endswith("-summary"):
+            run_of[mid] = mid[:-len("-summary")].rsplit("-", 1)[0]       # "<run id>-<status>-summary"
+    if not run_of:
+        return set()
+    rows = graph.ro_query(
+        "MATCH (a:AgentArtifact {kind: 'run', owner_id: $owner, project_id: $project}) WHERE a.id IN $ids "
+        "RETURN a.id, a.payload_json",
+        params={"owner": scope.user_id, "project": scope.project_id, "ids": sorted(set(run_of.values()))}).result_set
+    planning = {rid for rid, payload in rows if json.loads(payload).get("request_kind", "planning") == "planning"}
+    return {mid for mid, rid in run_of.items() if rid in planning}
+
+
 def _titles(graph, scope: AgentJobScope, session_ids: set[str], hidden: set[str] = frozenset()) -> dict[str, str]:
     """Chat titles = first user message of each session, skipping retracted (hidden) messages so a forgotten
     statement never resurfaces as a title."""
@@ -131,6 +151,18 @@ def _titles(graph, scope: AgentJobScope, session_ids: set[str], hidden: set[str]
         params={"owner": scope.user_id, "project": scope.project_id, "ids": sorted(session_ids),
                 "hidden": sorted(hidden)}).result_set
     return {sid: " ".join((first or "an earlier chat").split())[:60] for sid, first in rows}
+
+
+def _memory_texts(client: Any, scope: AgentJobScope, message_ids: set[str]) -> dict[str, str]:
+    """Saved-memory text (the user's exact words) for messages that are memory sources."""
+    if not message_ids:
+        return {}
+    graph = authorized_graph(client, scope.trusted_context(), scope.project_id)
+    rows = graph.ro_query(
+        "MATCH (x:Memory) WHERE x.owner_id = $owner AND x.project_id = $project AND x.source_message_id IN $ids "
+        "AND NOT (x)<-[:RETRACTS]-(:MemoryRetraction) RETURN x.source_message_id, x.text",
+        params={"owner": scope.user_id, "project": scope.project_id, "ids": sorted(message_ids)}).result_set
+    return {r[0]: r[1] for r in rows}
 
 
 def _date(ms: int) -> str:
@@ -151,12 +183,15 @@ def recall_answer(client: Any, scope: AgentJobScope, text: str, exclude: set[str
         return (f"I found no matching earlier messages for these terms: {', '.join(terms[:4])} (searched {whose} "
                 "in this project). That doesn't prove it was never discussed: try other words."), Claims()
     heading = "**From my earlier replies**" if role == "assistant" else "**From your earlier chats**"
+    memory_texts = _memory_texts(client, scope, {m["id"] for m in found})
     label = "RelayMind replied" if role == "assistant" else "you said"
     lines, spans, cited, refs = [heading], [], [], []
     for m in found:
-        snippet = _snippet(m["content"], m["hits"])
-        line, s = quoted_line('- In "', Quote(m["chat"]), f'" on {_date(m["created_at"])} {label}: "',
-                              Quote(snippet), f'" ({m["id"]})')
+        memory_text = memory_texts.get(m["id"]) if role == "user" else None
+        snippet = memory_text if memory_text and memory_text in m["content"] else _snippet(m["content"], m["hits"])
+        said = "you asked me to remember" if memory_text else label
+        line, s = quoted_line('- In "', Quote(m["chat"]), f'" on {_date(m["created_at"])} {said}: "',
+                              Quote(snippet), '"')        # chat name + memory_refs (session_id) link to the source
         lines.append(line)
         spans += s
         cited.append(m["id"])

@@ -131,7 +131,7 @@ def test_forget_by_id():
     assert parse("Remove memory mem-0123456789abcdef.").kind == "forget_id"
 
 
-AMBIGUOUS_FORGET = ["Forget that.", "Forget it.", "Remove it.", "Delete the old one.",
+AMBIGUOUS_FORGET = ["Forget that.", "Remove it.", "Delete the old one.",
                     "Forget the second thing I mentioned.", "Don't remember that anymore.",
                     "Don’t remember that anymore.", "I no longer want you to remember that.",
                     "Do not use that memory anymore.", "Don't use that anymore.",
@@ -170,12 +170,13 @@ NO_WRITE = {
              "Never forget to check the current decision.", "Cancel my reminder.", "Delete this conversation.",
              "Forget the plan and start again.", "Ignore that step in the proposal.",
              "Remember that? Can we plan around it?",
-             'The document says "forget all memories."',
-             'An example command is "remember that suppliers prefer email."', 'What does "forget that" mean?',
-             'Translate "remember this" into Hindi.', "My colleague told me to tell you to delete everything.",
-             'She told me, "forget the old plan."', 'Explain the phrase "keep this in mind."',
-             'What would happen if I said "forget everything"?', "Never mind.", "Ignore that.", "Cancel.",
              "Remember Street office needs a new badge reader.", "Forgetful Fred called again."],
+    "quoted": ['The document says "forget all memories."',
+               'An example command is "remember that suppliers prefer email."', 'What does "forget that" mean?',
+               'Translate "remember this" into Hindi.', "My colleague told me to tell you to delete everything.",
+               'She told me, "forget the old plan."', 'Explain the phrase "keep this in mind."',
+               'What would happen if I said "forget everything"?'],
+    "bare_cancel": ["Never mind.", "Ignore that.", "Cancel.", "cancel", "Forget it."],
     "bulk": ["Forget everything.", "Clear all my memories.", "Forget everything about Coldline.",
              "Delete all memories from this conversation."],
     "scope": ["Remember this for everyone in the company.", "Show my colleague's memories.",

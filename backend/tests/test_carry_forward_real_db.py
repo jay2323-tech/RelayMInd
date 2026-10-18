@@ -126,3 +126,16 @@ def test_direct_recall_plus_plan_carries_the_matches(world, monkeypatch):
     assert run["request_kind"] == "planning" and run["status"] == "completed"
     assert source in run["selected_memory_ids"]
     assert planner_input(model)["historical_context"]["related_memory"]["items"][0]["message_id"] == source
+
+
+def test_regression_planner_may_cite_a_run_id_short_form(world, monkeypatch):
+    """Jayanth's live test: the model cited '<run id>' without the '-request' suffix and the plan blocked."""
+    pid, _ = world
+    c = login("northstar.lead")
+    a = c.post(f"/api/projects/{pid}/sessions").json()["id"]
+    source = say(c, pid, a, "Remember that Coldline wants a phone call before 10am.")["run"]["memory_refs"][0]["message_id"]
+    short = source[:-len("-request")]
+    install(monkeypatch, planner(pid, short))
+    b = c.post(f"/api/projects/{pid}/sessions").json()["id"]
+    run = say(c, pid, b, "Do you remember what I said about Coldline? Plan on it and make it better.")["run"]
+    assert run["status"] == "completed", run.get("error")
