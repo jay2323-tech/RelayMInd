@@ -78,3 +78,33 @@ Explicit review run: original three passed, new quote-span regression failed.
 Full trial-merge backend suite: 318 passed in 149.42 seconds, three existing deprecation warnings.
 Frontend trial-merge build passed (46 modules), eight UI state tests passed.
 Browser acceptance remains not run; no app servers started or GitHub PR merged.
+
+
+## Final quotation recheck — ee195a6
+
+The remaining quoted-text finding is **closed**. QuotedSpan now records the full
+producer-built line plus start/length; only the recorded range on an identical
+line is masked. Appending the same status word elsewhere, including editing the
+same line, remains subject to the state-word check. Producer routes build spans
+with quoted_line; existing Narrator formatting preserves the lines.
+
+All four independent review reproductions passed against the latest checkout,
+including the original real-DB task-title case. The permanent positional unit
+and real-DB regressions also passed. No remaining blocking finding was identified
+in this reviewed fix; this is not a guarantee about arbitrary prose semantics.
+
+Frontend build passed (46 modules), all 14 UI tests passed (Watcher/Overseer 8,
+trackState 6). Combined backend suite plus four review reproductions: 322 passed,
+two failed in 150.06 seconds. Both failures are the unchanged concurrency harness's
+25ms maximum launch-skew guard: AT-2 measured 53.50ms, AT-3 measured 26.99ms.
+These do not establish an atomicity result; the two checks are being rerun unchanged.
+No claim of a fully green first run. Three existing deprecation warnings.
+
+Confirmed #25 and #26 are already merged; only #27 is open. PR #27 includes current
+main. Browser approval/change/alert/revision/history acceptance is not run and
+remains required before closing Phase 2. No servers started or GitHub PR merged.
+
+Targeted concurrency rerun: both AT-2 and AT-3 passed unchanged, 82.69 seconds.
+All 320 backend cases and four independent review cases passed across the initial
+run plus this two-case rerun; the initial run still had two timing failures.
+No remaining blocker identified in reviewed PR27 ee195a6. Browser acceptance pending.

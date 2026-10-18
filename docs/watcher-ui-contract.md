@@ -35,7 +35,8 @@ The capability endpoint must add watcher=true when this API is supported, indepe
 of reminder-worker heartbeat. Omitted/false means no alert requests and no alert list.
 PR #27 fea7149 now supplies this field in both WorkflowCapabilities and CAPABILITIES.
 The three original review findings are verified closed in a local trial merge with main.
-See pr27-review.md for a remaining quoted-text lint finding, separate from the alert API.
+PR #27 ee195a6 adds positional quote exemptions for the final quoted-text lint finding;
+see pr27-review.md for the verification history.
 No frontend shim enables an unavailable API.
 The full live browser acceptance remains pending backend fixes and integration.
 

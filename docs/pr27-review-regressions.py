@@ -1,4 +1,4 @@
-"""Review-only reproductions: original three now pass on fea7149; quote-span case fails.
+"""Review-only reproductions for PR27; all four expected to pass after positional quote fix.
 Run against that checkout with its backend/src and backend/tests on PYTHONPATH,
 RUN_LIVE_FALKORDB_TESTS=1 and local FalkorDB credentials loaded. Uses throwaway
 projects and scripted providers; never modifies demo decisions.
