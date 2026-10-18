@@ -6,7 +6,8 @@ import { EvidenceChip } from './common';
 
 type Proposal = { target?: 'order' | 'task'; task_id: string; new_status: string; reason: string; based_on: string[]; expected_task_version: number; run_id?: string };
 
-export function InlinePlanControls({ sessionId, view, supported, review, busy, onDecision }: {
+export function InlinePlanControls({ sessionId, view, supported, review, busy, onDecision, outdated = false }: {
+  outdated?: boolean;
   sessionId: string; view: RunView; supported: boolean; review: PlanReview | null; busy: boolean;
   onDecision: (decision: PlanDecision, feedback: string, operationId: string, expectedVersion?: number) => Promise<void>;
 }) {
@@ -55,7 +56,7 @@ export function InlinePlanControls({ sessionId, view, supported, review, busy, o
       </details>
     </div>}
     {(!recorded || changing) && <>
-      <div className="row"><button className="btn btn--primary" disabled={busy || !supported || !accepted} onClick={() => void decide('approved')}>Approve plan</button>
+      <div className="row"><button className="btn btn--primary" disabled={busy || !supported || !accepted || outdated} onClick={() => void decide('approved')}>Approve plan</button>
         <button className="btn" disabled={busy || !supported} onClick={() => setEditing(value => !value)}>Request changes</button>
         <button className="btn btn--ghost btn--danger-text" disabled={busy || !supported} onClick={() => void decide('rejected')}>Reject plan</button></div>
       {!supported ? <p className="caption">Whole-plan approval is not available on this server yet. Supported individual changes can be reviewed below.</p>

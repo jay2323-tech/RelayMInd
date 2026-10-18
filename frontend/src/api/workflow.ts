@@ -1,7 +1,9 @@
 import { ApiError, currentProject, request } from './client';
-import type { PlanDecision, PlanReview, WorkflowCapabilities, Reminder } from '../types/workflow';
+import type { PlanDecision, PlanReview, WorkflowCapabilities, Reminder, WatcherAlert } from '../types/workflow';
 const base = () => `/api/projects/${encodeURIComponent(currentProject())}`;
 export const workflowApi = {
+  alerts: () => request<WatcherAlert[]>(`${base()}/alerts`),
+  acknowledgeAlert: (id: string) => request<WatcherAlert>(`${base()}/alerts/${encodeURIComponent(id)}/ack`, { method: 'POST' }),
   reminders: () => request<Reminder[]>(`${base()}/reminders`),
   snooze: (id: string, minutes: number) => request<Reminder>(`${base()}/reminders/${encodeURIComponent(id)}/snooze`, {
     method: 'POST', body: JSON.stringify({ minutes }),

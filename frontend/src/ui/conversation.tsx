@@ -115,8 +115,9 @@ export function Composer({ busy, showSuggestions, pauseAfterPlan, onPauseChange,
 }
 
 // ---------- plan + review ----------
-export function PlanCard({ run, handoffs, currentDecisionIds, currentHolds = {}, onEvidence }: {
+export function PlanCard({ run, handoffs, currentDecisionIds, currentHolds = {}, onEvidence, outdated = false }: {
   run: RunRecord | null; handoffs: Handoff[]; currentDecisionIds: Set<string>;
+  outdated?: boolean;
   currentHolds?: Record<string, string>;   // hold id -> current hold decision id (from the impact query)
   onEvidence: (id: string) => void;
 }) {
@@ -132,6 +133,7 @@ export function PlanCard({ run, handoffs, currentDecisionIds, currentHolds = {},
       </div>
       {handoffs.length > 1 && <span className="badge badge--warn">revised after review</span>}
     </div>
+    {outdated && <div className="alert alert--warn outdated-plan" role="status"><strong>Outdated plan</strong><p>The records this revision relies on have changed. Recheck or request a new revision before approval. Dismissing its alert does not make it current.</p></div>}
     <Freshness handoffs={handoffs} currentHolds={currentHolds} onEvidence={onEvidence} />
     <div className="plan-overview"><p className="plan__summary">{latest.plan.summary}</p>
       <div className="plan-facts"><span>{latest.plan.steps.length} proposed steps</span>
