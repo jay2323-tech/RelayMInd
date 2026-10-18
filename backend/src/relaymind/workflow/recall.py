@@ -42,6 +42,7 @@ anything something like know think wrote write talk talked discussed suggest sug
 propose proposed answer reply suggestion recommendation""".split())
 
 MAX_SCAN = 2000          # newest messages of the caller considered per recall
+SEARCH_INFO: dict = {}   # details of the most recent search in this call (copied onto the run)
 MAX_RESULTS = 3
 SNIPPET = 280
 
@@ -76,9 +77,15 @@ def search(client: Any, scope: AgentJobScope, terms: list[str], exclude: set[str
         "MATCH (s)-[:HAS_MESSAGE]->(m:Message {role: $role}) "
         "RETURN m.id, m.role, m.content, m.created_at, s.id ORDER BY m.created_at DESC LIMIT $max",
         params={"owner": scope.user_id, "project": scope.project_id, "role": role, "max": MAX_SCAN}).result_set
+    from relaymind.workflow.memories import suppressed_message_ids
+    hidden = suppressed_message_ids(client, scope)          # retracted memories/messages never resurface
+    memory_of = {r[0]: r[1] for r in graph.ro_query(
+        "MATCH (x:Memory) WHERE x.owner_id = $owner AND x.project_id = $project "
+        "AND NOT (x)<-[:RETRACTS]-(:MemoryRetraction) RETURN x.source_message_id, x.id",
+        params={"owner": scope.user_id, "project": scope.project_id}).result_set}
     scored = []
     for message_id, role, content, created_at, session_id in rows:
-        if message_id in exclude or not content:
+        if message_id in exclude or message_id in hidden or not content:
             continue
         if role == "user" and is_recall(content):
             continue                                   # never "remember" an earlier recall question
@@ -87,25 +94,31 @@ def search(client: Any, scope: AgentJobScope, terms: list[str], exclude: set[str
         hits = [t for t in terms if re.search(rf"\b{re.escape(t)}", content, re.I)]
         if not hits:
             continue
-        score = len(hits)
+        # a saved memory wins ties among equally relevant matches, but never outranks a better match
+        score = len(hits) + (0.5 if message_id in memory_of else 0)
         scored.append({"id": message_id, "role": role, "content": content, "created_at": created_at or 0,
-                       "session_id": session_id, "score": score, "hits": hits})
-    scored.sort(key=lambda m: (m["score"], m["created_at"]), reverse=True)
+                       "session_id": session_id, "score": score, "hits": hits, "memory_id": memory_of.get(message_id)})
+    scored.sort(key=lambda m: (m["score"], m["created_at"]), reverse=True)     # relevance first, recency breaks ties
     best = scored[:MAX_RESULTS]
-    titles = _titles(graph, scope, {m["session_id"] for m in best})
+    SEARCH_INFO.update({"method": "keyword", "scanned": len(rows), "matches": len(scored), "shown": len(best),
+                        "more": len(scored) > len(best), "role": role, "terms": terms})
+    titles = _titles(graph, scope, {m["session_id"] for m in best}, hidden)
     for m in best:
         m["chat"] = titles.get(m["session_id"], "an earlier chat")
     return best
 
 
-def _titles(graph, scope: AgentJobScope, session_ids: set[str]) -> dict[str, str]:
+def _titles(graph, scope: AgentJobScope, session_ids: set[str], hidden: set[str] = frozenset()) -> dict[str, str]:
+    """Chat titles = first user message of each session, skipping retracted (hidden) messages so a forgotten
+    statement never resurfaces as a title."""
     if not session_ids:
         return {}
     rows = graph.ro_query(
         "MATCH (s:Session {owner_id: $owner})-[:ABOUT]->(:Project {id: $project}) WHERE s.id IN $ids "
-        "OPTIONAL MATCH (s)-[:HAS_MESSAGE]->(m:Message {role: 'user'}) WITH s, m ORDER BY m.seq "
-        "RETURN s.id, collect(m.content)[0]",
-        params={"owner": scope.user_id, "project": scope.project_id, "ids": sorted(session_ids)}).result_set
+        "OPTIONAL MATCH (s)-[:HAS_MESSAGE]->(m:Message {role: 'user'}) WHERE NOT m.id IN $hidden "
+        "WITH s, m ORDER BY m.seq RETURN s.id, collect(m.content)[0]",
+        params={"owner": scope.user_id, "project": scope.project_id, "ids": sorted(session_ids),
+                "hidden": sorted(hidden)}).result_set
     return {sid: " ".join((first or "an earlier chat").split())[:60] for sid, first in rows}
 
 
@@ -114,6 +127,7 @@ def _date(ms: int) -> str:
 
 
 def recall_answer(client: Any, scope: AgentJobScope, text: str, exclude: set[str]) -> tuple[str, Claims]:
+    SEARCH_INFO.clear()
     terms = query_terms(text)
     if not terms:
         return ("Tell me what to look for. For example: \"do you remember what I said about the Coldline "
@@ -135,7 +149,10 @@ def recall_answer(client: Any, scope: AgentJobScope, text: str, exclude: set[str
         spans += s
         cited.append(m["id"])
         refs.append(MemoryRef(message_id=m["id"], session_id=m["session_id"], chat_title=m["chat"], role=role,
-                              created_at=m["created_at"], snippet=snippet))
-    lines += ["", "_This is what was said earlier, not an approved decision. Current project decisions take "
-                  "priority._"]
+                              created_at=m["created_at"], snippet=snippet, memory_id=m.get("memory_id")))
+    info = SEARCH_INFO
+    more = f" ({info['matches'] - info['shown']} more matched; add words to narrow it)" if info.get("more") else ""
+    lines += ["", f"_Keyword search over your newest {info.get('scanned', 0)} messages in this project: "
+                  f"{info.get('matches', 0)} matched, showing {info.get('shown', 0)}{more}._",
+              "_This is what was said earlier, not an approved decision. Current project decisions take priority._"]
     return "\n".join(lines), Claims(cited_ids=cited, quoted_spans=spans, source_quotes=refs)
