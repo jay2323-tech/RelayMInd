@@ -67,11 +67,11 @@ def order_ids(text):
 def test_exposed_orders_match_acceptance_and_unknowns_are_explicit(aw):
     client, pid, ctx, scope = aw
     load_incident(client, ctx, pid, "before-change")
-    text, err = factual_answer(client, scope("s"), "exposed_orders")
+    text, err, claims = factual_answer(client, scope("s"), "exposed_orders")
     exposed = text.split("**Unknown")[0]
     assert err is None and order_ids(exposed) == AW_CASES["AW-01"]["expected_ids"]
     load_incident(client, ctx, pid, "after-change")
-    text, err = factual_answer(client, scope("s"), "exposed_orders")
+    text, err, claims = factual_answer(client, scope("s"), "exposed_orders")
     exposed, unknown = text.split("**Unknown, not proven safe**")
     assert order_ids(exposed) == AW_CASES["AW-02"]["expected_ids"]
     assert "AW-O105" in unknown                                   # AW-07: unknown, never "unaffected"
@@ -81,24 +81,24 @@ def test_exposed_orders_match_acceptance_and_unknowns_are_explicit(aw):
 def test_changes_current_and_affected_tasks_from_graph(hb):
     client, pid, ctx, scope = hb
     load_scenario(client, ctx, pid, "before-change")
-    assert "nothing has changed yet" in factual_answer(client, scope("s"), "changes")[0]
+    assert "nothing has changed" in factual_answer(client, scope("s"), "changes")[0]
     assert "No task" in factual_answer(client, scope("s"), "affected_tasks")[0]
     load_scenario(client, ctx, pid, "after-change")
-    current, _ = factual_answer(client, scope("s"), "current_decisions")
+    current, _, _ = factual_answer(client, scope("s"), "current_decisions")
     assert "hb-dec-route-v2" in current and "hb-dec-route-v1" not in current          # HB-02
-    changes, _ = factual_answer(client, scope("s"), "changes")
+    changes, _, _ = factual_answer(client, scope("s"), "changes")
     assert "hb-dec-route-v1" in changes and "hb-dec-route-v2" in changes
-    tasks, _ = factual_answer(client, scope("s"), "affected_tasks")
+    tasks, _, _ = factual_answer(client, scope("s"), "affected_tasks")
     assert {"hb-task-book-route-a", "hb-task-confirm-friday"} <= set(re.findall(r"hb-task-[a-z-]+", tasks))
     assert "hb-task-book-route-b" not in tasks
-    orders, _ = factual_answer(client, scope("s"), "exposed_orders")
+    orders, _, _ = factual_answer(client, scope("s"), "exposed_orders")
     assert "No current hold" in orders                                                 # logistics: no hold, said plainly
 
 
 def test_approvals_never_come_from_seeded_decisions(hb):
     client, pid, ctx, scope = hb
     load_scenario(client, ctx, pid, "after-change")                 # seeded decisions are human_approved
-    text, err = factual_answer(client, scope("s"), "approvals")
+    text, err, claims = factual_answer(client, scope("s"), "approvals")
     assert err is None and "have not approved" in text and "hb-dec" not in text
 
 

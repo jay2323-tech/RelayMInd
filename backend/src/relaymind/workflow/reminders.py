@@ -192,7 +192,7 @@ def message_text(r: dict, item: WorkItem) -> str:
     return (f"**{lead}: {item.title}** ({when} {item.timezone})\n"
             f"- Outcome: {item.outcome}\n- Owner: {item.owner_id}\n- Deadline: {item.deadline} "
             f"({days_left} day{'s' if days_left != 1 else ''} left)\n"
-            f"_In-app reminder for {item.id}. Snooze it, or mark the work completed to stop reminders._")
+            f"_In-app reminder for {item.id}. Snooze it, or mark the work as done to stop reminders._")
 
 
 def _deliver_one(client, graph, ctx: TrustedContext, r: dict, token: str, now: int, deliver) -> str:
@@ -273,7 +273,7 @@ def confirmation_note(client, scope, item: WorkItem) -> str:
         return "No future reminder times fall inside this work's dates, so none were scheduled."
     first = datetime.fromtimestamp(upcoming[0]["due_at"] / 1000, ZoneInfo(item.timezone)).strftime("%Y-%m-%d %H:%M")
     note = (f"Scheduled {len(upcoming)} in-app reminder{'s' if len(upcoming) != 1 else ''} in this conversation; "
-            f"the first is at {first} {item.timezone}. Reminders stop when the work is completed or cancelled. "
+            f"the first is at {first} {item.timezone}. Reminders stop when you finish or cancel the work. "
             "No email or other external channel is connected.")
     if not worker_alive(client):
         note += (" Saved; delivery is waiting for the reminder worker, which is currently OFFLINE - "

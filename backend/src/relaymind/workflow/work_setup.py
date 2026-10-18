@@ -403,8 +403,18 @@ _CONFIRM = ("confirm", "yes confirm", "confirm it", "yes, confirm", "confirm.")
 _CANCEL = ("cancel setup", "cancel", "cancel it", "stop setup")
 
 
-def chat_turn(client: Any, scope: AgentJobScope, text: str, operation_id: str) -> str | None:
-    """Handle a setup message, or return None if this message is not about work setup."""
+def chat_turn(client: Any, scope: AgentJobScope, text: str, operation_id: str):
+    """Handle a setup message: (reply, claims) for the Overseer, or None if not about work setup."""
+    from relaymind.contracts.assistant import Claims
+    result = _chat_turn(client, scope, text, operation_id)
+    if result is None:
+        return None
+    if isinstance(result, tuple):
+        return result
+    return result, Claims()       # guidance replies: the state-word lint still runs on them
+
+
+def _chat_turn(client: Any, scope: AgentJobScope, text: str, operation_id: str):
     from relaymind.workflow.reminders import confirmation_note
     start = _START.match(text)
     lowered = " ".join(text.lower().split())
@@ -418,10 +428,18 @@ def chat_turn(client: Any, scope: AgentJobScope, text: str, operation_id: str) -
             item = transition(client, scope, draft.id, "confirm", draft.version)
         except (WorkSetupInvalid, WorkSetupConflict) as exc:
             return _guide(client, scope, draft, [str(exc)])
-        return "\n".join([f"**Confirmed: {item.title}** ({item.id})", *_describe(item), "", confirmation_note(client, scope, item)])
+        from relaymind.contracts.assistant import Claims, RecordState
+        from relaymind.workflow.reminders import list_reminders
+        scheduled = list_reminders(client, scope, item_id=item.id, status="scheduled")
+        reply = "\n".join([f"**Confirmed: {item.title}** ({item.id})", *_describe(item), "",
+                           confirmation_note(client, scope, item)])
+        return reply, Claims(record_states=[RecordState(kind="work_item", id=item.id, status="confirmed")]
+                             + [RecordState(kind="reminder", id=r["id"], status="scheduled") for r in scheduled])
     if draft is not None and lowered in _CANCEL:
+        from relaymind.contracts.assistant import Claims, RecordState
         item = transition(client, scope, draft.id, "cancel", draft.version)
-        return f"Cancelled the draft {item.title or item.id}. Nothing was scheduled."
+        return (f"Cancelled the draft {item.title or item.id}. Nothing was scheduled.",
+                Claims(record_states=[RecordState(kind="work_item", id=item.id, status="cancelled")]))
     fields, errors = parse_fields(text, scope.user_id)
     has_fields = any(v is not None for v in fields.model_dump().values())
     nl_start = False
