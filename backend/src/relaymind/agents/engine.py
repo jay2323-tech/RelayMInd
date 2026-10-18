@@ -316,7 +316,7 @@ class CoordinationEngine:
             existing=None
         if existing is not None:
             self._check_artifact_scope(existing)
-            if existing.request!=request:
+            if (existing.user_message or existing.request)!=request:
                 raise ArtifactConflict('Run ID reused with a different request')
             return existing
         run=RunRecord(id=run_id,project_id=self.project_id,session_id=self.session_id,
@@ -359,6 +359,17 @@ class CoordinationEngine:
             # B2: clear factual questions are answered from graph records (no model, no plan).
             from relaymind.workflow.routing import classify,factual_answer
             route=classify(request)
+            if route.kind=='planning' and not route.explicit:
+                # Phase 3: the Assistant (one model call) routes what the rules could not place.
+                from relaymind.assistant.router import assist
+                from relaymind.workflow.routing import Route
+                outcome,value=assist(self,run,request)
+                if outcome=='done':
+                    return value
+                if outcome=='factual':
+                    route=Route('factual',value)
+                elif value!=request:            # a confirmed, offered plan: plan the offered request
+                    run.user_message,run.request=request,value[:16000]
             if route.kind=='factual':
                 from relaymind.assistant.overseer import GraphFacts,oversee
                 answer,error,claims=factual_answer(self.client,self.job_scope,route.intent)

@@ -96,3 +96,39 @@
   user: northstar.lead
   question: "Can you remember things?"
   route: capability
+
+# ---- Phase 3 Assistant routing (messages the deterministic rules cannot place) ----
+- id: AS-STAND
+  project: hb-route-07
+  user: harbor.lead
+  question: "hey, where do we stand with the Coldline shipment?"
+  route: factual
+  intent: current_decisions
+- id: AS-HELP
+  project: hb-route-07
+  user: harbor.lead
+  question: "thanks! what else can you do?"
+  route: capability
+- id: AS-REMIND
+  project: hb-route-07
+  user: harbor.lead
+  question: "remind me to call Coldline about the delay"
+  route: work_setup
+- id: AS-VAGUE
+  project: hb-route-07
+  user: harbor.lead
+  question: "the shipment situation is getting messy"
+  route: clarify
+  offers_plan: true
+- id: AS-CONFIRM
+  project: hb-route-07
+  user: harbor.lead
+  after: AS-VAGUE
+  question: "yes"
+  route: planning
+- id: AS-PLANSTATUS
+  project: hb-route-07
+  user: harbor.lead
+  question: "is my plan finished?"
+  route: factual
+  intent: run_status

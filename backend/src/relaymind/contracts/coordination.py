@@ -82,7 +82,9 @@ class RunRecord(StrictModel):
     tenant_id: str | None = None
     company_id: str | None = None
     request: str
-    request_kind: Literal["planning", "capability", "factual", "work_setup"] = "planning"
+    request_kind: Literal["planning", "capability", "factual", "work_setup", "clarify"] = "planning"
+    user_message: str | None = Field(default=None, description="The user's own words when request was expanded")
+    pending_plan_request: str | None = Field(default=None, description="A plan the Assistant offered (clarify)")
     answer: str | None = None
     status: Literal["planning", "awaiting_review", "paused", "completed", "needs_revision", "blocked", "failed"]
     handoff_ids: list[str] = Field(default_factory=list)
