@@ -225,3 +225,8 @@ summary:focus-visible, button:focus-visible, textarea:focus-visible { outline: 2
 .request-notice p { margin: 6px 0 0; color: var(--text-2); font-size: 13px; line-height: 1.5; }
 .clarify-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
 @media (max-width: 760px) { .thinking-feedback { gap: 10px; } .thinking-feedback strong { font-size: 14px; } }
+
+/* Source titles are navigation, distinct from evidence record chips. */
+.memory-chat-link { color: var(--accent, #a3d7cd); background: none; border: 0; padding: 0; font: inherit; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; text-align: left; overflow-wrap: anywhere; }
+.memory-chat-link:focus-visible { outline: 2px solid currentColor; outline-offset: 4px; border-radius: 2px; }
+.memory-chat-sources { padding-left: 1.2rem; margin-block: .75rem; }
