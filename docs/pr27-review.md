@@ -43,3 +43,38 @@ Full reviewed PR suite: 299 passed in 144.93 seconds (three existing deprecation
 All three saved additional regressions failed against 7253212, confirming the findings.
 No live cloud-model calls or app/demo data resets. Full browser lifecycle test
 awaits fixes and merged integration. Human controls merging.
+
+
+## Re-review — fea7149 (trial merged with main cf1fd03)
+
+The three findings above are **closed in this revision**. The saved original
+reproductions all pass against the integrated code. Inspection confirms incomplete
+reads abort reconciliation, current topic decisions and evidence/hold snapshots
+change the alert basis, and watcher=true is advertised independently of worker health.
+PR #26 is already merged in main. The isolated trial merge was conflict-free.
+
+### Remaining P2: quote masking applies outside the quoted occurrence
+
+assistant/overseer.py:256–257 performs global string replacement for every quoted
+record value. A record title of `shipped` therefore removes that word from the
+assistant's own unquoted assertion too. This weakens the state-word guard that the
+new quotation exception is intended to preserve.
+
+Real database reproduction (throwaway project, normal routing producer): create a
+todo task titled `shipped`, supersede its basis decision, then render
+routing._affected_tasks. The legitimate quoted-title reply passes. Append
+`All affected orders were shipped.` with the same producer-created Claims: the
+Overseer still returns ok=True, checks_run=7, failures=[] despite no shipped orders.
+A repeated complete quoted sentence is also globally masked at every occurrence
+(unit probe, not an additional DB scenario).
+
+Bind exemptions to the actual rendered quotation occurrences, e.g. validated text
+spans associated with each rendered record field. Do not globally remove matching
+substrings or exempt all instances of a status word. Keep the original quotation
+case passing and add the appended-unquoted-claim case as a rejecting regression.
+
+The fourth test in pr27-review-regressions.py preserves the new reproduction.
+Explicit review run: original three passed, new quote-span regression failed.
+Full trial-merge backend suite: 318 passed in 149.42 seconds, three existing deprecation warnings.
+Frontend trial-merge build passed (46 modules), eight UI state tests passed.
+Browser acceptance remains not run; no app servers started or GitHub PR merged.

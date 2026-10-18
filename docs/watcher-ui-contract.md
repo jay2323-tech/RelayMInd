@@ -33,9 +33,10 @@ action alerts open the Actions drawer. Technical reasons are expandable.
 
 The capability endpoint must add watcher=true when this API is supported, independent
 of reminder-worker heartbeat. Omitted/false means no alert requests and no alert list.
-PR #27 currently omits that field in both WorkflowCapabilities and CAPABILITIES;
-Claude must add it before the UI can activate. See pr27-review.md for two additional
-reproduced backend lifecycle findings. No frontend shim enables an unavailable API.
+PR #27 fea7149 now supplies this field in both WorkflowCapabilities and CAPABILITIES.
+The three original review findings are verified closed in a local trial merge with main.
+See pr27-review.md for a remaining quoted-text lint finding, separate from the alert API.
+No frontend shim enables an unavailable API.
 The full live browser acceptance remains pending backend fixes and integration.
 
 Narrator handoff: direct_reply(kind,text) is applied by the engine BEFORE Overseer
@@ -45,7 +46,8 @@ producer adoption; these helpers make no graph reads or new model calls. They ar
 not wired into Claude-owned receipt/routing modules here. Do not render a fresh
 string after verification without checking the resulting string/claims again.
 
-Producer issue observed on merged main 40f21bb: _decisions includes the quoted hold
+Historical producer issue observed on merged main 40f21bb (quotation handling added
+in PR27 fea7149; see re-review for remaining occurrence-boundary gap): _decisions includes the quoted hold
 text "shipped units need QA exposure review" but its Claims has no shipped order
 RecordState; therefore both original and narrated current-decision answers fail
 state_words. Fix the producer/quotation contract; do not weaken Narrator tests or
