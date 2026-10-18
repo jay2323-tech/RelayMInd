@@ -4,6 +4,22 @@
 
 For hands-on evaluation, use the [user manual, feature list and tester checklist](USER-MANUAL.md).
 
+## Required submission checklist
+
+Checked against the [full Graph Hacks rules](https://www.wemakedevs.org/hackathons/falkordb/rules), including required deliverables (rule 10) and AI disclosure (rule 11). “Documented” means the material exists; it does not establish fresh runtime verification or successful submission.
+
+| Required item | RelayMind material | Remaining check |
+|---|---|---|
+| Public source-code repository | [RelayMind repository](https://github.com/jay2323-tech/RelayMInd) | Verify public visibility and access while signed out; this pass did not establish either |
+| README with setup and graph data model | [Root README](../../README.md), sections 1–2 | Reproduce setup on the final revision/environment |
+| Dependent Cypher queries or graph algorithms | [Query examples and implementation index](README.md#core-query-implementations) | Team should be able to explain each path and demonstrate its effect |
+| Working-project demo video | URL pending | Record/upload and verify accessible playback; deployment does not replace this requirement |
+| Live deployment or complete local setup | [Local setup](../../README.md#run-locally); temporary tunnel available (see links below) | Verify a complete run in the chosen environment; local instructions are the deployment alternative |
+| Entered track | **Agent Memory and Coordination** | Select/name this track in the actual submission form |
+| AI assistance disclosure | [Human contributions and AI assistance](TEAM-CONTRIBUTIONS.md) | Ensure the final form/project description includes the disclosure |
+
+The team must understand and explain the code, graph, queries and technical choices. The rules require meaningful participant contribution and verification; the contribution document must remain an accurate account of actual work. Confirm event-window eligibility and participant/team registration before filing. No eligibility attestation or form submission has been made by this checklist.
+
 ## Project name
 
 RelayMind
@@ -112,7 +128,7 @@ Production identity and durable job infrastructure; indexed retrieval and broade
 | Field | Current value |
 |---|---|
 | Repository | https://github.com/jay2323-tech/RelayMInd |
-| Deployment | Pending — Jayanth plans to provide the URL after deployment |
+| Deployment | [Temporary HTTPS demo](https://flights-lawyers-prove-revisions.trycloudflare.com) — hosted from the Mac through Cloudflare; available only while the host/tunnel run |
 | Working demo video | Pending |
 | Team name | Awaiting confirmation |
 | Participants | Jayanth Krishna — graph/platform; Kanak Garg — agent memory/coordination |

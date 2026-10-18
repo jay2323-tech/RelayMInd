@@ -41,13 +41,15 @@ OPTIONAL MATCH (d)-[:SUPPORTED_BY]->(s:Source)
 RETURN d.id, d.topic, d.text, collect(DISTINCT s.id)
 ```
 
-The server selects the authorized tenant graph and groups results to detect conflicts. Models never select graphs or write arbitrary Cypher. Read the [technical architecture and graph reference](docs/submission-drafts/README.md) for the complete model, request lifecycle and implementation links.
+The server selects the authorized tenant graph and groups results to detect conflicts. Models never select graphs or write arbitrary Cypher. Read the [technical architecture and graph reference](docs/submission-drafts/README.md) for the complete model and request lifecycle, and the [core Cypher query implementations](docs/submission-drafts/README.md#core-query-implementations) for affected tasks, manufacturing impact, memory retrieval, handoff claims and guarded approvals.
 
 ## 2. Setup and manual instructions
 
 ### Try the hosted demo
 
-Deployment and video URLs are pending publication in the [submission details](docs/submission-drafts/SUBMISSION.md#submission-links-and-human-details--pending). Use the URL and demo password supplied by the team when available. Start with the [five-minute user walkthrough](docs/submission-drafts/USER-MANUAL.md#2-five-minute-browser-walkthrough).
+**[Open the temporary live demo](https://flights-lawyers-prove-revisions.trycloudflare.com)**. The login page displays its public demo password and account choices. This free HTTPS tunnel runs the app and FalkorDB on the host Mac; the Mac, internet connection and tunnel must stay running. It is a temporary demonstration endpoint, not independent cloud hosting.
+
+The mandatory video is still pending in the [submission details](docs/submission-drafts/SUBMISSION.md#submission-links-and-human-details--pending). Start with the [five-minute user walkthrough](docs/submission-drafts/USER-MANUAL.md#2-five-minute-browser-walkthrough).
 
 ### Run locally
 
@@ -196,6 +198,8 @@ Frontend build: run `npm run build` from `frontend/`. See the [dated verificatio
 Limits: synthetic demo accounts and shared password; in-memory login sessions and single API-process job management; bounded lexical search; variable model/provider reliability; in-app reminders requiring a worker; no external shipping/payment/email/Slack integrations. Model review is not a guarantee of semantic correctness, and production-scale concurrency is not claimed.
 
 ### Team and submission material
+
+The [full event rules](https://www.wemakedevs.org/hackathons/falkordb/rules) require a public repository, setup and graph model, dependent queries/algorithms, a working demo video, a deployment or complete local setup, and the entered track. AI assistance must also be disclosed. Track: **Agent Memory and Coordination**. See the [deliverable checklist and pending items](docs/submission-drafts/SUBMISSION.md#required-submission-checklist); a hosted app does not replace the required video.
 
 **Jayanth Krishna + Claude Code:** graph/platform responsibilities. **Kanak Garg + Codex:** agent memory/coordination responsibilities. Read [team contributions and AI assistance](docs/submission-drafts/TEAM-CONTRIBUTIONS.md) for the agreed split and substantial AI-assisted implementation.
 

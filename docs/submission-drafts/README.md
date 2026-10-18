@@ -91,6 +91,52 @@ RETURN t.id, old.id, collect(DISTINCT replacement.id)
 
 The engine requires relevant affected tasks in plan steps and exposed orders in citations, then checks freshness before and after independent review. Complete query logic and scope checks live in [decision storage](../../backend/src/relaymind/memory/decisions.py), [task storage](../../backend/src/relaymind/memory/tasks.py) and [manufacturing storage](../../backend/src/relaymind/memory/manufacturing.py). These examples show read patterns, not the complete authorization or approval implementation.
 
+### Core query implementations
+
+The product depends on Cypher traversals and guarded writes, rather than a named PageRank/centrality algorithm. The examples above and below show the principal read paths. The linked source functions contain the complete queries, parameter handling and failure checks used by the application.
+
+| Product dependency | Complete implementation |
+|---|---|
+| Current decisions, conflict detection and guarded supersession | [decisions.py: get_current_decisions, record_decision](../../backend/src/relaymind/memory/decisions.py) |
+| Affected work, current task versions and dependency reads | [tasks.py: find_affected_tasks, get_task, trace_dependencies](../../backend/src/relaymind/memory/tasks.py) |
+| Hold exposure and unknown traceability | [manufacturing.py: current_hold, affected_orders, get_order](../../backend/src/relaymind/memory/manufacturing.py) |
+| Owned conversation and sourced episode retrieval | [conversations.py](../../backend/src/relaymind/memory/conversations.py), [episodes.py](../../backend/src/relaymind/memory/episodes.py) |
+| Approved procedure lookup | [procedures.py: get_procedure](../../backend/src/relaymind/memory/procedures.py) |
+| Bounded lexical source search | [retrieval.py: search_sources](../../backend/src/relaymind/memory/retrieval.py) |
+| Saved handoff reads, claim leases and versioned run snapshots | [artifacts.py: ArtifactStore](../../backend/src/relaymind/memory/artifacts.py) |
+| Guarded task/order approvals | [actions.py: approve_action, _APPLY, _APPLY_ORDER_HOLD](../../backend/src/relaymind/services/actions.py) |
+| Human plan decisions, work setup and reminders | [plan_reviews.py](../../backend/src/relaymind/workflow/plan_reviews.py), [work_setup.py](../../backend/src/relaymind/workflow/work_setup.py), [reminders.py](../../backend/src/relaymind/workflow/reminders.py) |
+
+**Manufacturing impact:** the server resolves the current approved hold decision and supplies `$d`; it is not a model-selected decision.
+
+```cypher
+MATCH (:Hold {id: $hold, project_id: $project})
+      -[:HAS_VERSION_DECISION]->(d:Decision {id: $d})
+      -[:HOLDS]->(b:Batch)<-[u:USES_BATCH]-(a:Assembly)
+      -[al:ALLOCATED_TO]->(o:Order)
+RETURN o.id, b.id, a.id, u.source_id, al.source_id
+ORDER BY o.id, b.id, a.id
+```
+
+Missing traceability uses a separate query, so absence of a path does not become a claim of safety:
+
+```cypher
+MATCH (:Project {id: $project})<-[:ABOUT]-(o:Order)
+WHERE NOT (o)<-[:ALLOCATED_TO]-(:Assembly)
+RETURN o.id ORDER BY o.id
+```
+
+**Current order version:** absence of an incoming `PREVIOUS` edge determines the head; storage code requires exactly one result.
+
+```cypher
+MATCH (:Project {id: $project})<-[:ABOUT]-(o:Order {id: $id})
+      -[:HAS_VERSION]->(v:OrderVersion)
+WHERE NOT (v)<-[:PREVIOUS]-(:OrderVersion)
+RETURN o.id, v.id, v.version, v.status
+```
+
+Approval is a separate server operation: it validates the proposal and conflicts, then uses the guarded write in `actions.py` to append a version only while its base and basis are valid. A failed/no-row write is not reported as applied. Handoff claim code uses scope-bound conditional updates and lease tokens. These are implementation mechanisms, not blanket production concurrency guarantees.
+
 ## How a request works
 
 ```mermaid
