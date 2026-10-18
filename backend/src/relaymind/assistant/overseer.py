@@ -140,7 +140,8 @@ class GraphFacts:
             if kind == "action":
                 from relaymind.services.actions import get_action
                 action = get_action(self.client, self.ctx, self.project_id, record_id)
-                return {action.status} | ({"applied"} if action.status == "approved" and action.applied_version_id
+                # A human-approved action is stored as "applied" once its new version exists.
+                return {action.status} | ({"approved"} if action.status == "applied" and action.applied_version_id
                                           else set())
             if kind == "run":
                 return {self._engine_for_scope().store.get("run", record_id)["status"]}

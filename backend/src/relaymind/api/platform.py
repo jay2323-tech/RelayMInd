@@ -133,7 +133,13 @@ def propose(project_id: str, body: ProposeBody, me: Principal = Depends(project_
 @router.post("/actions/{action_id}/approve")
 def approve(project_id: str, action_id: str, me: Principal = Depends(project_member)):
     with api_errors():
-        return am.approve_action(get_client(), me.context(), project_id, action_id)
+        result = am.approve_action(get_client(), me.context(), project_id, action_id)
+    try:   # an approved action can make OTHER proposals stale; surface that immediately
+        from relaymind.assistant.watcher import sweep_for
+        sweep_for(get_client(), me, project_id)
+    except Exception:
+        pass   # alerts are advisory; the approval result above is authoritative
+    return result
 
 
 class RejectBody(StrictModel):
