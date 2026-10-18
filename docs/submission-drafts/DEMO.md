@@ -121,6 +121,10 @@ The official event page lists the closing time as **18 October 2026, 11:59 PM IS
 
 ## Documentation maintenance record
 
+### Codex — 18 October 2026: submission description
+
+Drafted a form-ready project description explaining outdated agent context, the intended project/operations users, sourced graph memory, persisted Planner/Reviewer handoffs and separate human approval. Based on the root README and required submission documents; no product behavior changed. Kept synthetic demo scenarios explicit and made no new live-service claims. Verification: checked wording against those documents; build/backend/live-service tests not run for this prose-only task. Open: paste the reviewed description into the submission form.
+
 ### Codex — 18 October 2026: consolidate docs
 
 Requested by Jayanth. Removed all contents of `docs/` except `submission-drafts/`, including historical plans, PDF learning material, review artifacts and assistant logs. Created a local recovery archive before removal; previously committed records also remain in Git history. The four submission documents remain.
@@ -174,3 +178,15 @@ Jayanth authorized pushing all pending local changes. Included the existing docu
 Merged current main (including M2/M3 memory) into Kg. The only conflict was the removed Claude log; retained the consolidated-doc layout, with the full log preserved in main’s Git history. Kept the newly published docs/memory-api.md contract. Combined build passed (53 modules), all 16 frontend tests passed, default backend suite 412 passed/152 skipped/3 existing warnings, documentation local-link targets and whitespace checks passed.
 
 Live FalkorDB full suite: 563 passed, 1 failed in 185.76 seconds. The failed narrator test required preserving the old empty-result status-word false positive that this patch intentionally fixes. Updated that test to require actual empty graph/claim sets, no invented citations and the explicit route-query limitation; all other answer kinds retain unchanged gate-outcome assertions. Reran narrator, presentation and Overseer live suites: 28 passed, including the corrected regression and persistent wrong-answer blocking. Full live suite was not repeated after this test-only correction. No cloud-model call, deployment or main merge performed. Deployment still needs Claude’s public-demo endpoint/usage-cap branch.
+
+### Codex — 18 October 2026: full-rules deliverable review
+
+Requested by Jayanth. Read the official full rules page and added a rule-linked deliverable checklist to SUBMISSION.md, keeping repository visibility, video playback, deployment/local rehearsal and final form work explicitly pending. Clarified that video is required even with deployment and that AI assistance disclosure is mandatory. Retained meaningful participant contribution/understanding as a human responsibility without inventing an eligibility attestation.
+
+Expanded the technical reference with a core query implementation index and actual manufacturing/unknown-traceability/current-version read patterns, cross-checked against source. Linked it and the checklist from the root README while preserving exactly four main sections. No application code changed. Existing docs/memory-api.md from later integration was left untouched.
+
+Verification: four-section assertion, root/submission local links and anchors, balanced code fences and git diff --check passed. Repository web fetch returned a cache-miss error, so public access was not confirmed. No build/backend/live-service/deployment test, upload or submission was performed for this documentation-only change. Open items: public-repo access check, mandatory working demo video, final runtime/setup verification, deployment URL if used, and actual form submission.
+
+### Codex — latest deployment main integrated
+
+While PR #42 was opening, Jayanth merged deploy/render as PR #41. Integrated main e942be2, including public demo endpoint, rate cap, production/static serving and Render files. Resolved only the same removed-log conflict; backend deployment code was preserved unchanged. Reverified frontend build (53 modules), 16 frontend tests, default backend suite 415 passed/155 skipped/3 existing warnings and focused live Assistant/public-demo-cap/static-frontend/narrator tests 24 passed in 11.49s. No new model call or deployment. Prior notes saying the backend still needs integration are now superseded by this entry. Public demo must still be explicitly enabled in the deployment environment; real deployed-browser checks remain pending.
