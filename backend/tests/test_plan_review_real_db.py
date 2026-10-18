@@ -295,3 +295,19 @@ def test_changed_rejection_unblocks_resume(world):
     # decision governs the resume guard: supersede the rejection with another rejection, still blocked.
     assert decide(c, pid, sid, rid, handoff, "rejected", feedback="Still no", expected=1).status_code == 200
     assert c.post(f"/api/projects/{pid}/sessions/{sid}/runs/{rid}/resume").status_code == 409
+
+
+def test_regression_what_did_i_approve_across_conversations(world):
+    """Live acceptance finding: approvals made in OTHER chats must verify in the approvals answer."""
+    pid, _ = world
+    c = login("northstar.lead")
+    plan_sid = c.post(f"/api/projects/{pid}/sessions").json()["id"]
+    rid, done = start(c, pid, plan_sid)
+    handoff = done["run"]["handoff_ids"][-1]
+    assert decide(c, pid, plan_sid, rid, handoff, "approved").status_code == 200
+    assert decide(c, pid, plan_sid, rid, handoff, "rejected", feedback="Changed", expected=1).status_code == 200
+    ask_sid = c.post(f"/api/projects/{pid}/sessions").json()["id"]           # a DIFFERENT conversation
+    rid2 = c.post(f"/api/projects/{pid}/sessions/{ask_sid}/runs", json={"request": "What did I approve?"}).json()["run_id"]
+    run = wait_done(c, pid, ask_sid, rid2)["run"]
+    assert run["status"] == "completed" and run["overseer"]["ok"], run.get("overseer")
+    assert f"Approved plan {handoff}" in run["answer"] and f"Rejected plan {handoff}" in run["answer"]

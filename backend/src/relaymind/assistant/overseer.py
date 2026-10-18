@@ -155,7 +155,7 @@ class GraphFacts:
                 return {get_reminder(self.client, self.scope, record_id)["status"]}
             if kind == "plan_review":
                 from relaymind.workflow.plan_reviews import review_by_id
-                review = review_by_id(self.client, self.scope, record_id)
+                review = review_by_id(self.client, self.scope, record_id, any_session=True)   # caller's own
                 return {review.decision} if review else set()
             if kind == "action":
                 from relaymind.services.actions import get_action
@@ -246,7 +246,11 @@ def oversee(text: str, claims: Claims, facts) -> OverseerVerdict:
             fail("records", f"{rs.kind} {rs.id} is not '{rs.status}' (graph: {sorted(actual) or 'not found'})")
     if presented_current and not any(f.check in ("currency", "conflicts") for f in failures):
         verified.setdefault(("decision", "current"), set()).update(presented_current)
-    alias_of = {name: (rs.kind, rs.id) for rs in claims.record_states for name in [rs.id, *rs.aliases]}
+    alias_of: dict[str, list[tuple[str, str]]] = {}      # a name can belong to several records
+    for rs in claims.record_states:                       # (e.g. two decisions on one plan revision)
+        for name in [rs.id, *rs.aliases]:
+            if (rs.kind, rs.id) not in alias_of.setdefault(name, []):
+                alias_of[name].append((rs.kind, rs.id))
     known_names = set(alias_of) | set(claims.cited_ids) | set(presented_current)
 
     # state words need a verified record of a matching kind -------------------
@@ -265,13 +269,12 @@ def oversee(text: str, claims: Claims, facts) -> OverseerVerdict:
             relevant, problems = 0, []
             # Every record named in this clause is checked against the graph on its own.
             for token in sorted(_id_tokens(_claim_span(text, m.start()))):
-                lookups = [alias_of[token]] if token in alias_of else [(k, token) for k in sorted(kinds)]
-                states_by_kind = {k: facts.record_state(k, rid) for k, rid in lookups if k in kinds}
-                found = {k: st for k, st in states_by_kind.items() if st}
+                lookups = alias_of[token] if token in alias_of else [(k, token) for k in sorted(kinds)]
+                found = [(k, st) for k, rid in lookups if k in kinds for st in facts.record_state(k, rid)]
                 if found:
                     relevant += 1
-                    if not any((k, st) in pairs for k, sts in found.items() for st in sts):
-                        problems.append(f"{token} is {'/'.join(sorted(set().union(*found.values())))}")
+                    if not any(pair in pairs for pair in found):
+                        problems.append(f"{token} is {'/'.join(sorted({st for _, st in found}))}")
                 elif token not in known_names and not facts.exists(token):
                     problems.append(f"{token} does not exist")
                 # else: a different kind of record (a person, batch, source...) - not what the word describes

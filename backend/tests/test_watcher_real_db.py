@@ -195,3 +195,53 @@ def test_regression_watcher_capability_is_advertised(world):
     from relaymind.workflow import reminders
     client.connection.delete(reminders.HEARTBEAT_KEY)                    # independent of worker health
     assert c.get(f"/api/projects/{pid}/workflow/capabilities").json()["watcher"] is True
+
+
+# ------------------------------------------------ regressions from the live acceptance run
+
+def test_regression_deleted_evidence_is_staleness_not_an_outage(world, monkeypatch):
+    """Live finding: a plan citing a record that no longer exists must alert, not block the Watcher."""
+    from relaymind.api import runs as runs_api
+    from test_agent_loop import ScriptedModel
+    pid, client = world
+    record_source(client, NS, pid, f"{pid}-extra", "note", "launch checklist", "Checklist: QA sign-off first.")
+    plan = {"final": {"summary": "Launch the free tier", "decision_ids": [f"{pid}-dec"],
+                      "steps": [{"task": "Prepare free tier launch", "evidence_ids": [f"{pid}-dec", f"{pid}-src"]},
+                                {"task": "Run the checklist", "evidence_ids": [f"{pid}-extra"]}]}}
+    monkeypatch.setattr(runs_api, "provider_factory",
+                        lambda: ScriptedModel([plan, {"final": {"status": "accepted", "issues": []}}]))
+    c = login("northstar.lead")
+    sid = c.post(f"/api/projects/{pid}/sessions").json()["id"]
+    rid, done = start(c, pid, sid, mode="plan_then_pause")
+    assert done["run"]["status"] == "paused", done["run"]
+    graph_of(client, pid).query("MATCH (s:Source {id: $id}) DETACH DELETE s", params={"id": f"{pid}-extra"})
+    stats = watcher.sweep(client, [graph_of(client, pid).name])
+    [alert] = alerts(c, pid)
+    assert alert["kind"] == "plan_stale" and "no longer available" in alert["reason"], alert
+    assert stats["created"] >= 1
+
+
+def test_regression_one_unreadable_plan_does_not_block_other_alerts(world, monkeypatch):
+    """Incomplete reads freeze only the affected target; other alerts still reconcile."""
+    pid, client = world
+    c = login("northstar.lead")
+    sid_a = c.post(f"/api/projects/{pid}/sessions").json()["id"]
+    start(c, pid, sid_a, mode="plan_then_pause")                           # A: paused plan
+    sid_b = c.post(f"/api/projects/{pid}/sessions").json()["id"]
+    rid_b, done_b = start(c, pid, sid_b)                                   # B: approved plan
+    handoff_b = done_b["run"]["handoff_ids"][-1]
+    assert decide(c, pid, sid_b, rid_b, handoff_b, "approved").status_code == 200
+    supersede(client, pid, f"{pid}-dec2", f"{pid}-dec", "Second scope")
+    by_kind = {a["kind"]: a for a in alerts(c, pid)}
+    assert set(by_kind) == {"plan_stale", "approved_plan_stale"}
+
+    real_engine = watcher._engine
+
+    def flaky(client_, scope):
+        if scope.session_id == sid_a:
+            raise ConnectionError("plan A unreadable")
+        return real_engine(client_, scope)
+    monkeypatch.setattr(watcher, "_engine", flaky)
+    assert decide(c, pid, sid_b, rid_b, handoff_b, "rejected", feedback="Outdated", expected=1).status_code == 200
+    after = {a["kind"]: a["status"] for a in alerts(c, pid)}
+    assert after == {"plan_stale": "open", "approved_plan_stale": "resolved"}, after
