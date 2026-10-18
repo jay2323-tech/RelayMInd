@@ -227,3 +227,51 @@ def test_regression_casual_decline_of_an_offer(world, monkeypatch):
     declined = say(c, pid, sid, "nahh nahh dw")["run"]
     assert declined["request_kind"] == "clarify" and "won't prepare a plan" in declined["answer"]
     assert declined["handoff_ids"] == []
+
+
+def test_model_free_answers_work_without_a_model_key(world, monkeypatch):
+    """Production robustness: a missing/expired model key must not refuse every chat message."""
+    pid, _ = world
+
+    def unconfigured():
+        raise ValueError("Configure a supported provider, explicit model name and API key")
+    monkeypatch.setattr(runs_api, "provider_factory", unconfigured)
+    c = login("northstar.lead")
+    sid = c.post(f"/api/projects/{pid}/sessions").json()["id"]
+    answer = say(c, pid, sid, "What are the current decisions?")["run"]
+    assert answer["request_kind"] == "factual" and answer["status"] == "completed"
+    saved = say(c, pid, sid, "Remember that Coldline prefers calls before 10am.")["run"]
+    assert saved["memory_receipt"]["operation"] == "saved"
+    plan = say(c, pid, sid, "Plan the launch")["run"]
+    assert plan["status"] in ("failed", "blocked") and plan["handoff_ids"] == []     # honest failure, no fake plan
+    assert "model_not_configured" in plan["error"]
+    vague = say(c, pid, sid, "hmm what about that thing")["run"]
+    assert vague["request_kind"] == "clarify" and vague["handoff_ids"] == []         # safe fallback
+
+
+def test_public_demo_mode_is_off_by_default_and_opt_in(world, monkeypatch):
+    from fastapi.testclient import TestClient
+    from relaymind.main import app
+    monkeypatch.delenv("RELAYMIND_PUBLIC_DEMO", raising=False)
+    assert TestClient(app).get("/api/auth/demo").json() == {"public_demo": False}      # never leaks by default
+    monkeypatch.setenv("RELAYMIND_PUBLIC_DEMO", "1")
+    info = TestClient(app).get("/api/auth/demo").json()
+    assert info["public_demo"] is True and info["password"] == "test-only-password"
+    assert {"northstar.lead", "harbor.lead", "aw.quality"} <= {a["username"] for a in info["accounts"]}
+
+
+def test_hourly_model_budget_stops_plans_but_not_answers(world, monkeypatch):
+    pid, _ = world
+    monkeypatch.setenv("RELAYMIND_MODEL_CALLS_PER_USER_HOUR", "2")          # planner + reviewer = 2 calls
+    with runs_api._usage_lock:
+        runs_api._usage.clear()
+    install(monkeypatch, ScriptedModel(plan_replies(pid)), ScriptedModel(plan_replies(pid)), ScriptedModel([]))
+    c = login("northstar.lead")
+    sid = c.post(f"/api/projects/{pid}/sessions").json()["id"]
+    assert say(c, pid, sid, "Plan the launch")["run"]["status"] == "completed"           # uses the 2 calls
+    over = say(c, pid, sid, "Plan the launch again")["run"]
+    assert over["status"] in ("failed", "blocked") and "model_budget_exceeded" in over["error"]
+    facts = say(c, pid, sid, "What are the current decisions?")["run"]
+    assert facts["status"] == "completed"                                                 # never limited
+    with runs_api._usage_lock:
+        runs_api._usage.clear()

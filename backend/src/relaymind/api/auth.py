@@ -43,6 +43,17 @@ def logout(request: Request, response: Response):
     return {"signed_out": True}
 
 
+@router.get("/demo")
+def demo_info():
+    """Public demo mode (RELAYMIND_PUBLIC_DEMO=1, off by default): lets the login screen show the shared demo
+    password so testers can sign in without asking. Only for deployments holding synthetic demo data."""
+    if os.getenv("RELAYMIND_PUBLIC_DEMO") != "1" or not os.getenv("RELAYMIND_DEMO_PASSWORD"):
+        return {"public_demo": False}
+    from relaymind.platform.identity import ACCOUNTS
+    return {"public_demo": True, "password": os.environ["RELAYMIND_DEMO_PASSWORD"],
+            "accounts": [{"username": a.username, "label": a.display_name} for a in ACCOUNTS.values()]}
+
+
 @router.get("/me")
 def me(principal: Principal = Depends(current_principal)):
     return principal.public()
