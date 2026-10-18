@@ -41,6 +41,9 @@ class FakeFacts:
     def record_state(self, kind, record_id):
         return set(self.records.get((kind, record_id), ()))
 
+    def exists(self, token):
+        return token in self.known or any(rid == token for _, rid in self.records)
+
 
 def failed(verdict, check):
     return not verdict.ok and any(f.check == check for f in verdict.failures)
@@ -137,3 +140,38 @@ def test_regression_status_must_be_backed_by_the_named_record():
     rfacts = FakeFacts(records={("plan_review", "h1-plan-review"): {"approved"}})
     assert oversee("You approved plan revision h1.", review, rfacts).ok
     assert failed(oversee("You approved plan revision h2-r1.", review, rfacts), "state_words")
+
+
+
+def test_regression_exact_ids_and_every_asserted_record_is_checked():
+    """Codex PR #25 review: substring IDs and partial backing in a list."""
+    facts = FakeFacts(records={("action", "a-1"): {"applied", "approved"}, ("action", "a-2"): {"proposed"}})
+    claim = Claims(record_states=[RecordState(kind="action", id="a-1", status="applied")])
+    assert oversee("Action a-1 was applied.", claim, facts).ok
+    assert failed(oversee("Action a-10 was applied.", claim, facts), "state_words")        # a-1 never vouches for a-10
+    assert failed(oversee("Actions a-1 and a-2 were applied.", claim, facts), "state_words")  # a-2 is only proposed
+    assert failed(oversee("Actions a-1, a-2 were applied.", claim, facts), "state_words")
+    both = FakeFacts(records={("action", "a-1"): {"applied"}, ("action", "a-2"): {"applied"}})
+    two = Claims(record_states=[RecordState(kind="action", id=i, status="applied") for i in ("a-1", "a-2")])
+    assert oversee("Actions a-1 and a-2 were applied.", two, both).ok
+    # A different kind of known record next to the word is not what the word describes, so it is fine.
+    mixed = FakeFacts(known=("dec-1", "src-1", "person-7"), records={("action", "a-1"): {"applied"}})
+    assert oversee("Action a-1 was applied for person-7.", claim, mixed).ok
+
+
+def test_uuid_like_ids_are_whole_tokens():
+    from relaymind.assistant.overseer import _id_tokens
+    tokens = _id_tokens("Plan 0b6f1c2a-9d3e-4f5a-8b7c-1234567890ab-r1 on 2026-10-18 via in-app, a-1, AW-O102")
+    assert tokens == {"0b6f1c2a-9d3e-4f5a-8b7c-1234567890ab-r1", "a-1", "AW-O102"}
+
+
+def test_regression_quote_exemption_is_positional_not_global():
+    """Codex PR #27 re-review: a record titled "shipped" must not hide an assistant sentence saying shipped."""
+    from relaymind.contracts.assistant import Quote, quoted_line
+    line, spans = quoted_line('- t-1 "', Quote("shipped"), '" (todo) still open')
+    claims = Claims(quoted_spans=spans)
+    assert oversee(line, claims, FakeFacts()).ok                                   # the quoted title is exempt
+    assert failed(oversee(line + "\nAll affected orders were shipped.", claims, FakeFacts()), "state_words")
+    assert failed(oversee(line + " and it was shipped", claims, FakeFacts()), "state_words")   # same line, edited
+    same_line_twice = line + "\n" + line                                           # an identical producer line
+    assert oversee(same_line_twice, claims, FakeFacts()).ok

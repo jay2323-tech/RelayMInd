@@ -315,6 +315,10 @@ def worker_loop(client: Any, interval: float = 15.0, stop=None) -> None:
             stats = run_once(client)
             if any(stats.values()):
                 log.info("reminder_worker %s", stats)
+            from relaymind.assistant.watcher import sweep
+            alerts = sweep(client)
+            if alerts["created"] or alerts["resolved"]:
+                log.info("watcher %s", alerts)
         except Exception as exc:   # keep running; class name only
             log.error("reminder_worker_error %s", type(exc).__name__)
         if stop is not None:
