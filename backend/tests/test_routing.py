@@ -44,3 +44,20 @@ def test_clear_factual_questions(text, intent):
 @pytest.mark.parametrize("text", PLANNING)
 def test_judgement_or_unclear_requests_go_to_planning(text):
     assert classify(text).kind == "planning"
+
+
+
+@pytest.mark.parametrize("text", ["nahh nahh dw", "nah", "Nope, I'm good", "no thanks", "dw", "don't worry about it",
+                                  "nvm", "not now", "skip it", "nahhhh bro", "No need", "all good, no thanks",
+                                  "nah it's fine"])
+def test_casual_declines_of_a_pending_offer(text):
+    from relaymind.assistant.router import _NEGATIVE, is_decline
+    assert _NEGATIVE.match(text) or is_decline(text), text          # the router accepts either
+
+
+@pytest.mark.parametrize("text", ["no, plan the launch instead", "yes", "ok", "sure go ahead",
+                                  "no I want the pricing plan", "good morning", "Is the delivery not now?",
+                                  "what did I say about Coldline?"])
+def test_real_requests_are_not_declines(text):
+    from relaymind.assistant.router import is_decline
+    assert not is_decline(text), text
