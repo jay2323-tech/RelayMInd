@@ -44,12 +44,17 @@ export type RunStatus = 'planning' | 'awaiting_review' | 'paused' | 'completed' 
 export interface OverseerVerdict {
   ok: boolean; checks_run: number; failures: { check: string; detail: string }[]; rewritten: boolean;
 }
+export interface MemoryRef {
+  message_id: string; session_id: string; chat_title: string;
+  role: 'user' | 'assistant'; created_at: number; snippet: string; memory_id: string | null;
+}
 export interface RunRecord {
+  memory_refs?: MemoryRef[];
   id: string; status: RunStatus; request: string; handoff_ids: string[]; events: AgentEvent[];
   result: { review: Review; procedure_id: string; procedure_version: number; decision_ids: string[] } | null;
   error: string | null;
   overseer?: OverseerVerdict | null;
-  request_kind?: 'planning' | 'capability' | 'factual' | 'work_setup' | 'clarify'; answer?: string | null; pending_plan_request?: string | null; user_message?: string | null;
+  request_kind?: 'planning' | 'capability' | 'factual' | 'work_setup' | 'clarify' | 'memory'; answer?: string | null; pending_plan_request?: string | null; user_message?: string | null;
 }
 export interface Job { state: 'queued' | 'running' | 'done' | 'error'; error: string | null }
 export interface RunView { run: RunRecord | null; job: Job | null; handoffs: Handoff[] }

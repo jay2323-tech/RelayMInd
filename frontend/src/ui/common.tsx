@@ -1,5 +1,6 @@
+import { memoryTitleSpans } from './memoryLinks';
 import { useEffect, type ReactNode } from 'react';
-import type { Identity } from '../types';
+import type { Identity, MemoryRef } from '../types';
 
 // ---------- evidence chips ----------
 export type ChipKind = 'decision' | 'source' | 'task' | 'episode' | 'other';
@@ -38,11 +39,35 @@ export function Linkified({ text, onOpen }: { text: string; onOpen: (id: string)
 }
 
 /** Safe text rendering: headings, lists and bold; never injects HTML. */
-export function ReadableReply({ text, onOpen }: { text: string; onOpen: (id: string) => void }) {
+export interface MemoryNavigation {
+  memoryRefs?: MemoryRef[]; onOpenChat?: (sessionId: string) => void;
+}
+export function MemoryChatLinks({ memoryRefs = [], onOpenChat }: MemoryNavigation) {
+  if (!memoryRefs.length || !onOpenChat) return null;
+  return <ul className="memory-chat-sources" aria-label="Source conversations">{memoryRefs.map((ref, i) =>
+    <li key={`${ref.message_id}-${i}`}><button type="button" className="memory-chat-link" onClick={() => onOpenChat(ref.session_id)}>
+      {ref.chat_title}</button><span className="caption"> · {ref.role === 'user' ? 'You said' : 'RelayMind replied'} · {new Date(ref.created_at).toLocaleDateString()}</span><p className="caption">{ref.snippet}</p></li>)}</ul>;
+}
+export function ReadableReply({ text, onOpen, memoryRefs = [], onOpenChat }: {
+  text: string; onOpen: (id: string) => void;
+} & MemoryNavigation) {
+  function linked(value: string): ReactNode {
+    const titles = memoryTitleSpans(value, memoryRefs);
+    let last = 0;
+    const parts: ReactNode[] = [];
+    for (const span of titles) {
+      parts.push(<Linkified key={`text-${span.start}`} text={value.slice(last, span.start)} onOpen={onOpen} />);
+      parts.push(onOpenChat ? <button type="button" className="memory-chat-link" key={span.start}
+        onClick={() => onOpenChat(span.sessionId)} aria-label={`Open conversation: ${span.title}`}>{span.title}</button> : span.title);
+      last = span.start + span.title.length;
+    }
+    parts.push(<Linkified key="tail" text={value.slice(last)} onOpen={onOpen} />);
+    return parts;
+  }
   function inline(value: string) {
     return value.split(/(\*\*[^*]+\*\*)/g).map((part, i) => part.startsWith('**')
-      ? <strong key={i}><Linkified text={part.slice(2, -2)} onOpen={onOpen} /></strong>
-      : <Linkified key={i} text={part} onOpen={onOpen} />);
+      ? <strong key={i}>{linked(part.slice(2, -2))}</strong>
+      : <span key={i}>{linked(part)}</span>);
   }
   return <div className="readable-reply">{text.split(/\n\s*\n/).map((block, i) => {
     const lines = block.split('\n');

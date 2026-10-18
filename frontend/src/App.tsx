@@ -317,7 +317,10 @@ function Workspace({ identity, healthy, onSignOut, onExpired }: {
               if (alert.session_id) void openSession(alert.session_id).catch(fail);
               else { openTab('actions'); setSheetOpen(true); }
             }} />}
-            <ChatStream key={sessionId ?? 'new'} messages={messages} onEvidence={showEvidence} hasPlan={message => !!planFor(message)} renderAfter={message => {
+            <ChatStream key={sessionId ?? 'new'} messages={messages} onEvidence={showEvidence}
+              onOpenChat={id => { void openSession(id).catch(fail); }}
+              memoryFor={message => Object.values(runViews).find(item => message.id === `${item.run?.id}-${item.run?.status}-summary`)?.run?.memory_refs ?? []}
+              hasPlan={message => !!planFor(message)} renderAfter={message => {
               const matchingRun = Object.values(runViews).find(item => message.id === `${item.run?.id}-${item.run?.status}-summary`)?.run ?? null;
               const badge = <><OverseerBadge run={matchingRun} message={message} />
                 {matchingRun?.pending_plan_request && matchingRun.request_kind === 'clarify' && message.id === messages.at(-1)?.id && !jobActive && <div className="clarify-actions" aria-label="Plan offer">
@@ -330,7 +333,7 @@ function Workspace({ identity, healthy, onSignOut, onExpired }: {
               const outdated = (!!latestHandoff && staleTargets.has(latestHandoff)) || planNeedsRefresh(saved.handoffs.at(-1), decisions ? currentIds : null,
                 Object.fromEntries(impacts.map(item => [item.hold.hold_id, item.hold.decision_id])));
               return <div className="chat-plan">
-                <PlanCard outdated={outdated} run={saved.run} handoffs={saved.handoffs} currentDecisionIds={currentIds}
+                <PlanCard onOpenChat={id => { void openSession(id).catch(fail); }} outdated={outdated} run={saved.run} handoffs={saved.handoffs} currentDecisionIds={currentIds}
                   currentHolds={Object.fromEntries(impacts.map(item => [item.hold.hold_id, item.hold.decision_id]))} onEvidence={showEvidence} savedText={message.content}>
                 <InlinePlanControls reviewLoading={capabilities.plan_review && !(id in planReviews)} outdated={outdated} sessionId={sessionId!} view={saved} supported={capabilities.plan_review} review={planReviews[id] ?? null} busy={busy || jobActive}
                   onDecision={(decision, feedback, operationId, expectedVersion) => decidePlan(id, decision, feedback, operationId, expectedVersion)} />
