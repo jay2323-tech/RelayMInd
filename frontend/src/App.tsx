@@ -1,3 +1,4 @@
+import { ThinkingFeedback } from './ui/ThinkingFeedback';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, fetchHealth, setProject, currentProject, ApiError, UnauthorizedError } from './api/client';
 import type { AffectedTask, CurrentDecisions, Decision, Evidence, Identity, ImpactReport, ProposedAction, RunView } from './types';
@@ -318,7 +319,11 @@ function Workspace({ identity, healthy, onSignOut, onExpired }: {
             }} />}
             <ChatStream key={sessionId ?? 'new'} messages={messages} onEvidence={showEvidence} hasPlan={message => !!planFor(message)} renderAfter={message => {
               const matchingRun = Object.values(runViews).find(item => message.id === `${item.run?.id}-${item.run?.status}-summary`)?.run ?? null;
-              const badge = <OverseerBadge run={matchingRun} message={message} />;
+              const badge = <><OverseerBadge run={matchingRun} message={message} />
+                {matchingRun?.pending_plan_request && matchingRun.request_kind === 'clarify' && message.id === messages.at(-1)?.id && !jobActive && <div className="clarify-actions" aria-label="Plan offer">
+                  <button className="btn btn--small btn--primary" disabled={busy} onClick={() => void send('yes').catch(fail)}>Yes, prepare a plan</button>
+                  <button className="btn btn--small btn--ghost" disabled={busy} onClick={() => void send('no').catch(fail)}>No, thanks</button>
+                </div>}</>;
               const entry = planFor(message); if (!entry) return badge;
               const [id, saved] = entry;
               const latestHandoff = saved.handoffs.at(-1)?.id;
@@ -335,7 +340,10 @@ function Workspace({ identity, healthy, onSignOut, onExpired }: {
                   onReject={actionId => act(() => api.reject(actionId), 'Reject')} />
               </div>;
             }} />
-            {jobActive && <p className="chat-working" role="status"><span className="spinner" aria-hidden /> Checking evidence and preparing your response…</p>}
+            {jobActive && <ThinkingFeedback view={view} />}
+            {!jobActive && view?.run && ['failed', 'blocked'].includes(view.run.status) && <div className="request-notice" role="status">
+              <strong>This request could not finish</strong><p>Open Activity below for the recorded details. You can rephrase the request or try again.</p>
+            </div>}
             {view && <details className="chat-activity"><summary>Activity · {view.run?.status.replaceAll('_', ' ') ?? 'queued'}</summary>
               <RelayTrack view={view} busy={busy} onPause={() => control('pause')} onResume={() => control('resume')}
                 onRetry={view.run ? () => { void send(view.run!.request).catch(fail); } : undefined} />
@@ -345,7 +353,7 @@ function Workspace({ identity, healthy, onSignOut, onExpired }: {
           </div>
         </main>
         <div className="chat-composer-dock"><div className="chat-reading-column">
-          {sessionId && <ReminderControls key={sessionId} sessionId={sessionId} supported={capabilities.reminders} delivery={capabilities.reminder_delivery} onError={fail} />}
+          {sessionId && <ReminderControls key={sessionId} sessionId={sessionId} supported={capabilities.reminders} delivery={capabilities.reminder_delivery} refreshKey={messages.at(-1)?.id} onError={fail} />}
           <Composer busy={busy || jobActive} showSuggestions={!messages.length} pauseAfterPlan={pauseAfterPlan} project={currentProject()}
             onPauseChange={setPauseAfterPlan} onSend={send} />
           <p className="composer-note">Evidence-backed proposals. You control business changes.</p>
