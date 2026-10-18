@@ -38,7 +38,9 @@ def test_recall_finds_what_i_said_in_another_chat(world):
     chat_b = c.post(f"/api/projects/{pid}/sessions").json()["id"]
     run = say(c, pid, chat_b, "Do you remember what I said about Coldline?")
     assert (run["request_kind"], run["status"]) == ("factual", "completed")
-    assert "Coldline prefers phone calls before 10am" in run["answer"] and f"{chat_a}-m0" in run["answer"]
+    assert "Coldline prefers phone calls before 10am" in run["answer"]
+    assert f"{chat_a}-m0" not in run["answer"]                                     # no raw IDs in the text...
+    assert (run["memory_refs"][0]["message_id"], run["memory_refs"][0]["session_id"]) == (f"{chat_a}-m0", chat_a)  # ...links
     assert 'In "Coldline prefers phone calls' in run["answer"]                      # chat named by its first message
     assert "not an approved decision" in run["answer"]
     assert run["overseer"]["ok"] and run["overseer"]["checks_run"] >= 1             # quote grounded via owned lookup

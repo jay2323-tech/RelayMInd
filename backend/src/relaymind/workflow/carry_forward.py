@@ -23,7 +23,7 @@ from relaymind.contracts.assistant import MemoryRef
 
 LABEL = ("The user's own earlier statements from their chats in this project. History, not approved decisions: "
          "current approved decisions take priority, and a conflict must be named, not resolved in favour of memory. "
-         "Cite the message_id when a step relies on one.")
+         "Refer to them in the text by chat name, never by message ID; put the message_id only in evidence_ids.")
 MAX_CARRIED = 5
 
 

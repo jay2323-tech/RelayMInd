@@ -191,7 +191,7 @@ def recall_answer(client: Any, scope: AgentJobScope, text: str, exclude: set[str
         snippet = memory_text if memory_text and memory_text in m["content"] else _snippet(m["content"], m["hits"])
         said = "you asked me to remember" if memory_text else label
         line, s = quoted_line('- In "', Quote(m["chat"]), f'" on {_date(m["created_at"])} {said}: "',
-                              Quote(snippet), f'" ({m["id"]})')
+                              Quote(snippet), '"')        # chat name + memory_refs (session_id) link to the source
         lines.append(line)
         spans += s
         cited.append(m["id"])
