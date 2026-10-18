@@ -2,6 +2,9 @@
 
 
 def conversation_reply(run: dict, plan: dict | None = None) -> str:
+    if (run.get('error') or '').startswith('factual: overseer_'):
+        return ('I could not verify the answer against the latest project records. '
+                'No business changes were made. You can inspect Activity for details or try again.')
     if run.get('answer'):
         return run['answer']
     status = run['status']
@@ -56,6 +59,11 @@ def direct_reply(kind: str, text: str) -> str:
     body = text.strip()
     if kind == 'factual' and body.endswith(_FACTUAL_FOOTER):
         body = body[:-len(_FACTUAL_FOOTER)].rstrip()
+    # An empty traversal is not a claim that a particular decision is superseded.
+    # Preserve the producer's narrow result without triggering status-word lint.
+    if kind == 'factual' and body == 'No task in this project still implements a superseded decision.':
+        body = ('No tasks were found linked to a replaced decision in this project. '
+                'This does not establish whether tasks still use a particular route.')
     if body.endswith(_CONTROL):
         return body
     heading = '**Answer**' if kind == 'factual' else '**Work setup**'

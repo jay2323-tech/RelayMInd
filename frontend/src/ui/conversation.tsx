@@ -1,8 +1,9 @@
+import { StatusOrb } from './ThinkingFeedback';
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react';
 import type { ChatMessage } from '../components/chat/ChatPanel';
 import type { SessionSummary } from '../components/chat/ConversationHistory';
-import type { Handoff, RunRecord } from '../types';
-import { EvidenceChip, ReadableReply } from './common';
+import type { Handoff, RunRecord, MemoryRef } from '../types';
+import { EvidenceChip, ReadableReply, MemoryChatLinks } from './common';
 
 // ---------- sessions rail ----------
 export function SessionRail({ sessions, activeId, busy, onSelect, onNew }: {
@@ -30,7 +31,8 @@ export function SessionRail({ sessions, activeId, busy, onSelect, onNew }: {
 }
 
 // ---------- chat stream ----------
-export function ChatStream({ messages, onEvidence, renderAfter, hasPlan }: {
+export function ChatStream({ messages, onEvidence, renderAfter, hasPlan, memoryFor, onOpenChat }: {
+  memoryFor?: (message: ChatMessage) => MemoryRef[]; onOpenChat?: (sessionId: string) => void;
   messages: ChatMessage[]; onEvidence: (id: string) => void;
   renderAfter?: (message: ChatMessage) => ReactNode; hasPlan?: (message: ChatMessage) => boolean;
 }) {
@@ -51,10 +53,11 @@ export function ChatStream({ messages, onEvidence, renderAfter, hasPlan }: {
     {messages.map(m => <article key={m.id} className={`bubble bubble--${m.role}`}>
       <span className="bubble__who">{m.role === 'user' ? 'You' : 'RelayMind'}</span>
       {m.role === 'assistant' ? hasPlan?.(m) ? null : m.id.endsWith('-receipt')
-        ? <details className="saved-receipt"><summary>Decision recorded</summary><ReadableReply text={m.content} onOpen={onEvidence} /></details>
+        ? <details className="saved-receipt"><summary>Decision recorded</summary><ReadableReply text={m.content} onOpen={onEvidence} memoryRefs={memoryFor?.(m)} onOpenChat={onOpenChat} /></details>
         : m.id.startsWith('alert-') && m.id.endsWith('-notice')
-        ? <details className="saved-receipt"><summary>Earlier notice: project records changed</summary><ReadableReply text={m.content} onOpen={onEvidence} /></details>
-        : <ReadableReply text={m.content} onOpen={onEvidence} /> : m.content}
+        ? <details className="saved-receipt"><summary>Earlier notice: project records changed</summary><ReadableReply text={m.content} onOpen={onEvidence} memoryRefs={memoryFor?.(m)} onOpenChat={onOpenChat} /></details>
+        : <ReadableReply text={m.content} onOpen={onEvidence} memoryRefs={memoryFor?.(m)} onOpenChat={onOpenChat} /> : m.content}
+      {m.role === 'assistant' && !hasPlan?.(m) && <MemoryChatLinks memoryRefs={memoryFor?.(m)} onOpenChat={onOpenChat} />}
       {renderAfter?.(m)}
     </article>)}
     <div ref={end} />
@@ -99,7 +102,7 @@ export function Composer({ busy, showSuggestions, pauseAfterPlan, onPauseChange,
     const value = text.trim();
     if (!value || busy || sending) return;
     setSending(true); setError(null);
-    try { await onSend(value); setDraft(''); }
+    try { await onSend(value); setDraft(previous => previous.trim() === value ? '' : previous); }
     catch (e) { setError(e instanceof Error ? e.message : 'Message could not be sent. Your draft is kept.'); }
     finally { setSending(false); }
   }
@@ -113,7 +116,7 @@ export function Composer({ busy, showSuggestions, pauseAfterPlan, onPauseChange,
       <button key={s} type="button" className="suggestion" disabled={working} title={s} onClick={() => { setDraft(s); document.getElementById('composer')?.focus(); }}>
         <span>{(SUGGESTION_LABELS[project] ?? SUGGESTION_LABELS.default)[i]}</span><span aria-hidden>↗</span></button>)}</div>}
     <label htmlFor="composer" className="sr-only">Message</label>
-    <textarea ref={input} rows={1} id="composer" value={draft} maxLength={16000} disabled={working} placeholder="Ask about your project or plan your next step…"
+    <textarea ref={input} rows={1} id="composer" value={draft} maxLength={16000} disabled={sending} placeholder="Ask about your project or plan your next step…"
       onChange={e => setDraft(e.target.value)} onKeyDown={key} />
     {error && <p className="alert alert--danger" role="alert">{error}</p>}
     <div className="composer__row">
@@ -126,14 +129,15 @@ export function Composer({ busy, showSuggestions, pauseAfterPlan, onPauseChange,
       </details>
       <span className="topbar__spacer" />
       <button type="submit" className="btn btn--primary" disabled={working || !draft.trim()}>
-        {working ? <><span className="spinner" aria-hidden /> Working</> : 'Send ↑'}</button>
+        {working ? <><StatusOrb state="working" /> Working</> : 'Send ↑'}</button>
     </div>
   </form>;
 }
 
 // ---------- plan + review ----------
-export function PlanCard({ run, handoffs, currentDecisionIds, currentHolds = {}, onEvidence, outdated = false, children, savedText }: {
+export function PlanCard({ run, handoffs, currentDecisionIds, currentHolds = {}, onEvidence, outdated = false, children, savedText, onOpenChat }: {
   run: RunRecord | null; handoffs: Handoff[]; currentDecisionIds: Set<string>;
+  onOpenChat?: (sessionId: string) => void;
   outdated?: boolean; children?: ReactNode; savedText?: string;
   currentHolds?: Record<string, string>;
   onEvidence: (id: string) => void;
@@ -150,14 +154,15 @@ export function PlanCard({ run, handoffs, currentDecisionIds, currentHolds = {},
     <div className="plan-heading"><h2 id={`plan-title-${run.id}`}>Proposed plan</h2><span className={`plan-status ${outdated || (!accepted && run.status !== 'paused') ? 'plan-status--warn' : ''}`}>{status}</span></div>
     {outdated && <div className="alert alert--warn outdated-plan" role="status"><strong>This plan is outdated.</strong><p>Its supporting records changed. Request changes before approving it again. Dismissing the notification does not update the plan.</p></div>}
     <Freshness handoffs={handoffs.slice(-1)} currentHolds={currentHolds} onEvidence={onEvidence} />
-    <ReadableReply text={latest.plan.summary} onOpen={onEvidence} />
+    <ReadableReply text={latest.plan.summary} onOpen={onEvidence} memoryRefs={run.memory_refs} onOpenChat={onOpenChat} />
     <h3 className="next-steps-heading">Next steps</h3>
     <ol className="plan-list">{latest.plan.steps.map((step, i) => <li key={i}>
-      <ReadableReply text={step.task} onOpen={onEvidence} />
+      <ReadableReply text={step.task} onOpen={onEvidence} memoryRefs={run.memory_refs} onOpenChat={onOpenChat} />
     </li>)}</ol>
     {latest.plan.uncertainties.length > 0 && <div className="plan-unknowns"><h3>Still needed</h3>
-      <ul>{latest.plan.uncertainties.map((u, i) => <li key={i}><ReadableReply text={u} onOpen={onEvidence} /></li>)}</ul></div>}
+      <ul>{latest.plan.uncertainties.map((u, i) => <li key={i}><ReadableReply text={u} onOpen={onEvidence} memoryRefs={run.memory_refs} onOpenChat={onOpenChat} /></li>)}</ul></div>}
     {!accepted && run.status !== 'paused' && <ReviewSeal run={run} onEvidence={onEvidence} />}
+    <MemoryChatLinks memoryRefs={run.memory_refs} onOpenChat={onOpenChat} />
     <div className="plan-footer">
       <details className="plan-sources"><summary>Sources · {cited.length}</summary>
         <p className="caption">Based on {latest.plan.decision_ids.map(chip)}</p>
@@ -166,7 +171,7 @@ export function PlanCard({ run, handoffs, currentDecisionIds, currentHolds = {},
       <details className="plan-details"><summary>Details</summary>
         <p className="caption">Revision {latest.revision} · {latest.id}</p>
         {run.result && <p className="caption">Independent review: {review?.status.replaceAll('_', ' ')} · {run.result.procedure_id} v{run.result.procedure_version}</p>}
-        {savedText && <details><summary>Original saved response</summary><ReadableReply text={savedText} onOpen={onEvidence} /></details>}
+        {savedText && <details><summary>Original saved response</summary><ReadableReply text={savedText} onOpen={onEvidence} memoryRefs={run.memory_refs} onOpenChat={onOpenChat} /></details>}
       </details>
     </div>
     <div className="plan-decision glass">{children}</div>

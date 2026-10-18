@@ -39,7 +39,7 @@ def main():
             if result.returncode != 0:
                 print(result.stderr[-1500:])
                 raise SystemExit(result.returncode)
-    print("Ready: before-change stage. Sign in and follow docs/demo-script.md.")
+    print("Ready: before-change stage. Sign in and follow docs/submission-drafts/DEMO.md.")
 
 
 if __name__ == "__main__":

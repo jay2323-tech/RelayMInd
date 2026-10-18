@@ -85,3 +85,23 @@ def test_impact_never_drops_unknown_orders_or_invents_safety():
     assert 'aw-src-trace' in text and 'AW-A101' in text
     assert 'AW-O105 is safe' not in text
     assert 'No business changes were applied.' in text
+
+
+def test_withheld_factual_answer_uses_plain_verification_failure():
+    text = conversation_reply({'status': 'blocked', 'error': 'factual: overseer_state_words',
+                               'answer': 'My prepared answer did not match the project records on recheck.'})
+    assert 'could not verify' in text
+    assert 'prepared answer' not in text and 'No business changes were made' in text
+
+
+def test_empty_affected_result_retains_its_narrow_scope_and_passes_lint():
+    from relaymind.assistant.overseer import oversee
+    from relaymind.contracts.assistant import Claims
+    class EmptyFacts:
+        def affected_task_ids(self):
+            return set()
+    text = direct_reply('factual', 'No task in this project still implements a superseded decision.'
+                        + "\n\n_Answered directly from the project's records; no plan was made and nothing was changed._")
+    assert 'No tasks were found linked to a replaced decision' in text
+    assert 'does not establish whether tasks still use a particular route' in text
+    assert oversee(text, Claims(affected_task_ids=[]), EmptyFacts()).ok

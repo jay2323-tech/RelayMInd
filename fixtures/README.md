@@ -11,4 +11,4 @@ All data here is synthetic. None of it is a loaded database or an executed agent
   must be labelled as a test fixture.
 
 A validated seed loader and a second-tenant fixture remain to be implemented.
-Never use these files as a hardcoded live agent answer. See docs/memory-design.md.
+Never use these files as a hardcoded live agent answer. See docs/submission-drafts/README.md.
