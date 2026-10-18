@@ -70,9 +70,12 @@ def review_history(client: Any, scope: AgentJobScope, handoff_id: str) -> list[P
     return [_row(r) for r in rows]
 
 
-def review_by_id(client: Any, scope: AgentJobScope, review_id: str) -> PlanReview | None:
+def review_by_id(client: Any, scope: AgentJobScope, review_id: str, *, any_session: bool = False) -> PlanReview | None:
+    """A review in the caller's scope. any_session=True searches all of the caller's OWN sessions in this
+    company/project (used to verify "What did I approve?", which lists reviews from every conversation)."""
+    session_filter = "" if any_session else " AND r.session_id = $session"
     rows = _graph(client, scope).ro_query(
-        f"MATCH (r:PlanReview {{id: $id}}) WHERE {_SCOPE} AND r.session_id = $session {_RETURN}",
+        f"MATCH (r:PlanReview {{id: $id}}) WHERE {_SCOPE}{session_filter} {_RETURN}",
         params={**_params(scope), "id": review_id}).result_set
     return _row(rows[0]) if rows else None
 

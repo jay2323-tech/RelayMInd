@@ -175,3 +175,14 @@ def test_regression_quote_exemption_is_positional_not_global():
     assert failed(oversee(line + " and it was shipped", claims, FakeFacts()), "state_words")   # same line, edited
     same_line_twice = line + "\n" + line                                           # an identical producer line
     assert oversee(same_line_twice, claims, FakeFacts()).ok
+
+
+def test_one_name_can_belong_to_several_records():
+    """Two human decisions on one plan revision share the revision id; each line is checked against both."""
+    records = {("plan_review", "h1-review-v1"): {"approved"}, ("plan_review", "h1-review-v2"): {"rejected"}}
+    claims = Claims(record_states=[
+        RecordState(kind="plan_review", id="h1-review-v2", status="rejected", aliases=["h1-r1"]),
+        RecordState(kind="plan_review", id="h1-review-v1", status="approved", aliases=["h1-r1"])])
+    text = "- Rejected plan h1-r1: summary\n- Approved plan h1-r1: summary"
+    assert oversee(text, claims, FakeFacts(records=records)).ok
+    assert failed(oversee("- Applied plan h1-r1", claims, FakeFacts(records=records)), "state_words")
