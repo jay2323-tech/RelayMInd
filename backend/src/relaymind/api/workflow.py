@@ -23,7 +23,7 @@ router = APIRouter(prefix="/projects/{project_id}")
 # Flip a flag only when the feature is implemented AND verified (tests + live check).
 # `reminders` means SUPPORTED; delivery liveness is reported separately so the feature
 # never disappears from the UI when the worker is down (it shows "delivery offline" instead).
-CAPABILITIES = WorkflowCapabilities(plan_review=True, work_setup=True, reminders=True, watcher=True)
+CAPABILITIES = WorkflowCapabilities(plan_review=True, work_setup=True, reminders=True, watcher=True, memory=True)
 
 
 def capabilities_now() -> WorkflowCapabilities:
