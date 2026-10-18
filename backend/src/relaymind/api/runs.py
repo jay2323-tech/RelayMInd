@@ -48,6 +48,30 @@ def _default_provider():
 
 provider_factory: Callable[[], object] = _default_provider   # replaced only by tests
 
+
+class ModelNotConfigured(RuntimeError):
+    code = "model_not_configured"          # surfaces as run.error "planning: model_not_configured"
+
+
+class _UnconfiguredModel:
+    """Stands in when no model is configured. Deterministic routes (factual answers, memory, work setup,
+    capability help) never call a model and keep working; plans and the Assistant fail with a clear,
+    honest error instead of the whole chat being refused."""
+    code = "model_not_configured"
+
+    def __init__(self, reason: str):
+        self.reason = reason
+
+    def reply(self, *args, **kwargs):
+        raise ModelNotConfigured("The AI model is not configured on this server")
+
+
+def _provider_or_unconfigured():
+    try:
+        return provider_factory()
+    except ValueError as exc:
+        return _UnconfiguredModel(str(exc))
+
 # Server-owned review procedure per project (approved procedure IDs; never chosen by the browser).
 PROJECT_PROCEDURES: dict[str, str] = {"aw-qh-17": "quality-hold-review", "hb-route-07": "route-change-review"}
 
@@ -199,7 +223,7 @@ def start_run(project_id: str, session_id: str, body: RunBody, me: Principal = D
     run_id = str(uuid4())
     with api_errors():
         scope = job_scope(me, project_id, session_id)          # captured before queueing
-        provider = provider_factory()                          # fail fast on server misconfiguration
+        provider = _provider_or_unconfigured()                 # model-free answers work without a model key
     queue_plan(scope, run_id, body.request, provider, mode=body.mode)
     return {"run_id": run_id, "job": _visible_job(run_id, scope)}
 

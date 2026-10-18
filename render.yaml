@@ -1,0 +1,54 @@
+# Render Blueprint: Dashboard → New → Blueprint → pick this repo.
+# Two services: the app (web, public HTTPS) and FalkorDB (private, persistent disk). See docs/deploy-render.md.
+services:
+  - type: web
+    name: relaymind
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: starter            # always-on; the free plan sleeps and would stop reminders/Watcher
+    healthCheckPath: /api/health
+    autoDeploy: false        # deploy deliberately from the dashboard
+    envVars:
+      - key: FALKORDB_HOST
+        fromService:
+          type: pserv
+          name: relaymind-falkordb
+          property: host
+      - key: FALKORDB_PORT
+        value: "6379"
+      - key: FALKORDB_PASSWORD
+        fromService:
+          type: pserv
+          name: relaymind-falkordb
+          envVarKey: FALKORDB_PASSWORD
+      - key: RELAYMIND_DEMO_PASSWORD   # the password testers type; set it yourself in the dashboard
+        sync: false
+      - key: AGENT_PROVIDER
+        value: gemini
+      - key: GEMINI_MODEL
+        value: gemini-3.5-flash-lite
+      - key: GEMINI_API_KEY            # set in the dashboard; never commit
+        sync: false
+      - key: AGENT_FALLBACK_PROVIDER
+        value: groq
+      - key: GROQ_MODEL
+        value: openai/gpt-oss-120b
+      - key: GROQ_API_KEY              # optional fallback; set in the dashboard
+        sync: false
+      - key: RELAYMIND_COOKIE_SECURE
+        value: "1"
+      - key: RELAYMIND_REMINDER_WORKER
+        value: "1"
+
+  - type: pserv
+    name: relaymind-falkordb
+    runtime: docker
+    dockerfilePath: ./deploy/falkordb.Dockerfile
+    plan: starter
+    disk:
+      name: falkordb-data
+      mountPath: /var/lib/falkordb/data
+      sizeGB: 1
+    envVars:
+      - key: FALKORDB_PASSWORD
+        generateValue: true          # random secret, shared with the web service above

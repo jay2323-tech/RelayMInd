@@ -227,3 +227,23 @@ def test_regression_casual_decline_of_an_offer(world, monkeypatch):
     declined = say(c, pid, sid, "nahh nahh dw")["run"]
     assert declined["request_kind"] == "clarify" and "won't prepare a plan" in declined["answer"]
     assert declined["handoff_ids"] == []
+
+
+def test_model_free_answers_work_without_a_model_key(world, monkeypatch):
+    """Production robustness: a missing/expired model key must not refuse every chat message."""
+    pid, _ = world
+
+    def unconfigured():
+        raise ValueError("Configure a supported provider, explicit model name and API key")
+    monkeypatch.setattr(runs_api, "provider_factory", unconfigured)
+    c = login("northstar.lead")
+    sid = c.post(f"/api/projects/{pid}/sessions").json()["id"]
+    answer = say(c, pid, sid, "What are the current decisions?")["run"]
+    assert answer["request_kind"] == "factual" and answer["status"] == "completed"
+    saved = say(c, pid, sid, "Remember that Coldline prefers calls before 10am.")["run"]
+    assert saved["memory_receipt"]["operation"] == "saved"
+    plan = say(c, pid, sid, "Plan the launch")["run"]
+    assert plan["status"] in ("failed", "blocked") and plan["handoff_ids"] == []     # honest failure, no fake plan
+    assert "model_not_configured" in plan["error"]
+    vague = say(c, pid, sid, "hmm what about that thing")["run"]
+    assert vague["request_kind"] == "clarify" and vague["handoff_ids"] == []         # safe fallback

@@ -42,3 +42,30 @@ def _maybe_start_reminder_worker():
 def identity(principal: Principal = Depends(current_principal)):
     # Authenticated local demo account (server-side session); not a production identity provider.
     return principal.public()
+
+
+# ---------------------------------------------------------------- production: serve the built frontend
+def mount_frontend(target, static_dir):
+    """Serve the built UI from the same origin as /api. Registered LAST so every /api route wins; unknown
+    non-API paths fall back to index.html (SPA routing); files outside static_dir are never served."""
+    from pathlib import Path
+    from fastapi import HTTPException
+    from fastapi.responses import FileResponse
+    root = Path(static_dir).resolve() if static_dir else None
+    if root is None or not (root / "index.html").is_file():
+        return False
+
+    @target.get("/{full_path:path}", include_in_schema=False)
+    def _frontend(full_path: str):
+        if full_path == "api" or full_path.startswith("api/"):
+            raise HTTPException(404, "Not found")
+        candidate = (root / full_path).resolve()
+        if full_path and candidate.is_file() and root in candidate.parents:   # no path traversal
+            return FileResponse(candidate)
+        return FileResponse(root / "index.html")
+    return True
+
+
+import os as _os
+
+mount_frontend(app, _os.getenv("RELAYMIND_STATIC_DIR"))
