@@ -50,12 +50,13 @@ _INTENTS: list[tuple[Intent, re.Pattern]] = [
 class Route:
     kind: Literal["factual", "planning"]
     intent: Intent | None = None
+    explicit: bool = False      # planning: the user clearly asked for a plan (vs. nothing matched)
 
 
 def classify(text: str) -> Route:
     t = " ".join(re.sub(r"[^a-z0-9'\s-]", " ", text.lower()).split())
     if not t or len(t) > 300 or _PLANNING.search(t):
-        return Route("planning")
+        return Route("planning", explicit=True)
     for intent, pattern in _INTENTS:
         if pattern.search(t):
             return Route("factual", intent)
@@ -224,7 +225,8 @@ def _run_status(client, scope: AgentJobScope) -> tuple[str, Claims]:
     for r in runs[-5:]:
         review = review_for_handoff(client, scope, r["handoff_ids"][-1]) if r.get("handoff_ids") else None
         human = f"; you {review.decision.replace('_', ' ')} it" if review else ""
-        line, s = quoted_line("- ", Quote(r["request"][:80]), f": {r['status'].replace('_', ' ')}{human} ({r['id']})")
+        shown = r["request"].split("\n\n(The user confirmed")[0][:80]   # hide the Assistant's internal note
+        line, s = quoted_line("- ", Quote(shown), f": {r['status'].replace('_', ' ')}{human} ({r['id']})")
         out.append(line)
         spans += s
         states.append(RecordState(kind="run", id=r["id"], status=r["status"]))
