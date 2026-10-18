@@ -272,9 +272,13 @@ def confirmation_note(client, scope, item: WorkItem) -> str:
     if not upcoming:
         return "No future reminder times fall inside this work's dates, so none were scheduled."
     first = datetime.fromtimestamp(upcoming[0]["due_at"] / 1000, ZoneInfo(item.timezone)).strftime("%Y-%m-%d %H:%M")
-    return (f"Scheduled {len(upcoming)} in-app reminder{'s' if len(upcoming) != 1 else ''} in this conversation; "
+    note = (f"Scheduled {len(upcoming)} in-app reminder{'s' if len(upcoming) != 1 else ''} in this conversation; "
             f"the first is at {first} {item.timezone}. Reminders stop when the work is completed or cancelled. "
             "No email or other external channel is connected.")
+    if not worker_alive(client):
+        note += (" Saved; delivery is waiting for the reminder worker, which is currently OFFLINE - "
+                 "no reminder will arrive until it is running (scripts/reminder_worker.py).")
+    return note
 
 
 # ----------------------------------------------------------------------------- worker liveness
@@ -283,15 +287,23 @@ HEARTBEAT_KEY = "relaymind:reminder_worker:heartbeat"
 
 
 def heartbeat(client: Any, now: int | None = None) -> None:
-    client.connection.set(HEARTBEAT_KEY, str(_now() if now is None else now), ex=120)
+    # No expiry: the timestamp stays readable so the UI can show "last seen" after the worker dies.
+    client.connection.set(HEARTBEAT_KEY, str(_now() if now is None else now))
+
+
+def last_heartbeat(client: Any) -> int | None:
+    """Epoch ms of the last worker heartbeat ever recorded, or None."""
+    try:
+        value = client.connection.get(HEARTBEAT_KEY)
+        return int(value) if value else None
+    except Exception:
+        return None
 
 
 def worker_alive(client: Any) -> bool:
-    """True only if a worker reported within the last 2 minutes (the key expires)."""
-    try:
-        return client.connection.get(HEARTBEAT_KEY) is not None
-    except Exception:
-        return False
+    """True only if a worker reported within the last 2 minutes."""
+    beat = last_heartbeat(client)
+    return beat is not None and _now() - beat < 120_000
 
 
 def worker_loop(client: Any, interval: float = 15.0, stop=None) -> None:

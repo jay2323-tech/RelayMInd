@@ -34,7 +34,7 @@ class PlanReviewConflict(ValueError):
 
 
 _FIELDS = ("id", "run_id", "handoff_id", "decision", "feedback", "reviewed_by", "created_at",
-           "next_run_id", "session_id", "plan_summary")
+           "next_run_id", "session_id", "plan_summary", "review_version", "supersedes_review_id")
 _RETURN = "RETURN " + ", ".join(f"r.{f}" for f in _FIELDS)
 _SCOPE = ("r.tenant_id = $tenant AND r.company_id = $company AND r.owner_id = $owner "
           "AND r.project_id = $project")
@@ -46,7 +46,9 @@ def _params(scope: AgentJobScope) -> dict:
 
 
 def _row(row) -> PlanReview:
-    return PlanReview(**dict(zip(_FIELDS, row)))
+    data = dict(zip(_FIELDS, row))
+    data["review_version"] = data.get("review_version") or 1   # records from before review history
+    return PlanReview(**data)
 
 
 def _graph(client, scope: AgentJobScope):
@@ -54,9 +56,24 @@ def _graph(client, scope: AgentJobScope):
 
 
 def review_for_handoff(client: Any, scope: AgentJobScope, handoff_id: str) -> PlanReview | None:
+    """The CURRENT (newest) human decision on this plan revision; earlier ones stay in history."""
+    rows = review_history(client, scope, handoff_id)
+    return rows[0] if rows else None
+
+
+def review_history(client: Any, scope: AgentJobScope, handoff_id: str) -> list[PlanReview]:
+    """Every human decision on this plan revision, newest first. Append-only; nothing is edited."""
     rows = _graph(client, scope).ro_query(
-        f"MATCH (r:PlanReview {{handoff_id: $handoff}}) WHERE {_SCOPE} AND r.session_id = $session {_RETURN}",
+        f"MATCH (r:PlanReview {{handoff_id: $handoff}}) WHERE {_SCOPE} AND r.session_id = $session {_RETURN} "
+        "ORDER BY coalesce(r.review_version, 1) DESC",
         params={**_params(scope), "handoff": handoff_id}).result_set
+    return [_row(r) for r in rows]
+
+
+def review_by_id(client: Any, scope: AgentJobScope, review_id: str) -> PlanReview | None:
+    rows = _graph(client, scope).ro_query(
+        f"MATCH (r:PlanReview {{id: $id}}) WHERE {_SCOPE} AND r.session_id = $session {_RETURN}",
+        params={**_params(scope), "id": review_id}).result_set
     return _row(rows[0]) if rows else None
 
 
@@ -136,33 +153,52 @@ def existing_for_operation(client: Any, scope: AgentJobScope, run_id: str,
                                     scope.project_id, scope.session_id)
     if not same_scope or tuple(row[5:9]) != (run_id, body.expected_handoff_id, body.decision, body.feedback):
         raise PlanReviewConflict("operation_id was already used for a different review")
-    return review_for_handoff(client, scope, body.expected_handoff_id)
+    return review_by_id(client, scope, row[9])
 
 
 @serialized_write
 def record_review(client: Any, scope: AgentJobScope, run: RunRecord, handoff: HandoffRecord,
                   body: PlanReviewBody, next_run_id: str | None = None) -> PlanReview:
-    """One guarded query: create the review only if this handoff has none and the op is unused."""
+    """Append a review record. History is kept; decisions change by superseding, never by editing.
+
+    expected_review_version None keeps the legacy behaviour (first review only). To change an
+    existing decision the caller must name the version being replaced; a mismatch means someone
+    else decided first, and nothing is written. One guarded query enforces the version count and
+    operation uniqueness, so concurrent changes conflict instead of overwriting each other.
+    """
     replay = existing_for_operation(client, scope, run.id, body)
     if replay is not None:
         return replay
-    review_id = f"{handoff.id}-plan-review"
+    current = review_for_handoff(client, scope, handoff.id)
+    current_version = current.review_version if current else 0
+    if body.expected_review_version is None:
+        if current is not None:
+            raise PlanReviewConflict(
+                "This plan revision was already reviewed; pass expected_review_version to change the decision")
+    elif body.expected_review_version != current_version:
+        raise PlanReviewConflict(
+            f"The decision was changed by someone else first (current version {current_version}); reload and retry")
+    version = current_version + 1
+    review_id = f"{handoff.id}-plan-review" + (f"-v{version}" if version > 1 else "")
     params = {**_params(scope), "id": review_id, "op": str(body.operation_id), "run": run.id,
               "handoff": handoff.id, "decision": body.decision, "feedback": body.feedback,
-              "now": int(time.time() * 1000), "next": next_run_id,
+              "now": int(time.time() * 1000), "next": next_run_id, "version": version,
+              "expected_count": current_version, "prior": current.id if current else None,
               "summary": handoff.plan.summary[:500]}
     rows = _graph(client, scope).query(
         "MATCH (h:AgentArtifact {kind: 'handoff', id: $handoff, owner_id: $owner, project_id: $project, "
         "session_id: $session}) "
-        "WHERE NOT (h)<-[:REVIEWS_PLAN]-(:PlanReview) "
+        "OPTIONAL MATCH (h)<-[:REVIEWS_PLAN]-(e:PlanReview) WITH h, count(e) AS existing "
+        "WHERE existing = $expected_count "
         "OPTIONAL MATCH (x:PlanReview {operation_id: $op}) WITH h, x WHERE x IS NULL "
         "CREATE (r:PlanReview {id: $id, operation_id: $op, run_id: $run, handoff_id: $handoff, "
         "decision: $decision, feedback: $feedback, reviewed_by: $owner, created_at: $now, next_run_id: $next, "
+        "review_version: $version, supersedes_review_id: $prior, "
         "tenant_id: $tenant, company_id: $company, owner_id: $owner, project_id: $project, session_id: $session, "
         "plan_summary: $summary})-[:REVIEWS_PLAN]->(h) RETURN r.id", params=params).result_set
     if len(rows) != 1:
-        raise PlanReviewConflict("This plan revision has already been reviewed")
-    return review_for_handoff(client, scope, handoff.id)
+        raise PlanReviewConflict("The review changed concurrently; reload and retry")
+    return review_by_id(client, scope, review_id)
 
 
 def revision_request(run: RunRecord, handoff: HandoffRecord, feedback: str) -> str:
@@ -173,11 +209,18 @@ def revision_request(run: RunRecord, handoff: HandoffRecord, feedback: str) -> s
 
 
 def receipt_text(review: PlanReview) -> str:
-    """Plain-language chat receipt. Never claims business changes were applied."""
+    """Plain-language chat receipt. Never claims business changes were applied or undone."""
+    changed = review.review_version > 1
+    prefix = (f"You changed your decision on plan revision {review.handoff_id} "
+              f"(decision version {review.review_version}; earlier decisions stay in the history). "
+              if changed else "")
+    undo_note = (" Actions that were already approved and applied under an earlier decision remain "
+                 "applied; changing this decision does not undo them." if changed else "")
     if review.decision == "approved":
-        return (f"You approved plan revision {review.handoff_id}. This records your approval of the plan only; "
-                "no business changes were applied. Approve individual actions to apply them.")
+        return (prefix + f"You approved plan revision {review.handoff_id}. This records your approval of the "
+                "plan only; no business changes were applied. Approve individual actions to apply them.")
     if review.decision == "rejected":
-        return f"You rejected plan revision {review.handoff_id}. No actions were run."
-    return (f"You requested changes to plan revision {review.handoff_id}. The original plan is kept unchanged; "
-            f"a revised plan is being prepared (run {review.next_run_id}). No actions were run.")
+        return prefix + f"You rejected plan revision {review.handoff_id}. No actions were run." + undo_note
+    return (prefix + f"You requested changes to plan revision {review.handoff_id}. The original plan is kept "
+            f"unchanged; a revised plan is being prepared (run {review.next_run_id}). No actions were run."
+            + undo_note)

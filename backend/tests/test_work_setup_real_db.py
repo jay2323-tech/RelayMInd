@@ -76,7 +76,11 @@ def test_structured_api_validation_versions_and_isolation(world):
     v3 = c.post(url, json={"expected_version": 2, "outcome": "Audit closed", "reminder": {"kind": "none"}}).json()
     confirmed = c.post(tr, json={"expected_version": v3["version"], "action": "confirm"}).json()
     assert confirmed["status"] == "confirmed" and confirmed["confirmed_at"]
-    assert c.post(url, json={"expected_version": confirmed["version"], "title": "y"}).status_code == 409   # not a draft
+    # Confirmed items are editable (decisions change; history kept as versioned snapshots).
+    edited = c.post(url, json={"expected_version": confirmed["version"], "deadline": "2026-12-15"})
+    assert edited.status_code == 200 and edited.json()["version"] == confirmed["version"] + 1
+    assert edited.json()["status"] == "confirmed" and edited.json()["deadline"] == "2026-12-15"
+    confirmed = edited.json()
     for other in ("northstar.peer", "harbor.lead"):
         o = login(other)
         assert o.get(url).status_code == 404 and o.get(f"/api/projects/{pid}/work-items").json() == []
@@ -84,3 +88,4 @@ def test_structured_api_validation_versions_and_isolation(world):
     finished = c.post(tr, json={"expected_version": confirmed["version"], "action": "complete"}).json()
     assert finished["status"] == "completed"
     assert c.post(tr, json={"expected_version": finished["version"], "action": "cancel"}).status_code == 409
+    assert c.post(url, json={"expected_version": finished["version"], "title": "y"}).status_code == 409   # completed: locked

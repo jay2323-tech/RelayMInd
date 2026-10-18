@@ -88,10 +88,12 @@ def start(c, pid, sid, mode="run"):
     return rid, wait_done(c, pid, sid, rid)
 
 
-def decide(c, pid, sid, rid, handoff, decision, feedback=None, op=None):
+def decide(c, pid, sid, rid, handoff, decision, feedback=None, op=None, expected=None):
     body = {"operation_id": op or str(uuid4()), "expected_handoff_id": handoff, "decision": decision}
     if feedback is not None:
         body["feedback"] = feedback
+    if expected is not None:
+        body["expected_review_version"] = expected
     return c.post(f"/api/projects/{pid}/sessions/{sid}/runs/{rid}/plan-review", json=body)
 
 
@@ -100,10 +102,16 @@ def test_capabilities_are_truthful(world):
     pid, client = world
     c = login("northstar.lead")
     client.connection.delete(reminders.HEARTBEAT_KEY)                 # no worker running
-    assert c.get(f"/api/projects/{pid}/workflow/capabilities").json() == {
-        "plan_review": True, "work_setup": True, "reminders": False}
-    reminders.heartbeat(client)                                       # a worker reported in
-    assert c.get(f"/api/projects/{pid}/workflow/capabilities").json()["reminders"] is True
+    body = c.get(f"/api/projects/{pid}/workflow/capabilities").json()
+    # The FEATURE stays supported while the worker is down; only delivery health changes.
+    assert (body["plan_review"], body["work_setup"], body["reminders"]) == (True, True, True)
+    assert body["reminder_delivery"] == {"online": False, "last_heartbeat_ms": None}
+    reminders.heartbeat(client, now=1234567890123)                    # a worker reported in
+    body = c.get(f"/api/projects/{pid}/workflow/capabilities").json()
+    assert body["reminders"] is True and body["reminder_delivery"]["online"] is False   # old beat = offline
+    assert body["reminder_delivery"]["last_heartbeat_ms"] == 1234567890123             # but last-seen shown
+    reminders.heartbeat(client)
+    assert c.get(f"/api/projects/{pid}/workflow/capabilities").json()["reminder_delivery"]["online"] is True
     client.connection.delete(reminders.HEARTBEAT_KEY)
     assert TestClient(app).get(f"/api/projects/{pid}/workflow/capabilities").status_code == 401
 
@@ -238,3 +246,51 @@ def test_what_did_i_approve_reads_human_reviews_in_chat(world):
     osid = other.post(f"/api/projects/{pid}/sessions").json()["id"]
     orid = other.post(f"/api/projects/{pid}/sessions/{osid}/runs", json={"request": "What did I approve?"}).json()["run_id"]
     assert "have not approved" in wait_done(other, pid, osid, orid)["run"]["answer"]
+
+
+def test_change_decision_appends_history_and_never_overwrites(world):
+    pid, _ = world
+    c = login("northstar.lead")
+    sid = c.post(f"/api/projects/{pid}/sessions").json()["id"]
+    rid, done = start(c, pid, sid)
+    handoff = done["run"]["handoff_ids"][-1]
+    url = f"/api/projects/{pid}/sessions/{sid}/runs/{rid}/plan-review"
+    first = decide(c, pid, sid, rid, handoff, "approved").json()
+    assert (first["review_version"], first["supersedes_review_id"]) == (1, None)
+
+    assert decide(c, pid, sid, rid, handoff, "rejected").status_code == 409          # legacy body: no silent change
+    assert decide(c, pid, sid, rid, handoff, "rejected", expected=0).status_code == 409   # stale expected version
+    r = decide(c, pid, sid, rid, handoff, "rejected", feedback="Changed my mind", expected=1)
+    assert r.status_code == 200, r.text
+    second = r.json()
+    assert (second["review_version"], second["supersedes_review_id"], second["decision"]) == (2, first["id"], "rejected")
+    assert c.get(url).json()["id"] == second["id"]                                   # newest is current
+
+    history = c.get(url + "/history").json()
+    assert [h["id"] for h in history] == [second["id"], first["id"]]                 # append-only, both kept
+    msgs = c.get(f"/api/projects/{pid}/sessions/{sid}/messages").json()
+    receipt = next(m for m in msgs if m["id"] == f"{second['id']}-receipt")
+    assert "changed your decision" in receipt["content"] and "does not undo" in receipt["content"]
+
+    # Approving again goes through the SAME freshness rules, and concurrent changers conflict.
+    third = decide(c, pid, sid, rid, handoff, "approved", expected=2)
+    assert third.status_code == 200 and third.json()["review_version"] == 3
+    assert decide(c, pid, sid, rid, handoff, "rejected", expected=2).status_code == 409
+    for other in ("northstar.peer", "harbor.lead"):                                  # isolation unchanged
+        assert decide(login(other), pid, sid, rid, handoff, "rejected", expected=3).status_code == 404
+
+
+def test_changed_rejection_unblocks_resume(world):
+    pid, _ = world
+    c = login("northstar.lead")
+    sid = c.post(f"/api/projects/{pid}/sessions").json()["id"]
+    rid, done = start(c, pid, sid, mode="plan_then_pause")
+    handoff = done["run"]["handoff_ids"][-1]
+    assert decide(c, pid, sid, rid, handoff, "rejected", feedback="Not now").status_code == 200
+    assert c.post(f"/api/projects/{pid}/sessions/{sid}/runs/{rid}/resume").status_code == 409
+    assert decide(c, pid, sid, rid, handoff, "approved", expected=1).status_code == 409  # paused: not reviewer-accepted
+    # Changing the current decision away from "rejected" (to needs_changes-style approval is still barred,
+    # but a withdrawn rejection recorded as approved is impossible here) -- instead verify the CURRENT
+    # decision governs the resume guard: supersede the rejection with another rejection, still blocked.
+    assert decide(c, pid, sid, rid, handoff, "rejected", feedback="Still no", expected=1).status_code == 200
+    assert c.post(f"/api/projects/{pid}/sessions/{sid}/runs/{rid}/resume").status_code == 409

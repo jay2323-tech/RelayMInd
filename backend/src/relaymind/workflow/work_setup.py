@@ -167,23 +167,33 @@ def create_draft(client: Any, scope: AgentJobScope, fields: WorkFields, operatio
 @serialized_write
 def update_draft(client: Any, scope: AgentJobScope, item_id: str, changes: WorkFields,
                  expected_version: int) -> WorkItem:
+    """Edit a draft OR a confirmed item (decisions change; history is kept as snapshots).
+
+    Confirmed edits revalidate everything and reschedule reminders when dates or the
+    preference changed. Completed/cancelled items stay locked.
+    """
     item = get_item(client, scope, item_id)
-    if item.status != "draft":
-        raise WorkSetupConflict(f"Work item is {item.status}; only drafts can be edited")
+    if item.status not in ("draft", "confirmed"):
+        raise WorkSetupConflict(f"Work item is {item.status}; it can no longer be edited")
     merged = _merge(item, changes)
     errors = validate(client, scope, merged)
     if errors:
         raise WorkSetupInvalid("; ".join(errors))
     rows = _graph(client, scope).query(
-        f"MATCH (w:WorkItem {{id: $id}}) WHERE {_SCOPE} AND w.version = $expected AND w.status = 'draft' "
+        f"MATCH (w:WorkItem {{id: $id}}) WHERE {_SCOPE} AND w.version = $expected AND w.status = $status "
         "SET w.title = $title, w.outcome = $outcome, w.start_date = $start, w.deadline = $deadline, w.timezone = $tz, "
         "w.owner_id = $owner, w.reminder_json = $reminder, w.version = w.version + 1, w.updated_at = $now "
         + _SNAPSHOT + "RETURN w.id",
         params={**_params(scope), **_field_params(merged), "id": item_id, "expected": expected_version,
-                "now": _now(), "snapshot": merged.model_dump_json()}).result_set
+                "status": item.status, "now": _now(), "snapshot": merged.model_dump_json()}).result_set
     if len(rows) != 1:
         raise WorkSetupConflict("Work item changed since you loaded it (stale version); reload and retry")
-    return get_item(client, scope, item_id)
+    done = get_item(client, scope, item_id)
+    if item.status == "confirmed" and (merged.reminder != item.reminder or merged.start_date != item.start_date
+                                       or merged.deadline != item.deadline):
+        from relaymind.workflow import reminders
+        reminders.reschedule(client, scope, done)
+    return done
 
 
 _TRANSITIONS = {"confirm": ("draft", "confirmed"), "complete": ("confirmed", "completed"),

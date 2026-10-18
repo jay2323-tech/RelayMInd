@@ -12,11 +12,18 @@ from relaymind.contracts.models import StrictModel
 PlanDecision = Literal["approved", "rejected", "needs_changes"]
 
 
+class ReminderDeliveryHealth(StrictModel):
+    """Delivery-worker liveness; separate from whether the reminder FEATURE is supported."""
+    online: bool
+    last_heartbeat_ms: int | None = None
+
+
 class WorkflowCapabilities(StrictModel):
     """True only for features that are implemented and verified on this server."""
     plan_review: bool
     work_setup: bool
-    reminders: bool
+    reminders: bool = Field(description="Feature supported; delivery health is reminder_delivery")
+    reminder_delivery: ReminderDeliveryHealth | None = None
 
 
 class PlanReviewBody(StrictModel):
@@ -24,6 +31,8 @@ class PlanReviewBody(StrictModel):
     expected_handoff_id: str = Field(min_length=1, max_length=300)
     decision: PlanDecision
     feedback: str | None = Field(default=None, max_length=4000)
+    expected_review_version: int | None = Field(
+        default=None, ge=0, description="None = first review only (legacy behaviour); n = replace version n")
 
     @field_validator("feedback")
     @classmethod
@@ -50,6 +59,8 @@ class PlanReview(StrictModel):
     next_run_id: str | None = None
     session_id: str
     plan_summary: str = ""
+    review_version: int = Field(default=1, ge=1)
+    supersedes_review_id: str | None = None
 
 
 # ------------------------------------------------------------------ B3 work setup
