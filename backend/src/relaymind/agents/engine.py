@@ -344,6 +344,8 @@ class CoordinationEngine:
                 if setup_error is None:
                     from relaymind.assistant.overseer import gate
                     reply,claims=setup
+                    from relaymind.agents.presentation import direct_reply
+                    reply=direct_reply('work_setup',reply)
                     setup,run.overseer=gate(self.client,self.job_scope,reply,claims,
                         'Your work setup change was saved, but I could not verify my summary of it against '
                         'the records, so I am not repeating it. Open the work item to see its current state.')
@@ -360,6 +362,9 @@ class CoordinationEngine:
             if route.kind=='factual':
                 from relaymind.assistant.overseer import GraphFacts,oversee
                 answer,error,claims=factual_answer(self.client,self.job_scope,route.intent)
+                from relaymind.agents.presentation import direct_reply
+                if error is None:
+                    answer=direct_reply('factual',answer)
                 verdict=None
                 if error is None:
                     verdict=oversee(answer,claims,GraphFacts(self.client,self.job_scope))
@@ -368,6 +373,7 @@ class CoordinationEngine:
                         # producer bugs); if the rebuilt answer still fails, show nothing wrong.
                         answer,error,claims=factual_answer(self.client,self.job_scope,route.intent)
                         if error is None:
+                            answer=direct_reply('factual',answer)
                             verdict=oversee(answer,claims,GraphFacts(self.client,self.job_scope)
                                             ).model_copy(update={'rewritten':True})
                             if not verdict.ok:

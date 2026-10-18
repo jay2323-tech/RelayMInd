@@ -112,3 +112,12 @@ html, body, #root { height: 100%; }
 
 .overseer-badge { display: inline-flex; align-items: center; gap: 7px; margin-top: 12px; padding: 5px 9px; border-radius: 8px; border: 1px solid rgba(160,210,199,.2); background: rgba(160,210,199,.055); color: var(--accent); font-size: 11px; line-height: 1.5; }
 .overseer-badge > span { font-size: 12px; }
+
+.watcher-alerts { padding: 16px; margin-bottom: 24px; border: 1px solid rgba(255,181,71,.25); background: rgba(255,181,71,.035); border-radius: 16px; }
+.watcher-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 14px; }
+.watcher-heading > span { padding: 2px 7px; border-radius: 6px; background: rgba(255,181,71,.1); color: var(--warn); }
+.watcher-alert { padding: 12px 0; border-bottom: 1px solid var(--glass-stroke); margin-bottom: 10px; }
+.watcher-alert p { font-size: 14px; line-height: 1.6; }
+.watcher-alert .caption { font-size: 11px; margin: 4px 0 8px; }
+.outdated-plan { margin-bottom: 14px; }
+.outdated-plan p { margin-top: 5px; }

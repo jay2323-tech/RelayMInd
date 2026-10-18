@@ -12,6 +12,9 @@ import { workflowApi } from './api/workflow';
 import type { PlanReview, WorkflowCapabilities, PlanDecision } from './types/workflow';
 import { ReminderControls } from './ui/ReminderControls';
 import { InlineActions, InlinePlanControls } from './ui/InlinePlanControls';
+import { WatcherAlerts } from './ui/WatcherAlerts';
+import { outdatedTargets } from './ui/watcherState';
+import type { WatcherAlert } from './types/workflow';
 import { OverseerBadge } from './ui/OverseerBadge';
 import { LoginScreen } from './ui/LoginScreen';
 
@@ -47,6 +50,8 @@ function Workspace({ identity, healthy, onSignOut, onExpired }: {
   const [runViews, setRunViews] = useState<Record<string, RunView>>({});
   const [planReviews, setPlanReviews] = useState<Record<string, PlanReview | null>>({});
   const [capabilities, setCapabilities] = useState<WorkflowCapabilities>({ plan_review: false, work_setup: false, reminders: false });
+  const [alerts, setAlerts] = useState<WatcherAlert[]>([]);
+  const staleTargets = useMemo(() => outdatedTargets(alerts), [alerts]);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const activeSession = useRef<string | undefined>(undefined);
   const [pauseAfterPlan, setPauseAfterPlan] = useState(false);
@@ -104,9 +109,29 @@ function Workspace({ identity, healthy, onSignOut, onExpired }: {
     return () => { cancelled = true; clearInterval(timer); document.removeEventListener('visibilitychange', visible); };
   }, [fail]);
 
-  // In-app reminder messages arrive independently of agent runs.
   useEffect(() => {
-    if (!sessionId || !capabilities.reminders || jobActive) return;
+    if (!capabilities.watcher) return;
+    let cancelled = false;
+    const load = async () => {
+      try { const rows = await workflowApi.alerts(); if (!cancelled) setAlerts(rows); }
+      catch (error) { if (!cancelled) fail(error); }
+    };
+    void load();
+    const timer = window.setInterval(() => { if (!document.hidden) void load(); }, 30000);
+    const visible = () => { if (!document.hidden) void load(); };
+    document.addEventListener('visibilitychange', visible);
+    return () => { cancelled = true; clearInterval(timer); document.removeEventListener('visibilitychange', visible); };
+  }, [capabilities.watcher, fail]);
+
+  async function acknowledgeAlert(id: string) {
+    const receipt = await workflowApi.acknowledgeAlert(id);
+    // Keep the acknowledged record: dismissal never clears a target's outdated badge.
+    setAlerts(previous => previous.map(alert => alert.id === id ? receipt : alert));
+  }
+
+  // Reminder and Watcher messages arrive independently of agent runs.
+  useEffect(() => {
+    if (!sessionId || !(capabilities.reminders || capabilities.watcher) || jobActive) return;
     let cancelled = false;
     const timer = window.setInterval(async () => {
       if (document.hidden) return;
@@ -116,7 +141,7 @@ function Workspace({ identity, healthy, onSignOut, onExpired }: {
       } catch (error) { if (!cancelled) fail(error); }
     }, 15000);
     return () => { cancelled = true; clearInterval(timer); };
-  }, [sessionId, capabilities.reminders, jobActive, fail]);
+  }, [sessionId, capabilities.reminders, capabilities.watcher, jobActive, fail]);
 
   // Selected evidence shows derived state, so reload it whenever platform data refreshes.
   useEffect(() => {
@@ -247,7 +272,12 @@ function Workspace({ identity, healthy, onSignOut, onExpired }: {
         throw new Error('This plan or decision changed. The latest decision has been reloaded; review it before trying again.');
       }
       throw error;
-    } finally { setBusy(false); }
+    } finally {
+      if (capabilities.watcher) {
+        try { setAlerts(await workflowApi.alerts()); } catch (error) { fail(error); }
+      }
+      setBusy(false);
+    }
   }
 
   function planFor(message: ChatMessage) {
@@ -287,15 +317,21 @@ function Workspace({ identity, healthy, onSignOut, onExpired }: {
         </div>
         <main className="chat-conversation" aria-label="Conversation workspace">
           <div className="chat-reading-column">
+            {capabilities.watcher && <WatcherAlerts alerts={alerts} onAcknowledge={acknowledgeAlert} onOpen={alert => {
+              if (alert.session_id) void openSession(alert.session_id).catch(fail);
+              else { openTab('actions'); setSheetOpen(true); }
+            }} />}
             <ChatStream messages={messages} onEvidence={showEvidence} hasPlan={message => !!planFor(message)} renderAfter={message => {
               const matchingRun = Object.values(runViews).find(item => message.id === `${item.run?.id}-${item.run?.status}-summary`)?.run ?? null;
               const badge = <OverseerBadge run={matchingRun} message={message} />;
               const entry = planFor(message); if (!entry) return badge;
               const [id, saved] = entry;
+              const latestHandoff = saved.handoffs.at(-1)?.id;
+              const outdated = !!latestHandoff && staleTargets.has(latestHandoff);
               return <>{badge}<div className="chat-plan">
-                <PlanCard run={saved.run} handoffs={saved.handoffs} currentDecisionIds={currentIds}
+                <PlanCard outdated={outdated} run={saved.run} handoffs={saved.handoffs} currentDecisionIds={currentIds}
                   currentHolds={Object.fromEntries(impacts.map(item => [item.hold.hold_id, item.hold.decision_id]))} onEvidence={showEvidence} />
-                <InlinePlanControls sessionId={sessionId!} view={saved} supported={capabilities.plan_review} review={planReviews[id] ?? null} busy={busy || jobActive}
+                <InlinePlanControls outdated={outdated} sessionId={sessionId!} view={saved} supported={capabilities.plan_review} review={planReviews[id] ?? null} busy={busy || jobActive}
                   onDecision={(decision, feedback, operationId, expectedVersion) => decidePlan(id, decision, feedback, operationId, expectedVersion)} />
                 <InlineActions view={saved} actions={actions} impacts={impacts} affected={affected} busy={busy || jobActive} onEvidence={showEvidence}
                   onPropose={body => act(() => api.propose(body), 'Proposed')} onApprove={actionId => act(() => api.approve(actionId), 'Approve')}
