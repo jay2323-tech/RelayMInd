@@ -63,9 +63,21 @@ def _content_basis(engine, handoff) -> list:
     """Versioned basis: current content hashes of everything the plan cites, plus current hold impact.
     Any further edit to the same evidence therefore yields a new fingerprint (and a new alert)."""
     from relaymind.agents.manufacturing import impact_snapshot
-    cited = [(e.evidence_id, e.content_sha256) for e in engine.evidence_manifest(handoff.plan)]
-    impact = [impact_snapshot(engine.client, engine.context, engine.project_id, m.evidence_id).model_dump()
-              for m in handoff.manufacturing_versions]
+    import hashlib as _h
+    from relaymind.graph.access import AccessDenied
+    cited = []
+    for evidence_id in sorted({i for step in handoff.plan.steps for i in step.evidence_ids}):
+        try:
+            record = engine.evidence(evidence_id)
+            cited.append((evidence_id, _h.sha256(record.text.encode("utf-8")).hexdigest()))
+        except (LookupError, AccessDenied):
+            cited.append((evidence_id, "missing"))
+    impact = []
+    for m in handoff.manufacturing_versions:
+        try:
+            impact.append(impact_snapshot(engine.client, engine.context, engine.project_id, m.evidence_id).model_dump())
+        except (LookupError, AccessDenied):
+            impact.append({"hold": m.evidence_id, "state": "missing"})
     return sorted(cited) + [json.dumps(impact, sort_keys=True, default=str)]
 
 
@@ -81,10 +93,10 @@ def _decision_change(engine, handoff) -> tuple[list[str], list[str]]:
 
 
 class _Incomplete(Exception):
-    """Some target's state could not be established; this sweep must not resolve anything."""
+    """A target's state could not be established (an outage, not an answer)."""
 
 
-def _plan_findings(client, graph, owner_filter=None) -> list[dict]:
+def _plan_findings(client, graph, owner_filter=None, incomplete=None) -> list[dict]:
     from relaymind.contracts.coordination import HandoffRecord
     from relaymind.workflow.plan_reviews import review_for_handoff, staleness
     rows = graph.ro_query(
@@ -102,7 +114,8 @@ def _plan_findings(client, graph, owner_filter=None) -> list[dict]:
             engine = _engine(client, scope)
             handoff = HandoffRecord.model_validate(engine.store.get("handoff", run["handoff_ids"][-1]))
         except Exception as exc:
-            raise _Incomplete(f"plan {run['id']}: {type(exc).__name__}") from None
+            incomplete.append(("run", run["id"], type(exc).__name__))
+            continue
         if run["status"] == "paused":
             kind = "plan_stale"
         else:
@@ -116,10 +129,9 @@ def _plan_findings(client, graph, owner_filter=None) -> list[dict]:
                 continue
             old, new = _decision_change(engine, handoff)
             content = _content_basis(engine, handoff)
-        except _Incomplete:
-            raise
         except Exception as exc:
-            raise _Incomplete(f"plan {run['id']}: {type(exc).__name__}") from None
+            incomplete.append(("run", run["id"], type(exc).__name__))
+            continue
         if kind == "plan_stale":
             text = (f"Your paused plan {handoff.id} is out of date: " + "; ".join(reasons)
                     + (f" (it relied on {', '.join(old)}; the current decision is {', '.join(new) or 'unresolved'})"
@@ -135,7 +147,7 @@ def _plan_findings(client, graph, owner_filter=None) -> list[dict]:
     return findings
 
 
-def _action_findings(client, graph, ctx_for, owner_filter=None) -> list[dict]:
+def _action_findings(client, graph, ctx_for, owner_filter=None, incomplete=None) -> list[dict]:
     from relaymind.memory.decisions import get_current_decisions
     rows = graph.ro_query(
         "MATCH (a:ProposedAction {status: 'proposed'}) WHERE ($owner IS NULL OR a.created_by = $owner) "
@@ -164,7 +176,8 @@ def _action_findings(client, graph, ctx_for, owner_filter=None) -> list[dict]:
                 from relaymind.memory.tasks import get_task
                 version = get_task(client, ctx, project_id, target_id).version
         except Exception as exc:
-            raise _Incomplete(f"action {action_id}: {type(exc).__name__}") from None
+            incomplete.append(("action", action_id, type(exc).__name__))
+            continue
         old = sorted(d for d in action.based_on if d not in current)
         moved = version != expected
         if not old and not moved:
@@ -214,29 +227,38 @@ def _record(client, graph, f: dict, now: int) -> bool:
     return new
 
 
-def _resolve_missing(graph, live_keys: set[str], owner_filter, now: int) -> int:
+def _resolve_missing(graph, live_keys: set[str], owner_filter, now: int,
+                     frozen_runs: set[str] = frozenset(), frozen_actions: set[str] = frozenset()) -> int:
+    """Resolve alerts whose condition is gone, EXCEPT those for targets that could not be read this
+    sweep: a failed read establishes nothing, so their alerts stay exactly as they were."""
     rows = graph.query(
         "MATCH (a:WatcherAlert) WHERE a.status IN ['open', 'acknowledged'] "
         "AND ($owner IS NULL OR a.owner_id = $owner) AND NOT a.key IN $live "
+        "AND NOT (a.kind <> 'action_stale' AND a.run_id IN $frozen_runs) "
+        "AND NOT (a.kind = 'action_stale' AND a.target_id IN $frozen_actions) "
         "SET a.status = 'resolved', a.resolved_at = $now RETURN a.id",
-        params={"live": sorted(live_keys), "owner": owner_filter, "now": now}).result_set
+        params={"live": sorted(live_keys), "owner": owner_filter, "now": now,
+                "frozen_runs": sorted(frozen_runs), "frozen_actions": sorted(frozen_actions)}).result_set
     return len(rows)
 
 
 def sweep_graph(client: Any, graph, ctx_for, owner_filter: str | None = None, now: int | None = None) -> dict:
-    """Detect, record, then reconcile. If ANY target could not be read, nothing is resolved: a failed
-    lookup is not evidence of freshness, so existing alerts stay exactly as they were."""
+    """Detect, record, then reconcile. Targets whose state could not be READ (an outage, not an answer)
+    keep their existing alerts untouched; every other target is reconciled normally, so one unreadable
+    plan never blocks alerts for the rest of the company."""
     import logging
     now = _now() if now is None else now
-    try:
-        findings = _plan_findings(client, graph, owner_filter) + _action_findings(client, graph, ctx_for, owner_filter)
-    except _Incomplete as exc:
-        logging.getLogger(__name__).warning("watcher_incomplete %s", exc)
-        return {"open": 0, "created": 0, "resolved": 0, "incomplete": True}
+    incomplete: list[tuple[str, str, str]] = []
+    findings = (_plan_findings(client, graph, owner_filter, incomplete)
+                + _action_findings(client, graph, ctx_for, owner_filter, incomplete))
+    for kind, target, error in incomplete:
+        logging.getLogger(__name__).warning("watcher_incomplete %s %s: %s", kind, target, error)
     created = sum(_record(client, graph, f, now) for f in findings)
     live = {f"{f['kind']}:{f['target_id']}:{f['basis']}" for f in findings}
-    resolved = _resolve_missing(graph, live, owner_filter, now)
-    return {"open": len(findings), "created": created, "resolved": resolved, "incomplete": False}
+    resolved = _resolve_missing(graph, live, owner_filter, now,
+                                frozen_runs={t for k, t, _ in incomplete if k == "run"},
+                                frozen_actions={t for k, t, _ in incomplete if k == "action"})
+    return {"open": len(findings), "created": created, "resolved": resolved, "incomplete": bool(incomplete)}
 
 
 def _identity_map():

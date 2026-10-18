@@ -121,8 +121,14 @@ def staleness(engine, handoff: HandoffRecord, *, strict: bool = False) -> list[s
         return ["Current approved decisions are unavailable or in conflict"]
     if snapshot(current) != snapshot(handoff.decisions):
         reasons.append("Approved decisions changed after this plan was made")
+    from relaymind.graph.access import AccessDenied
     try:
         changed = engine.changed_evidence(handoff)
+    except (LookupError, AccessDenied) as exc:
+        # The database answered: a cited record is gone (or no longer visible). That is a definite
+        # staleness signal in both modes, not a read failure.
+        missing = getattr(exc, "evidence_id", None)
+        return reasons + ["Cited evidence is no longer available" + (f": {missing}" if missing else "")]
     except Exception:
         if strict:
             raise
