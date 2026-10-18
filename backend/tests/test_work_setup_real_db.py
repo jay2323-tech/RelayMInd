@@ -89,3 +89,16 @@ def test_structured_api_validation_versions_and_isolation(world):
     assert finished["status"] == "completed"
     assert c.post(tr, json={"expected_version": finished["version"], "action": "cancel"}).status_code == 409
     assert c.post(url, json={"expected_version": finished["version"], "title": "y"}).status_code == 409   # completed: locked
+
+
+def test_natural_phrasing_starts_setup_in_chat(world):
+    pid, _ = world
+    c = login("northstar.lead")
+    sid = c.post(f"/api/projects/{pid}/sessions").json()["id"]
+    run = say(c, pid, sid, "I'm working on the supplier recovery follow-up, deadline is 25 October 2026")
+    assert (run["request_kind"], run["status"]) == ("work_setup", "completed")
+    [item] = c.get(f"/api/projects/{pid}/work-items").json()
+    assert (item["title"], item["deadline"], item["status"]) == ("supplier recovery follow-up", "2026-10-25", "draft")
+    assert "Still needed" in run["answer"]
+    nxt = say(c, pid, sid, "I'm working on the launch, what should we do next?")   # question: NOT setup
+    assert nxt["request_kind"] != "work_setup"
