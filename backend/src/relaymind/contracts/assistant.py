@@ -39,6 +39,9 @@ class Claims(StrictModel):
     record_states: list[RecordState] = Field(default_factory=list,
                                              description="Each state word in the text must be backed by one of these")
     lint_state_words: bool = Field(default=True, description="False for model prose already covered by the Reviewer")
+    quoted_spans: list[str] = Field(default_factory=list,
+                                    description="Exact text copied from records (decision text, titles, user input); "
+                                                "the record is speaking, so state words inside are not claims")
 
 
 class OverseerFailure(StrictModel):

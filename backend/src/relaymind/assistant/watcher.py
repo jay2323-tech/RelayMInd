@@ -59,6 +59,16 @@ def _engine(client, scope: AgentJobScope):
     return CoordinationEngine.for_job(client, scope, _NoModel(), GraphPlatformBridge(client))
 
 
+def _content_basis(engine, handoff) -> list:
+    """Versioned basis: current content hashes of everything the plan cites, plus current hold impact.
+    Any further edit to the same evidence therefore yields a new fingerprint (and a new alert)."""
+    from relaymind.agents.manufacturing import impact_snapshot
+    cited = [(e.evidence_id, e.content_sha256) for e in engine.evidence_manifest(handoff.plan)]
+    impact = [impact_snapshot(engine.client, engine.context, engine.project_id, m.evidence_id).model_dump()
+              for m in handoff.manufacturing_versions]
+    return sorted(cited) + [json.dumps(impact, sort_keys=True, default=str)]
+
+
 def _decision_change(engine, handoff) -> tuple[list[str], list[str]]:
     """(decision ids the plan relied on that are no longer current, the current ids on those topics)."""
     from relaymind.memory.decisions import get_current_decisions
@@ -68,6 +78,10 @@ def _decision_change(engine, handoff) -> tuple[list[str], list[str]]:
     topics = {d.topic for d in handoff.decisions if d.id in old}
     new = sorted(d.id for d in state.current + state.conflicting if d.topic in topics)
     return old, new
+
+
+class _Incomplete(Exception):
+    """Some target's state could not be established; this sweep must not resolve anything."""
 
 
 def _plan_findings(client, graph, owner_filter=None) -> list[dict]:
@@ -87,8 +101,8 @@ def _plan_findings(client, graph, owner_filter=None) -> list[dict]:
         try:
             engine = _engine(client, scope)
             handoff = HandoffRecord.model_validate(engine.store.get("handoff", run["handoff_ids"][-1]))
-        except Exception:
-            continue
+        except Exception as exc:
+            raise _Incomplete(f"plan {run['id']}: {type(exc).__name__}") from None
         if run["status"] == "paused":
             kind = "plan_stale"
         else:
@@ -96,10 +110,16 @@ def _plan_findings(client, graph, owner_filter=None) -> list[dict]:
             if review is None or review.decision != "approved":
                 continue
             kind = "approved_plan_stale"
-        reasons = staleness(engine, handoff)
-        if not reasons:
-            continue
-        old, new = _decision_change(engine, handoff)
+        try:
+            reasons = staleness(engine, handoff, strict=True)
+            if not reasons:
+                continue
+            old, new = _decision_change(engine, handoff)
+            content = _content_basis(engine, handoff)
+        except _Incomplete:
+            raise
+        except Exception as exc:
+            raise _Incomplete(f"plan {run['id']}: {type(exc).__name__}") from None
         if kind == "plan_stale":
             text = (f"Your paused plan {handoff.id} is out of date: " + "; ".join(reasons)
                     + (f" (it relied on {', '.join(old)}; the current decision is {', '.join(new) or 'unresolved'})"
@@ -111,7 +131,7 @@ def _plan_findings(client, graph, owner_filter=None) -> list[dict]:
                     + ". Your approval stays in the history, but it was given for the earlier state. "
                       "Request changes to get a revised plan.")
         findings.append(dict(kind=kind, target_id=handoff.id, run_id=run["id"], session_id=run["session_id"],
-                             reason=text, basis=_fingerprint(sorted(reasons), old, new), scope=scope))
+                             reason=text, basis=_fingerprint(sorted(reasons), old, new, content), scope=scope))
     return findings
 
 
@@ -129,17 +149,22 @@ def _action_findings(client, graph, ctx_for, owner_filter=None) -> list[dict]:
         tenant_id, company_id = ident
         ctx = TrustedContext(tenant_id=tenant_id, user_id=created_by)
         try:
+            from relaymind.memory.decisions import get_decision
             from relaymind.services.actions import get_action
             action = get_action(client, ctx, project_id, action_id)
-            current = {d.id for d in get_current_decisions(client, ctx, project_id).current}
+            state = get_current_decisions(client, ctx, project_id)
+            current = {d.id for d in state.current}
+            topics = {get_decision(client, ctx, project_id, d).topic for d in action.based_on}
+            # versioned basis: what is current NOW on the topics the action relied on (incl. conflicts)
+            now_on_topics = sorted(d.id for d in state.current + state.conflicting if d.topic in topics)
             if kind == "hold_order":
                 from relaymind.memory.manufacturing import get_order
                 version = get_order(client, ctx, project_id, target_id).version
             else:
                 from relaymind.memory.tasks import get_task
                 version = get_task(client, ctx, project_id, target_id).version
-        except Exception:
-            continue
+        except Exception as exc:
+            raise _Incomplete(f"action {action_id}: {type(exc).__name__}") from None
         old = sorted(d for d in action.based_on if d not in current)
         moved = version != expected
         if not old and not moved:
@@ -152,7 +177,7 @@ def _action_findings(client, graph, ctx_for, owner_filter=None) -> list[dict]:
         text = (f"Proposed action {action_id} on {target_id} is out of date: " + " and ".join(parts)
                 + ". Approving it now would be refused; propose a fresh action instead.")
         findings.append(dict(kind="action_stale", target_id=action_id, run_id=action.run_id, session_id=None,
-                             reason=text, basis=_fingerprint(old, version),
+                             reason=text, basis=_fingerprint(old, version, now_on_topics),
                              scope=AgentJobScope(tenant_id=tenant_id, user_id=created_by, company_id=company_id,
                                                  project_id=project_id, session_id="watcher")))
     return findings
@@ -199,12 +224,19 @@ def _resolve_missing(graph, live_keys: set[str], owner_filter, now: int) -> int:
 
 
 def sweep_graph(client: Any, graph, ctx_for, owner_filter: str | None = None, now: int | None = None) -> dict:
+    """Detect, record, then reconcile. If ANY target could not be read, nothing is resolved: a failed
+    lookup is not evidence of freshness, so existing alerts stay exactly as they were."""
+    import logging
     now = _now() if now is None else now
-    findings = _plan_findings(client, graph, owner_filter) + _action_findings(client, graph, ctx_for, owner_filter)
+    try:
+        findings = _plan_findings(client, graph, owner_filter) + _action_findings(client, graph, ctx_for, owner_filter)
+    except _Incomplete as exc:
+        logging.getLogger(__name__).warning("watcher_incomplete %s", exc)
+        return {"open": 0, "created": 0, "resolved": 0, "incomplete": True}
     created = sum(_record(client, graph, f, now) for f in findings)
     live = {f"{f['kind']}:{f['target_id']}:{f['basis']}" for f in findings}
     resolved = _resolve_missing(graph, live, owner_filter, now)
-    return {"open": len(findings), "created": created, "resolved": resolved}
+    return {"open": len(findings), "created": created, "resolved": resolved, "incomplete": False}
 
 
 def _identity_map():
@@ -217,7 +249,7 @@ def sweep(client: Any, graph_names: list[str] | None = None, now: int | None = N
     """Sweep every mapped graph once (the worker calls this). Safe to run repeatedly and concurrently."""
     from relaymind.graph.access import _DEMO_ACCESS
     ids = _identity_map()
-    totals = {"open": 0, "created": 0, "resolved": 0}
+    totals = {"open": 0, "created": 0, "resolved": 0, "incomplete": False}
     targets = {}
     for (tenant, user), (graph_name, projects) in sorted(_DEMO_ACCESS.items()):
         if graph_names is None or graph_name in graph_names:
@@ -225,8 +257,9 @@ def sweep(client: Any, graph_names: list[str] | None = None, now: int | None = N
     for graph_name, (tenant, user, project) in targets.items():
         graph = authorized_graph(client, TrustedContext(tenant_id=tenant, user_id=user), project)
         stats = sweep_graph(client, graph, ids.get, now=now)
-        for k in totals:
+        for k in ("open", "created", "resolved"):
             totals[k] += stats[k]
+        totals["incomplete"] = totals["incomplete"] or stats["incomplete"]
     return totals
 
 

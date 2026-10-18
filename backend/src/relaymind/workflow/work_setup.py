@@ -411,7 +411,9 @@ def chat_turn(client: Any, scope: AgentJobScope, text: str, operation_id: str):
         return None
     if isinstance(result, tuple):
         return result
-    return result, Claims()       # guidance replies: the state-word lint still runs on them
+    draft = open_draft(client, scope)   # guidance replies quote the draft's own user-entered text
+    quotes = [v for v in ((draft.title, draft.outcome) if draft else ()) if v]
+    return result, Claims(quoted_spans=quotes)
 
 
 def _chat_turn(client: Any, scope: AgentJobScope, text: str, operation_id: str):
@@ -433,7 +435,8 @@ def _chat_turn(client: Any, scope: AgentJobScope, text: str, operation_id: str):
         scheduled = list_reminders(client, scope, item_id=item.id, status="scheduled")
         reply = "\n".join([f"**Confirmed: {item.title}** ({item.id})", *_describe(item), "",
                            confirmation_note(client, scope, item)])
-        return reply, Claims(record_states=[RecordState(kind="work_item", id=item.id, status="confirmed",
+        return reply, Claims(quoted_spans=[v for v in (item.title, item.outcome) if v],
+                             record_states=[RecordState(kind="work_item", id=item.id, status="confirmed",
                                                         aliases=[item.title] if item.title else [])]
                              + [RecordState(kind="reminder", id=r["id"], status="scheduled") for r in scheduled])
     if draft is not None and lowered in _CANCEL:

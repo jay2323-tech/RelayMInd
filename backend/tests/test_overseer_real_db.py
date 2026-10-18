@@ -155,3 +155,35 @@ def test_regression_work_setup_replies_are_gated(hb):
     item_id = done.answer.split("(")[1].split(")")[0]
     wrong = Claims(record_states=[RecordState(kind="work_item", id=item_id, status="completed")])
     assert any(f.check == "records" for f in oversee("It is completed.", wrong, facts).failures)
+
+
+def test_regression_quoted_decision_text_is_not_a_state_claim(monkeypatch):
+    """Codex-observed producer issue: a hold decision's own wording ("shipped units need QA exposure
+    review") must not fail the state-word check; the assistant's own words still are checked."""
+    from uuid import uuid4
+
+    from relaymind.contracts.agent_jobs import AgentJobScope
+    from relaymind.contracts.models import TrustedContext
+    from relaymind.graph import access
+    from relaymind.graph.access import authorized_graph
+    from relaymind.graph.connection import create_client
+    from relaymind.platform.aw_incident import load_incident
+    tag = uuid4().hex[:10]
+    pid, gname = f"ovq-{tag}", f"relaymind_awtest_{tag}"
+    monkeypatch.setitem(access._DEMO_ACCESS, ("adventureworks", "aw-analyst"), (gname, frozenset({pid})))
+    client = create_client()
+    ctx = TrustedContext(tenant_id="adventureworks", user_id="aw-analyst")
+    graph = authorized_graph(client, ctx, pid)
+    try:
+        load_incident(client, ctx, pid, "after-change")
+        create_session(client, ctx, pid, "s1")
+        scope = AgentJobScope(tenant_id="adventureworks", user_id="aw-analyst", company_id="adventureworks",
+                              project_id=pid, session_id="s1")
+        text, claims = routing._decisions(client, ctx, pid)
+        verdict = oversee(text, claims, GraphFacts(client, scope))
+        assert verdict.ok, verdict.failures
+        doctored = text + "\nAll affected orders were shipped."            # the ASSISTANT asserting a state
+        assert any(f.check == "state_words" for f in oversee(doctored, claims, GraphFacts(client, scope)).failures)
+    finally:
+        assert graph.name.startswith("relaymind_awtest_")
+        graph.delete()

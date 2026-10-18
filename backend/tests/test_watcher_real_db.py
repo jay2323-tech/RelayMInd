@@ -116,3 +116,82 @@ def test_missed_changes_are_recovered_and_alerts_are_isolated(world):
         assert alerts(o, pid) == []
         assert o.post(f"/api/projects/{pid}/alerts/{alert['id']}/ack").status_code == 404
     assert alerts(c, pid)[0]["status"] == "open"                           # other users could not touch it
+
+
+# ------------------------------------------------ regressions from Codex's PR #27 review (pr27-review.md)
+
+def test_regression_further_action_basis_change_creates_new_alert(world):
+    pid, client = world
+    record_task(client, NS, pid, f"{pid}-task", "Prepare pricing", "todo", None, [f"{pid}-dec"], [])
+    c = login("northstar.lead")
+    c.post(f"/api/projects/{pid}/actions", json={"task_id": f"{pid}-task", "new_status": "paused",
+                                                "reason": "Review", "based_on": [f"{pid}-dec"]})
+    supersede(client, pid, f"{pid}-dec2", f"{pid}-dec", "Second scope")
+    [first] = alerts(c, pid)
+    c.post(f"/api/projects/{pid}/alerts/{first['id']}/ack")
+    supersede(client, pid, f"{pid}-dec3", f"{pid}-dec2", "Third scope")
+    rows = alerts(c, pid)
+    assert len(rows) == 2, rows
+    assert {a["status"] for a in rows} == {"open", "resolved"}
+
+
+def test_regression_plan_lookup_failure_does_not_resolve_known_staleness(world, monkeypatch):
+    pid, client = world
+    c = login("northstar.lead")
+    sid = c.post(f"/api/projects/{pid}/sessions").json()["id"]
+    start(c, pid, sid, mode="plan_then_pause")
+    supersede(client, pid, f"{pid}-dec2", f"{pid}-dec", "Second scope")
+    [first] = alerts(c, pid)
+
+    def unavailable(*args, **kwargs):
+        raise ConnectionError("temporary lookup failure")
+    real_engine = watcher._engine
+    monkeypatch.setattr(watcher, "_engine", unavailable)
+    rows = alerts(c, pid)
+    assert [(r["id"], r["status"]) for r in rows] == [(first["id"], "open")], rows
+    monkeypatch.setattr(watcher, "_engine", real_engine)                 # lookups recover
+    assert [(r["id"], r["status"]) for r in alerts(c, pid)] == [(first["id"], "open")]   # same alert, no churn
+
+
+def test_regression_action_lookup_failure_does_not_resolve(world, monkeypatch):
+    pid, client = world
+    record_task(client, NS, pid, f"{pid}-task", "Prepare pricing", "todo", None, [f"{pid}-dec"], [])
+    c = login("northstar.lead")
+    c.post(f"/api/projects/{pid}/actions", json={"task_id": f"{pid}-task", "new_status": "paused",
+                                                "reason": "Review", "based_on": [f"{pid}-dec"]})
+    supersede(client, pid, f"{pid}-dec2", f"{pid}-dec", "Second scope")
+    [first] = alerts(c, pid)
+    import relaymind.memory.tasks as tasks_module
+
+    def unavailable(*args, **kwargs):
+        raise ConnectionError("temporary lookup failure")
+    monkeypatch.setattr(tasks_module, "get_task", unavailable)
+    assert alerts(c, pid)[0]["status"] == "open"
+
+
+def test_regression_further_evidence_content_change_creates_new_alert(world):
+    pid, client = world
+    c = login("northstar.lead")
+    sid = c.post(f"/api/projects/{pid}/sessions").json()["id"]
+    start(c, pid, sid, mode="plan_then_pause")
+    graph = graph_of(client, pid)
+    graph.query("MATCH (s:Source {id: $id}) SET s.text = 'Approved: launch the free tier only (edit 1).'",
+                params={"id": f"{pid}-src"})
+    [first] = alerts(c, pid)
+    assert first["kind"] == "plan_stale"
+    c.post(f"/api/projects/{pid}/alerts/{first['id']}/ack")
+    graph.query("MATCH (s:Source {id: $id}) SET s.text = 'Approved: launch the free tier only (edit 2).'",
+                params={"id": f"{pid}-src"})
+    rows = alerts(c, pid)
+    assert len(rows) == 2 and {a["status"] for a in rows} == {"open", "resolved"}, rows
+
+
+def test_regression_watcher_capability_is_advertised(world):
+    pid, client = world
+    c = login("northstar.lead")
+    response = c.get(f"/api/projects/{pid}/workflow/capabilities")
+    assert response.status_code == 200
+    assert response.json().get("watcher") is True, response.json()
+    from relaymind.workflow import reminders
+    client.connection.delete(reminders.HEARTBEAT_KEY)                    # independent of worker health
+    assert c.get(f"/api/projects/{pid}/workflow/capabilities").json()["watcher"] is True

@@ -251,6 +251,10 @@ def oversee(text: str, claims: Claims, facts) -> OverseerVerdict:
 
     # state words need a verified record of a matching kind -------------------
     if claims.lint_state_words:
+        # Verbatim record text (decision wording, titles, user input) is masked: words inside it are the
+        # record's own content, not the assistant asserting a state. Only exact copies are masked.
+        for quote in sorted({q for q in claims.quoted_spans if q and len(q) >= 3}, key=len, reverse=True):
+            text = text.replace(quote, "\u00ab" + "quoted" + "\u00bb")
         checks += 1
         unbacked = set()
         for m in _STATE_RE.finditer(text):
