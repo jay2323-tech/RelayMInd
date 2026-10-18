@@ -35,16 +35,26 @@ export function ChatStream({ messages, onEvidence, renderAfter, hasPlan }: {
   renderAfter?: (message: ChatMessage) => ReactNode; hasPlan?: (message: ChatMessage) => boolean;
 }) {
   const end = useRef<HTMLDivElement>(null);
-  useEffect(() => { end.current?.scrollIntoView({ block: 'end' }); }, [messages.length]);
+  const follow = useRef(true);
+  useEffect(() => {
+    const scroller = end.current?.closest('.chat-conversation');
+    if (!scroller) return;
+    const track = () => { follow.current = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 100; };
+    scroller.addEventListener('scroll', track, { passive: true });
+    return () => scroller.removeEventListener('scroll', track);
+  }, [messages.length === 0]);
+  useEffect(() => { if (follow.current) end.current?.scrollIntoView({ block: 'end' }); }, [messages.length]);
   if (!messages.length) return <div className="empty">
     <h1>What would you like to work on?</h1><p>Explore your project, work through a change, or prepare an evidence-backed plan.</p>
   </div>;
   return <div className="stream" role="log" aria-live="polite" aria-label="Conversation">
     {messages.map(m => <article key={m.id} className={`bubble bubble--${m.role}`}>
       <span className="bubble__who">{m.role === 'user' ? 'You' : 'RelayMind'}</span>
-      {m.role === 'assistant' ? <ReadableReply text={hasPlan?.(m)
-        ? m.content.split('**Proposed next steps**')[0].replace(/^Run [^:]+: [^.]+\. Latest plan: /, '').replace(/ Review: [^.]+\.$/, '')
-        : m.content} onOpen={onEvidence} /> : m.content}
+      {m.role === 'assistant' ? hasPlan?.(m) ? null : m.id.endsWith('-receipt')
+        ? <details className="saved-receipt"><summary>Decision recorded</summary><ReadableReply text={m.content} onOpen={onEvidence} /></details>
+        : m.id.startsWith('alert-') && m.id.endsWith('-notice')
+        ? <details className="saved-receipt"><summary>Earlier notice: project records changed</summary><ReadableReply text={m.content} onOpen={onEvidence} /></details>
+        : <ReadableReply text={m.content} onOpen={onEvidence} /> : m.content}
       {renderAfter?.(m)}
     </article>)}
     <div ref={end} />
@@ -81,6 +91,8 @@ export function Composer({ busy, showSuggestions, pauseAfterPlan, onPauseChange,
   onPauseChange: (v: boolean) => void; onSend: (text: string) => Promise<void>;
 }) {
   const [draft, setDraft] = useState('');
+  const input = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => { if (input.current) { input.current.style.height = 'auto'; input.current.style.height = Math.min(input.current.scrollHeight, 160) + 'px'; } }, [draft]);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   async function send(text = draft) {
@@ -101,55 +113,63 @@ export function Composer({ busy, showSuggestions, pauseAfterPlan, onPauseChange,
       <button key={s} type="button" className="suggestion" disabled={working} title={s} onClick={() => { setDraft(s); document.getElementById('composer')?.focus(); }}>
         <span>{(SUGGESTION_LABELS[project] ?? SUGGESTION_LABELS.default)[i]}</span><span aria-hidden>↗</span></button>)}</div>}
     <label htmlFor="composer" className="sr-only">Message</label>
-    <textarea id="composer" value={draft} maxLength={16000} disabled={working} placeholder="What would you like to work through?"
+    <textarea ref={input} rows={1} id="composer" value={draft} maxLength={16000} disabled={working} placeholder="Ask about your project or plan your next step…"
       onChange={e => setDraft(e.target.value)} onKeyDown={key} />
     {error && <p className="alert alert--danger" role="alert">{error}</p>}
     <div className="composer__row">
-      <label className="switch"><input type="checkbox" checked={pauseAfterPlan} disabled={working}
-        onChange={e => onPauseChange(e.target.checked)} /> Review before continuing</label>
+      <details className="composer-options" onKeyDown={event => {
+        if (event.key === 'Escape') { event.currentTarget.open = false; event.currentTarget.querySelector('summary')?.focus(); }
+      }}><summary>Options{pauseAfterPlan ? ' · pause enabled' : ''}</summary>
+        <div className="composer-options-menu glass"><label className="switch"><input type="checkbox" checked={pauseAfterPlan} disabled={working}
+          onChange={e => onPauseChange(e.target.checked)} /> Pause before independent review</label>
+          <p className="caption">To schedule work, include your deadline and reminder preference in a message.</p></div>
+      </details>
       <span className="topbar__spacer" />
       <button type="submit" className="btn btn--primary" disabled={working || !draft.trim()}>
-        {working ? <><span className="spinner" aria-hidden /> Working</> : 'Send request'}</button>
+        {working ? <><span className="spinner" aria-hidden /> Working</> : 'Send ↑'}</button>
     </div>
   </form>;
 }
 
 // ---------- plan + review ----------
-export function PlanCard({ run, handoffs, currentDecisionIds, currentHolds = {}, onEvidence, outdated = false }: {
+export function PlanCard({ run, handoffs, currentDecisionIds, currentHolds = {}, onEvidence, outdated = false, children, savedText }: {
   run: RunRecord | null; handoffs: Handoff[]; currentDecisionIds: Set<string>;
-  outdated?: boolean;
-  currentHolds?: Record<string, string>;   // hold id -> current hold decision id (from the impact query)
+  outdated?: boolean; children?: ReactNode; savedText?: string;
+  currentHolds?: Record<string, string>;
   onEvidence: (id: string) => void;
 }) {
   if (!run || !handoffs.length) return null;
   const latest = handoffs[handoffs.length - 1];
+  const cited = [...new Set([...latest.plan.decision_ids, ...latest.plan.steps.flatMap(step => step.evidence_ids)])];
   const chip = (id: string) => <EvidenceChip key={id} id={id} onOpen={onEvidence}
-    superseded={id.startsWith('decision-') && currentDecisionIds.size > 0 && !currentDecisionIds.has(id)} />;
-  return <section className="glass panel" aria-labelledby={`plan-title-${run.id}`}>
-    <div className="panel__head">
-      <div style={{ flex: 1 }}>
-        <span className="eyebrow">Evidence-backed recommendations</span>
-        <h2 id={`plan-title-${run.id}`} className="h2">Proposed plan</h2><details className="caption"><summary>Plan details · revision {latest.revision}</summary><p>Saved handoff: {latest.id}</p></details>
-      </div>
-      {handoffs.length > 1 && <span className="badge badge--warn">revised after review</span>}
-    </div>
-    {outdated && <div className="alert alert--warn outdated-plan" role="status"><strong>Outdated plan</strong><p>The records this revision relies on have changed. Recheck or request a new revision before approval. Dismissing its alert does not make it current.</p></div>}
-    <Freshness handoffs={handoffs} currentHolds={currentHolds} onEvidence={onEvidence} />
-    <div className="plan-overview"><p className="plan__summary">{latest.plan.summary}</p>
-      <div className="plan-facts"><span>{latest.plan.steps.length} proposed steps</span>
-        <span>{new Set(latest.plan.steps.flatMap(step => step.evidence_ids)).size} cited records</span>
-        <span>{latest.plan.uncertainties.length} open questions</span></div></div>
-    <div className="row caption" style={{ marginBottom: 12 }}>Based on {latest.plan.decision_ids.map(chip)}</div>
-    <div className="section-title">Recommended next steps</div><ol className="steps">{latest.plan.steps.map((step, i) => <li key={i} className="step">
-      <div>
-        <div>{step.task}</div>
-        {!!step.task_ids?.length && <div className="step__meta"><span className="caption">Addresses</span>{step.task_ids.map(chip)}</div>}
-        <details className="step-evidence"><summary>View evidence · {step.evidence_ids.length}</summary><div className="step__meta">{step.evidence_ids.map(chip)}</div></details>
-      </div>
+    superseded={currentDecisionIds.size > 0 && latest.plan.decision_ids.includes(id) && !currentDecisionIds.has(id)} />;
+  const review = run.result?.review;
+  const accepted = review?.status === 'accepted' && run.status === 'completed';
+  const status = outdated ? 'Outdated' : accepted ? 'Independently reviewed' : run.status === 'paused' ? 'Awaiting review' : 'Needs attention';
+  return <section className="plan-answer" aria-labelledby={`plan-title-${run.id}`}>
+    <div className="plan-heading"><h2 id={`plan-title-${run.id}`}>Proposed plan</h2><span className={`plan-status ${outdated || (!accepted && run.status !== 'paused') ? 'plan-status--warn' : ''}`}>{status}</span></div>
+    {outdated && <div className="alert alert--warn outdated-plan" role="status"><strong>This plan is outdated.</strong><p>Its supporting records changed. Request changes before approving it again. Dismissing the notification does not update the plan.</p></div>}
+    <Freshness handoffs={handoffs.slice(-1)} currentHolds={currentHolds} onEvidence={onEvidence} />
+    <ReadableReply text={latest.plan.summary} onOpen={onEvidence} />
+    <h3 className="next-steps-heading">Next steps</h3>
+    <ol className="plan-list">{latest.plan.steps.map((step, i) => <li key={i}>
+      <ReadableReply text={step.task} onOpen={onEvidence} />
     </li>)}</ol>
-    {latest.plan.uncertainties.length > 0 && <div className="uncertain"><strong>Open questions</strong>
-      <ul>{latest.plan.uncertainties.map((u, i) => <li key={i}>{u}</li>)}</ul></div>}
-    <ReviewSeal run={run} onEvidence={onEvidence} />
+    {latest.plan.uncertainties.length > 0 && <div className="plan-unknowns"><h3>Still needed</h3>
+      <ul>{latest.plan.uncertainties.map((u, i) => <li key={i}><ReadableReply text={u} onOpen={onEvidence} /></li>)}</ul></div>}
+    {!accepted && run.status !== 'paused' && <ReviewSeal run={run} onEvidence={onEvidence} />}
+    <div className="plan-footer">
+      <details className="plan-sources"><summary>Sources · {cited.length}</summary>
+        <p className="caption">Based on {latest.plan.decision_ids.map(chip)}</p>
+        {latest.plan.steps.map((step, i) => <div className="source-row" key={i}><span>Step {i + 1}</span><div>{[...new Set([...step.evidence_ids, ...(step.task_ids ?? [])])].map(chip)}</div></div>)}
+      </details>
+      <details className="plan-details"><summary>Details</summary>
+        <p className="caption">Revision {latest.revision} · {latest.id}</p>
+        {run.result && <p className="caption">Independent review: {review?.status.replaceAll('_', ' ')} · {run.result.procedure_id} v{run.result.procedure_version}</p>}
+        {savedText && <details><summary>Original saved response</summary><ReadableReply text={savedText} onOpen={onEvidence} /></details>}
+      </details>
+    </div>
+    <div className="plan-decision glass">{children}</div>
   </section>;
 }
 
