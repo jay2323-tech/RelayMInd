@@ -48,7 +48,7 @@ _NEGATORS = re.compile(r"\b(not|no|never|nothing|none|without|neither|nor)\b|n't
 
 
 _CLAUSE_BREAK = re.compile(r"[.;:,!?\n]|\b(?:and|but|while|whereas|so)\b", re.I)
-_RECORD_ID = re.compile(r"\b[A-Za-z][A-Za-z0-9]*(?:-[A-Za-z0-9]+)+\b")
+_RECORD_ID = re.compile(r"(?<![A-Za-z0-9-])[A-Za-z0-9]+(?:-[A-Za-z0-9]+)+(?![A-Za-z0-9-])")
 
 
 def _negated(text: str, start: int) -> bool:
@@ -62,11 +62,22 @@ def _negated(text: str, start: int) -> bool:
     return bool(_NEGATORS.search(" ".join(clause.split()[-4:])))
 
 
-def _sentence(text: str, start: int) -> str:
-    """The line/sentence containing this position (record identity is checked within it)."""
-    left = max(text.rfind("\n", 0, start), text.rfind(". ", 0, start)) + 1
-    ends = [i for i in (text.find("\n", start), text.find(". ", start)) if i != -1]
-    return text[left:min(ends) if ends else len(text)]
+_SPAN_BREAK = re.compile(r"[;:!?\n]|\.(?=\s|$)")
+
+
+def _claim_span(text: str, start: int) -> str:
+    """The clause a status word belongs to, INCLUDING lists joined by commas/and ("a-1 and a-2 were
+    applied"), so every record asserted alongside the word is checked. Bounded by . ; : ! ? newline."""
+    lefts = [m.end() for m in _SPAN_BREAK.finditer(text, 0, start)]
+    right = _SPAN_BREAK.search(text, start)
+    return text[(lefts[-1] if lefts else 0):(right.start() if right else len(text))]
+
+
+def _id_tokens(span: str) -> set[str]:
+    """Exact record-ID tokens (letters, hyphen-joined, containing a digit). Compared whole, never as
+    substrings, so a-1 can never vouch for a-10."""
+    return {t for t in _RECORD_ID.findall(span)
+            if any(ch.isdigit() for ch in t) and any(ch.isalpha() for ch in t)}   # not dates like 2026-10-18
 
 
 class GraphFacts:
@@ -98,6 +109,15 @@ class GraphFacts:
             return True
         except (AccessDenied, LookupError, AgentBlocked):
             return False
+
+    def exists(self, token: str) -> bool:
+        """Any record in this project scope with this exact id (evidence records or people)."""
+        if self.resolves(token):
+            return True
+        from relaymind.graph.access import authorized_graph
+        graph = authorized_graph(self.client, self.ctx, self.project_id)
+        return bool(graph.ro_query("MATCH (p:Person {id: $id})-[:MEMBER_OF]->(:Project {id: $p}) RETURN p.id",
+                                   params={"id": token, "p": self.project_id}).result_set)
 
     def current_state(self):
         from relaymind.memory.decisions import get_current_decisions
@@ -226,8 +246,8 @@ def oversee(text: str, claims: Claims, facts) -> OverseerVerdict:
             fail("records", f"{rs.kind} {rs.id} is not '{rs.status}' (graph: {sorted(actual) or 'not found'})")
     if presented_current and not any(f.check in ("currency", "conflicts") for f in failures):
         verified.setdefault(("decision", "current"), set()).update(presented_current)
-    all_names = {n for names in verified.values() for n in names} | {rs.id for rs in claims.record_states} \
-        | set(claims.cited_ids)
+    alias_of = {name: (rs.kind, rs.id) for rs in claims.record_states for name in [rs.id, *rs.aliases]}
+    known_names = set(alias_of) | set(claims.cited_ids) | set(presented_current)
 
     # state words need a verified record of a matching kind -------------------
     if claims.lint_state_words:
@@ -237,16 +257,25 @@ def oversee(text: str, claims: Claims, facts) -> OverseerVerdict:
             word = m.group(1).lower()
             if _negated(text, m.start()):
                 continue
-            backing = set().union(*(verified.get(pair, set()) for pair in WORD_BACKING[word]))
-            if not backing:
+            pairs = WORD_BACKING[word]
+            kinds = {k for k, _ in pairs}
+            relevant, problems = 0, []
+            # Every record named in this clause is checked against the graph on its own.
+            for token in sorted(_id_tokens(_claim_span(text, m.start()))):
+                lookups = [alias_of[token]] if token in alias_of else [(k, token) for k in sorted(kinds)]
+                states_by_kind = {k: facts.record_state(k, rid) for k, rid in lookups if k in kinds}
+                found = {k: st for k, st in states_by_kind.items() if st}
+                if found:
+                    relevant += 1
+                    if not any((k, st) in pairs for k, sts in found.items() for st in sts):
+                        problems.append(f"{token} is {'/'.join(sorted(set().union(*found.values())))}")
+                elif token not in known_names and not facts.exists(token):
+                    problems.append(f"{token} does not exist")
+                # else: a different kind of record (a person, batch, source...) - not what the word describes
+            if problems:
+                unbacked.add(f"{word} ({'; '.join(problems)})")
+            elif relevant == 0 and not any(verified.get(pair) for pair in pairs):
                 unbacked.add(word)
-                continue
-            # Record identity: if the sentence names a record, it must be one that backs this state.
-            sentence = _sentence(text, m.start())
-            named = {tok for tok in _RECORD_ID.findall(sentence) if any(ch.isdigit() for ch in tok)}
-            named |= {n for n in all_names if n and n in sentence}
-            if named and not (named & backing):
-                unbacked.add(f"{word} (for {', '.join(sorted(named))})")
         if unbacked:
             fail("state_words", "state words without a verified backing record: " + ", ".join(sorted(unbacked)))
 

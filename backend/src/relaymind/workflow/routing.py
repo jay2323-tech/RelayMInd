@@ -145,7 +145,8 @@ def _orders(client, ctx, project_id) -> tuple[str, Claims]:
         exposed_map[hold_id] = [a.order.order_id for a in r.affected]
         versions[hold_id] = r.hold.decision_id          # checked for currency even if the set is unchanged
         unknown_ids += [o.order_id for o in r.unknown_traceability]
-        cited += [hold_id, r.hold.decision_id] + exposed_map[hold_id] + [o.order_id for o in r.unknown_traceability]
+        cited += [hold_id, r.hold.decision_id] + exposed_map[hold_id] + [o.order_id for o in r.unknown_traceability] \
+            + list(r.hold.held_batches) + [x for a in r.affected for x in (a.assembly_id, a.batch_id)]
         states += [RecordState(kind="order", id=a.order.order_id, status=a.order.status) for a in r.affected]
         out.append(f"**Orders exposed by {hold_id}** (current version {r.hold.decision_id}, held batches "
                    f"{', '.join(r.hold.held_batches) or 'none'})")
