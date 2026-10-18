@@ -329,7 +329,7 @@ def _list(client, scope, topic, this_chat, request, current):
         memories = [m for m in memories if any(re.search(rf"\b{re.escape(t)}", m["text"], re.I) for t in terms)]
         if not memories:
             from relaymind.workflow.recall import recall_answer
-            text, claims = recall_answer(client, scope, f"what did I say about {topic}", {current})
+            text, claims = recall_answer(client, scope, f"what did I say about {topic}", {current}, offer_plan=False)
             return Turn("factual", f"You have no saved memory about {topic}. Here is what I found in your earlier "
                         f"messages instead:\n\n{text}", claims, refs=list(claims.source_quotes))
     if not memories:

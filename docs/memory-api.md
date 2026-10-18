@@ -123,3 +123,14 @@ send "1", "2", … or "cancel".
 - combined requests in one message (e.g. save + plan) → asks to send them one at a time (M3 will add save/recall → plan)
 - multi-selection ("1 and 3") → one at a time
 - semantic (meaning-based) search — recall is keyword-based and says so in `memory_search.method`
+
+### M3 live fields
+- Recall replies with results end with "Want me to prepare a plan using these earlier statements? Reply yes." (part of
+  the verified answer) and set `pending_plan_request` + `pending_memory_ids` (the exact message IDs shown).
+- On "yes" (next turn, same session): the plan run has `selected_memory_ids` (revalidated: exists, owned, not
+  retracted) and `memory_refs` (what the Planner received); dropped IDs appear in `events`
+  ("Left out N earlier message(s) that were retracted or are no longer available").
+- "Do you remember … ? Plan on it / make it better" plans directly with the best matches.
+- Planner context key `historical_context.related_memory = {label, items:[{message_id, said_by, chat, date_ms, text,
+  saved_memory_id}]}`. Retracted messages cannot be cited (evidence lookup refuses them).
+- UI: a "Use in a plan" button can simply send "yes" while the offer is pending.

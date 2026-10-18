@@ -57,6 +57,15 @@ def query_terms(text: str) -> list[str]:
     return list(dict.fromkeys(terms))[:8]
 
 
+_COMMANDS = {"forget", "forget_ambiguous", "forget_id", "list", "bulk", "scope", "temporary", "retain_ack",
+             "nosave_ack", "save_ambiguous"}
+
+
+def _is_memory_command(content: str) -> bool:
+    from relaymind.workflow.memory_intents import parse
+    return parse(content).kind in _COMMANDS
+
+
 def _snippet(text: str, terms: list[str]) -> str:
     flat = " ".join(text.split())
     if len(flat) <= SNIPPET:
@@ -89,6 +98,8 @@ def search(client: Any, scope: AgentJobScope, terms: list[str], exclude: set[str
             continue
         if role == "user" and is_recall(content):
             continue                                   # never "remember" an earlier recall question
+        if role == "user" and _is_memory_command(content):
+            continue                                   # "forget …", "don't save this", lists: instructions, not statements
         if role == "assistant" and (content.startswith("**From ") or "found no matching earlier messages" in content):
             continue                                   # nor an earlier recall answer
         hits = [t for t in terms if re.search(rf"\b{re.escape(t)}", content, re.I)]
@@ -126,7 +137,8 @@ def _date(ms: int) -> str:
     return datetime.fromtimestamp(ms / 1000, timezone.utc).strftime("%d %b %Y") if ms else "an earlier date"
 
 
-def recall_answer(client: Any, scope: AgentJobScope, text: str, exclude: set[str]) -> tuple[str, Claims]:
+def recall_answer(client: Any, scope: AgentJobScope, text: str, exclude: set[str],
+                  offer_plan: bool = True) -> tuple[str, Claims]:
     SEARCH_INFO.clear()
     terms = query_terms(text)
     if not terms:
@@ -155,4 +167,6 @@ def recall_answer(client: Any, scope: AgentJobScope, text: str, exclude: set[str
     lines += ["", f"_Keyword search over your newest {info.get('scanned', 0)} messages in this project: "
                   f"{info.get('matches', 0)} matched, showing {info.get('shown', 0)}{more}._",
               "_This is what was said earlier, not an approved decision. Current project decisions take priority._"]
+    if offer_plan:
+        lines += ["", "Want me to prepare a plan using these earlier statements? Reply yes."]
     return "\n".join(lines), Claims(cited_ids=cited, quoted_spans=spans, source_quotes=refs)

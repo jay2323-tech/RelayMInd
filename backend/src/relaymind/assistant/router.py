@@ -125,8 +125,10 @@ def _pending_plan(engine) -> str | None:
         prior = RunRecord.model_validate(engine.store.get("run", run_id))
     except Exception:
         return None
-    if prior.request_kind != "clarify" or not prior.pending_plan_request or prior.answer != offer["content"]:
+    if prior.request_kind not in ("clarify", "factual") or not prior.pending_plan_request \
+            or prior.answer != offer["content"]:
         return None                                      # only an offer that was actually shown counts
+    _pending_plan.memory_ids = list(prior.pending_memory_ids)   # the exact records shown (M3)
     return prior.pending_plan_request
 
 
@@ -162,8 +164,10 @@ def assist(engine, run, request: str):
         engine.store.put("run", run.id, run.model_dump())
         return "done", run
 
+    _pending_plan.memory_ids = []
     pending = _pending_plan(engine)
     if pending and _AFFIRMATIVE.match(request):
+        run.selected_memory_ids = list(_pending_plan.memory_ids)    # revalidated by the engine before planning
         run.events.append(AgentEvent(seq=1, agent="system", summary="Assistant: you confirmed the offered plan"))
         return "plan", f"{pending}\n\n(The user confirmed they want a plan for this: \"{request.strip()}\")"
     if pending and _NEGATIVE.match(request):

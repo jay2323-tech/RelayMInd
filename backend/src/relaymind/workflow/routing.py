@@ -26,7 +26,8 @@ Intent = Literal["approvals", "current_decisions", "changes", "exposed_orders", 
 _PLANNING = re.compile(
     r"\b(what should|should (we|i)|next steps?|^plan|(make|create|build|write) (a |the |an )?plan|plan (the|a|an|for|out|our)|"
     r"planning|propose|proposal|recommend|suggest|how (do|should|can) we|draft|prepare|may we|can we|could we|help me|"
-    r"decide|figure out|fix|resolve|continue|replan\w*|must|need(s)? to|ought|investigate|evaluate|why)\b")
+    r"decide|figure out|fix|resolve|continue|replan\w*|must|need(s)? to|ought|investigate|evaluate|why|"
+    r"plan (on|around|with|using) (it|that|this|them|those)|make it better|improve (it|on it|that))\b")
 
 _INTENTS: list[tuple[Intent, re.Pattern]] = [
     ("approvals", re.compile(
